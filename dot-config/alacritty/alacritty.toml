@@ -61,5 +61,5 @@ y = 0
 
 [keyboard]
 bindings = [
-  { key = "j", mods = "Control", action = "ToggleViMode" },
+  { key = "j", mods = "Command", action = "ToggleViMode" },
 ]
