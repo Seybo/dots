@@ -3,7 +3,7 @@ live_config_reload = true
 
 # Default colors
 [colors.primary]
-background = '#222436'
+background = '#262626'
 foreground = '#c8d3f5'
 
 # Normal colors
@@ -61,5 +61,5 @@ y = 0
 
 [keyboard]
 bindings = [
-  { key = "j", mods = "Command", action = "ToggleViMode" },
+  { key = "j", mods = "Control", action = "ToggleViMode" },
 ]
