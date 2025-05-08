@@ -1,0 +1,4 @@
+alias ll='ls -al -G'
+alias ..='cd ..'
+alias v='nvim'
+

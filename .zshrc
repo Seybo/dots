@@ -82,6 +82,13 @@ source $ZSH/oh-my-zsh.sh
 
 # User configuration
 
+if [ -f ~/.zsh_aliases_public ]; then
+  source ~/.zsh_aliases_public
+fi
+if [ -f ~/.zsh_aliases_private ]; then
+  source ~/.zsh_aliases_private
+fi
+
 # export MANPATH="/usr/local/man:$MANPATH"
 
 # You may need to manually set your language environment
@@ -89,6 +96,7 @@ source $ZSH/oh-my-zsh.sh
 
 export EDITOR='nvim'
 eval "$(jump shell)"
+eval "$(gdircolors -b ~/.dircolors)"
 
 # Start tmux automatically if not already inside a tmux session
 if command -v tmux >/dev/null 2>&1; then
