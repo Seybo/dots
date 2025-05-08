@@ -1,0 +1,16 @@
+# Configuration for dircolors
+# Color codes:
+# 30 - black
+# 31 - red
+# 32 - green
+# 33 - yellow
+# 34 - blue
+# 35 - magenta
+# 36 - cyan
+# 37 - white
+#
+# Below are the file type definitions
+DIR 01;34   # directory
+LINK 01;36  # symbolic link
+REG 00;32   # regular file
+EXE 01;32   # executable file
