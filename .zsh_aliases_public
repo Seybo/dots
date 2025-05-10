@@ -3,6 +3,11 @@ alias ll='ls -al -G'
 alias ..='cd ..'
 
 
+### tmux ###
+alias tksv='tmux kill-server'
+alias tkss='tmux kill-session -t'
+
+
 ### git ###
 alias gca='git commit -n --amend'
 alias gca!='git commit -n --amend --no-edit'
