@@ -1,4 +1,20 @@
+### console general ###
 alias ll='ls -al -G'
 alias ..='cd ..'
-alias v='nvim'
 
+
+### git ###
+alias gca='git commit -n --amend'
+alias gca!='git commit -n --amend --no-edit'
+alias gitc='git commit -n -v -m'
+
+
+### stow ###
+alias stow_check='cd ~/.dots && stow -n -v .'
+alias stow_do='cd ~/.dots && stow -v .'
+
+
+### misc apps ###
+alias rr='ranger'
+alias v='nvim'
+alias vim='nvim'
