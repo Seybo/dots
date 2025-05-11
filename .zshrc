@@ -76,18 +76,16 @@ DISABLE_LS_COLORS="true"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git)
+plugins=(git asdf rails)
 
 source $ZSH/oh-my-zsh.sh
 
 # User configuration
 
-if [ -f ~/.zsh_aliases_public ]; then
-  source ~/.zsh_aliases_public
-fi
-if [ -f ~/.zsh_aliases_private ]; then
-  source ~/.zsh_aliases_private
-fi
+# stow
+export STOW_DIR="$HOME/.dots"
+source "$STOW_DIR/no_stow/.zsh_aliases_public"
+source "$STOW_DIR/private/.zsh_aliases_private"
 
 # export MANPATH="/usr/local/man:$MANPATH"
 
@@ -97,6 +95,16 @@ fi
 export EDITOR='nvim'
 eval "$(jump shell)"
 eval "$(gdircolors -b ~/.dircolors)"
+
+export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"
+
+
+# PostgreSQL
+export PATH="/opt/homebrew/opt/postgresql@13/bin:$PATH"
+# Optional: Set compiler flags for PostgreSQL 13
+export LDFLAGS="-L/opt/homebrew/opt/postgresql@13/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/postgresql@13/include"
+export PKG_CONFIG_PATH="/opt/homebrew/opt/postgresql@13/lib/pkgconfig"
 
 # Start tmux automatically if not already inside a tmux session
 if command -v tmux >/dev/null 2>&1; then
