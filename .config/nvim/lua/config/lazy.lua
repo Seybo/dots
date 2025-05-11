@@ -15,22 +15,6 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
--- Make sure to setup `mapleader` and `maplocalleader` before
--- loading lazy.nvim so that mappings are correct.
--- This is also a good place to setup other settings (vim.opt)
-vim.g.mapleader = "Space"
-vim.opt.clipboard:append("unnamedplus") -- copy to system clipboard
-vim.o.termguicolors = true
-
-
-
-
--- WHAT IS IT???
--- vim.g.maplocalleader = "\\"
-
-
-
-
 
 -- Setup lazy.nvim
 require("lazy").setup({
