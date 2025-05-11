@@ -70,6 +70,7 @@ shell = { program = "/bin/zsh", args = ["-l"] }
 decorations = "none"
 dynamic_padding = false
 startup_mode = "Fullscreen"
+option_as_alt = "Both"
 
 [window.padding]
 x = 10
