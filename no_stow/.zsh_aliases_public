@@ -20,6 +20,6 @@ alias stow_do='cd ~/.dots && stow -v .'
 
 
 ### misc apps ###
-alias rr='ranger'
+alias rg='ranger'
 alias v='nvim'
 alias vim='nvim'
