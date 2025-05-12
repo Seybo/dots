@@ -373,6 +373,13 @@ tmux_conf_theme_clock_style="24"
 tmux_conf_copy_to_os_clipboard=false
 
 
+# _myupd: increase history size
+set -g history-limit 12288
+
+# _myupd: set repeat wating time
+set-option -g repeat-time 300
+
+
 # -- urlscan -------------------------------------------------------------------
 
 # options passed to urlscan
