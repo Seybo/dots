@@ -9,12 +9,56 @@ return {
     },
     lazy = false, -- neo-tree will lazily load itself
     config = function()
-      -- vim.keymap.set("n", "<A-f><A-f>", "<Cmd>Neotree reveal<CR>")
-      -- Using vim.api.nvim_set_keymap
-vim.api.nvim_set_keymap("n", "<A-f><A-f>", "<Cmd>Neotree reveal<CR>", { noremap = true, silent = true })
+      local plugin = require "neo-tree"
+      local commands = require "neo-tree.command"
 
+      local function close()
+        commands.execute({ action = "close" })
+      end
+
+      plugin.setup {
+        close_if_last_window = true,
+        popup_border_style = "rounded",
+        enable_git_status = true,
+        enable_diagnostics = false,
+
+        window = {
+          width = 60,
+          mapping_options = {
+            noremap = true,
+            nowait = true,
+          },
+        },
+        event_handlers = {
+          {
+            event = "file_opened",
+            handler = close,
+          },
+        },
+      }
+      
+      local function open_file_tree()
+        vim.cmd "Neotree source=filesystem position=left toggle=true reveal=true"
+      end
+
+      local function open_git_tree_index()
+        vim.cmd "Neotree source=git_status position=float toggle=true reveal=true"
+      end
+
+      -- TODO_MM: sort out how to handle main/master here
+      local function open_git_tree_all_changes()
+        vim.cmd "Neotree source=git_status git_base=main position=float toggle=true reveal=true"
+      end
+
+      -- TODO_MM: sort out
+      -- local function open_sessions()
+      --   vim.cmd "Neotree ~/.local/share/nvim/sessions toggle=true reveal=true"
+      -- end
+
+      vim.keymap.set("n", "<A-f><A-f>", open_file_tree)
+      vim.keymap.set("n", "<A-f><A-g>", open_git_tree_index)
+      vim.keymap.set("n", "<A-f><A-d>", open_git_tree_all_changes)
+      -- vim.keymap.set("n", "<A-f><A-s>", open_sessions)
     end,
   }
 }
-
-
