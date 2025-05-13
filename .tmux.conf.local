@@ -403,8 +403,8 @@ tmux_conf_urlscan_options="--compact --dedupe"
 
 # _myupd
 # remove default prefixes
-unbind C-a
-unbind C-b
+set -gu prefix2
+unbind C-B
 set -g prefix F4
 
 # if you don't want Oh my tmux! to alter a binding or a setting, use #!important
