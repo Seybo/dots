@@ -55,9 +55,21 @@ return {
       --   vim.cmd "Neotree ~/.local/share/nvim/sessions toggle=true reveal=true"
       -- end
 
-      vim.keymap.set("n", "<A-f><A-f>", open_file_tree)
-      vim.keymap.set("n", "<A-f><A-g>", open_git_tree_index)
-      vim.keymap.set("n", "<A-f><A-d>", open_git_tree_all_changes)
+      map { "<C-f>f",
+            "[Neo-tree] Open file tree",
+            open_file_tree,
+            mode = "n" }
+
+      map { "<C-f>i",
+            "[Neo-tree] Open git tree index",
+            open_file_tree,
+            mode = "n" }
+
+      map { "<C-f>c",
+            "[Neo-tree] Open git tree all changes",
+            open_git_tree_all_changes,
+            mode = "n" }
+
       -- vim.keymap.set("n", "<A-f><A-s>", open_sessions)
     end,
   }

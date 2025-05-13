@@ -1,8 +1,7 @@
 -- -- [[ Global ]] -- --
-
 vim.ortermguicolors = true
 vim.g.mapleader = " "
-vim.opt.clipboard:append("unnamedplus") -- copy to system clipboard
+-- vim.opt.clipboard:append("unnamedplus") -- copy to system clipboard
 vim.opt.mouse = "a" -- enable mouse support
 vim.opt.backupcopy = "yes" -- create backup copy of file on save
 
