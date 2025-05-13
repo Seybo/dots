@@ -4,5 +4,4 @@ require("utils.map")
 require("config.settings")
 require("config.lazy")
 require("config.mappings")
--- TODO_MM: remove if not needed here
--- require("lazy").setup("plugins")
+require("config.autocommands")

@@ -1,8 +1,7 @@
 -- -- [[ Global ]] -- --
 vim.ortermguicolors = true
 vim.g.mapleader = " "
--- vim.opt.clipboard:append("unnamedplus") -- copy to system clipboard
-vim.opt.mouse = "a" -- enable mouse support
+vim.opt.mouse = "a"        -- enable mouse support
 vim.opt.backupcopy = "yes" -- create backup copy of file on save
 
 -- -- [[ Folding ]] -- --
@@ -21,3 +20,10 @@ vim.opt.undolevels = 1000
 vim.opt.smartindent = true
 vim.opt.expandtab = true
 vim.opt.shiftwidth = 2
+
+-- -- [[ LSP ]] -- --
+-- time before writing swap files to disk
+-- and lsp diagnostics floating windows showup time
+vim.o.updatetime = 500
+-- use lua print(:vim.lsp.get_log_path()) to see the log file path for below
+-- vim.lsp.set_log_level("debug")
