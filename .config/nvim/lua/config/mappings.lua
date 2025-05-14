@@ -3,6 +3,10 @@ map { "jj",
   "[ General ] Go to normal mode from instert mode",
   "<Esc>",
   mode = "i" }
+map { "jj",
+  "[ General ] Enter normal mode",
+  "<C-\\><C-n>",
+  mode = "t" }
 
 -- -- [[ Search ]] -- --
 map { "*",
@@ -111,7 +115,6 @@ map { "<A-.>",
   mode = "v" }
 
 -- -- [[ Selection ]] -- --
-
 map { "<C-a><C-a>",
   "[ Selection ] Select all",
   "ggVG<CR>",
@@ -120,6 +123,48 @@ map { "<CR>",
   "[ Selection ] Deselect all",
   ":noh<CR><CR>",
   mode = "n" }
+local function select_text_up_to_dot_or_quote()
+  local _row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local line = vim.api.nvim_get_current_line()
+  -- Adjusting for 0-based indexing in Vim
+  col = col + 1
+  local before_cursor = line:sub(1, col - 1)
+  local after_cursor = line:sub(col)
+  -- Detect if the cursor is within quotes and adjust the bounds accordingly
+  local quote_type = before_cursor:match("(['\"])[^%s]*$")
+  local start_quote, end_quote
+  if quote_type then
+    -- Find the starting position of the preceding quote
+    start_quote = before_cursor:reverse():find(quote_type)
+    start_quote = start_quote and (#before_cursor - start_quote + 2) -- +2 to move after the quote
+    -- Find the ending position of the following quote
+    end_quote = after_cursor:find(quote_type)
+    end_quote = end_quote and (col + end_quote - 2) -- -2 to exclude the quote itself
+  end
+  local start_col, end_col
+  if start_quote and end_quote then
+    -- If within quotes, adjust start and end based on quotes' positions
+    start_col = start_quote
+    end_col = end_quote
+  else
+    -- Normal operation, calculate start and end positions for selection
+    local reverse_index = before_cursor:reverse():find("%s")
+    start_col = reverse_index and (#before_cursor - reverse_index + 2) or 1
+    end_col = after_cursor:find("%.") and (col + after_cursor:find("%.") - 2) or (col + #after_cursor - 1)
+  end
+  -- Preparing key sequence for visual selection
+  local move_to_start = "0" .. string.rep("l", start_col - 1)
+  local select_to_end = "v" .. string.rep("l", end_col - start_col)
+  -- Combining commands and executing
+  local keys = move_to_start .. select_to_end
+  vim.fn.feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "")
+end
+-- gf for rails calls like Foo::Bar::Baz.call
+-- TODO_MM: sort out how to better do that
+vim.keymap.set("n", "<A-g><A-f>", function()
+  select_text_up_to_dot_or_quote()
+  vim.fn.feedkeys(vim.api.nvim_replace_termcodes("gf", true, false, true), "x")
+end, { noremap = true, silent = true })
 
 -- -- [[ Buffers ]] -- --
 map { "<A-u>",
@@ -136,137 +181,53 @@ map { "qq",
   mode = "n" }
 
 -- vim-rails
-vim.keymap.set("n", "ra", ":A<CR>", { silent = true }) -- switch to spec
--- go to beginning/end of line
-vim.keymap.set("n", "<End>", "$", { silent = true })
-vim.keymap.set("n", "<Home>", "0", { silent = true })
-vim.keymap.set("v", "<End>", "$", { silent = true })
-vim.keymap.set("v", "<Home>", "0", { silent = true })
--- add empty line above/below
-vim.keymap.set("n", "<CR>j", ":<C-u>normal! o<CR>k", { silent = true })
-vim.keymap.set("n", "<CR>k", ":<C-u>normal! O<CR>j", { silent = true })
--- Cut to underscores
-vim.keymap.set("n", "cu", "ct_", { silent = true })
-vim.keymap.set("n", "c2u", "c2t_", { silent = true })
-vim.keymap.set("n", "c3u", "c3t_", { silent = true })
--- Delete to underscores
-vim.keymap.set("n", "du", "dt_", { silent = true })
-vim.keymap.set("n", "d2u", "d2t_", { silent = true })
-vim.keymap.set("n", "d3u", "d3t_", { silent = true })
--- Delete to next uppercase character
-local function delete_to_next_uppercase()
-  -- Get the character under the cursor
-  local col = vim.fn.col(".")
-  local char = vim.fn.getline("."):sub(col, col)
-
-  -- Check if the character is uppercase
-  if char:match("%u") then
-    -- If it's uppercase, delete it first and then search for the next uppercase
-    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("xd/\\u<CR>", true, false, true), "n", true)
-  else
-    -- If it's not uppercase, just delete up to the next uppercase character
-    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("d/\\u<CR>", true, false, true), "n", true)
-  end
-
-  -- Schedule the nohlsearch to ensure it runs after the search and delete
-  vim.schedule(function()
-    vim.cmd("nohlsearch")
-  end)
-end
--- Cut to next uppercase character
-local function cut_to_next_uppercase()
-  -- Get the character under the cursor
-  local col = vim.fn.col(".")
-  local char = vim.fn.getline("."):sub(col, col)
-
-  -- Check if the character is uppercase
-  if char:match("%u") then
-    -- If it's uppercase, delete it first and then search for the next uppercase
-    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("xc/\\u<CR>", true, false, true), "n", true)
-  else
-    -- If it's not uppercase, just delete up to the next uppercase character
-    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("c/\\u<CR>", true, false, true), "n", true)
-  end
-
-  -- Schedule the nohlsearch to ensure it runs after the search and delete
-  vim.schedule(function()
-    vim.cmd("nohlsearch")
-  end)
-end
-vim.keymap.set("n", "dc", delete_to_next_uppercase, { noremap = true, silent = true })
-vim.keymap.set("n", "cc", cut_to_next_uppercase, { noremap = true, silent = true })
+-- TODO_MM: should be in vim-rails
+-- vim.keymap.set("n", "ra", ":A<CR>", { silent = true }) -- switch to spec
 
 -- -- [[ Files ]] -- --
-vim.keymap.set("n", "<C-f><C-r>", ":e!<CR>", { silent = true })
-vim.keymap.set("n", "<Leader>fot", ":e ./_mydev/temp.md<CR>", { silent = true })
--- filenames copying
-vim.keymap.set("n", "<A-f>pa", ":let @+ = expand('%:p')<CR>", { silent = true }) -- absolute
-vim.keymap.set("n", "<A-f>pr", ":let @+ = expand('%')<CR>", { silent = true })   -- relative
-vim.keymap.set("n", "<A-f>pf", ":let @+ = expand('%:t')<CR>", { silent = true }) -- filename
+map { "<Leader>fot",
+  "[ Files ] Open temp file",
+  ":e ./_mydev/temp.md<CR>",
+  mode = "n" }
+map { "<A-f>pa",
+  "[ Files ] Copy absolute path",
+  ":let @+ = expand('%:p')<CR>",
+  mode = "n" }
+map { "<A-f>pr",
+  "[ Files ] Copy relative path",
+  ":let @+ = expand('%')<CR>",
+  mode = "n" }
+map { "<A-f>pf",
+  "[ Files ] Copy filename",
+  ":let @+ = expand('%:t')<CR>",
+  mode = "n" }
 
 -- -- [[ LSP ]] -- --
-
-vim.keymap.set("n", "do", vim.diagnostic.open_float, { noremap = true, silent = true })
-vim.keymap.set("n", "]d", vim.diagnostic.goto_next, { noremap = true, silent = true })
-vim.keymap.set("n", "[d", vim.diagnostic.goto_prev, { noremap = true, silent = true })
-vim.keymap.set("n", "gf", vim.lsp.buf.definition, { noremap = true })
-vim.keymap.set("n", "<space>f", function() vim.lsp.buf.format { async = true } end)
-
-local function select_text_up_to_dot_or_quote()
-  local _row, col = unpack(vim.api.nvim_win_get_cursor(0))
-  local line = vim.api.nvim_get_current_line()
-
-  -- Adjusting for 0-based indexing in Vim
-  col = col + 1
-
-  local before_cursor = line:sub(1, col - 1)
-  local after_cursor = line:sub(col)
-
-  -- Detect if the cursor is within quotes and adjust the bounds accordingly
-  local quote_type = before_cursor:match("(['\"])[^%s]*$")
-  local start_quote, end_quote
-  if quote_type then
-    -- Find the starting position of the preceding quote
-    start_quote = before_cursor:reverse():find(quote_type)
-    start_quote = start_quote and (#before_cursor - start_quote + 2) -- +2 to move after the quote
-    -- Find the ending position of the following quote
-    end_quote = after_cursor:find(quote_type)
-    end_quote = end_quote and (col + end_quote - 2) -- -2 to exclude the quote itself
-  end
-
-  local start_col, end_col
-  if start_quote and end_quote then
-    -- If within quotes, adjust start and end based on quotes' positions
-    start_col = start_quote
-    end_col = end_quote
-  else
-    -- Normal operation, calculate start and end positions for selection
-    local reverse_index = before_cursor:reverse():find("%s")
-    start_col = reverse_index and (#before_cursor - reverse_index + 2) or 1
-    end_col = after_cursor:find("%.") and (col + after_cursor:find("%.") - 2) or (col + #after_cursor - 1)
-  end
-
-  -- Preparing key sequence for visual selection
-  local move_to_start = "0" .. string.rep("l", start_col - 1)
-  local select_to_end = "v" .. string.rep("l", end_col - start_col)
-
-  -- Combining commands and executing
-  local keys = move_to_start .. select_to_end
-  vim.fn.feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "")
-end
-
--- gf for rails calls like Foo::Bar::Baz.call
-vim.keymap.set("n", "<A-g><A-f>", function()
-  select_text_up_to_dot_or_quote()
-  vim.fn.feedkeys(vim.api.nvim_replace_termcodes("gf", true, false, true), "x")
-end, { noremap = true, silent = true })
+map { "do",
+  "[ LSP ] Open diagnosic message in floating window",
+  vim.diagnostic.open_float,
+  mode = "n" }
+map { "]d",
+  "[ LSP ] Go to next diagnosic message",
+  vim.diagnostic.goto_next,
+  mode = "n" }
+map { "[d",
+  "[ LSP ] Go to prev diagnosic message",
+  vim.diagnostic.goto_prev,
+  mode = "n" }
+map { "gf",
+  "[ LSP ] Go to definition",
+  vim.lsp.buf.definition,
+  mode = "n" }
+map { "ff",
+  "[ LSP ] Format",
+  vim.lsp.buf.format,
+  mode = "n" }
 
 
--- -- [[ Terminal ]] -- --
-
+-- -- [[ Tabs ]] -- --
 local function open_or_switch_to_terminal()
   local term_tab_index = -1
-
   -- loop through tabs to find terminal
   for i = 1, vim.fn.tabpagenr("$") do
     if vim.fn.tabpagewinnr(i, "$") == 1 and
@@ -275,7 +236,6 @@ local function open_or_switch_to_terminal()
       break
     end
   end
-
   -- if terminal tab found, switch to it
   if term_tab_index > -1 then
     vim.cmd("tabn " .. term_tab_index)
@@ -285,10 +245,10 @@ local function open_or_switch_to_terminal()
   vim.cmd("startinsert")
 end
 
-vim.keymap.set("n", "<A-t><A-t>", open_or_switch_to_terminal, { silent = true }) -- launch terminal
-vim.keymap.set("t", "jj", "<C-\\><C-n>", { silent = true })
-
--- -- [[ Git Status ]] -- --
+map { "<A-t><A-t>",
+  "[ Tabs ] Switch to terminal tab",
+  open_or_switch_to_terminal,
+  mode = "n" }
 
 local function open_or_switch_to_git_status()
   local status_tab_index = -1
@@ -310,22 +270,28 @@ local function open_or_switch_to_git_status()
     vim.cmd("tabnew | Git | wincmd k | q")
   end
 end
-
-vim.keymap.set("n", "<A-t><A-g>", open_or_switch_to_git_status, { silent = true })
-
--- -- [[ Tabs ]] -- --
-
-vim.keymap.set("n", "<A-t><A-c>", ":tab new<CR>", { silent = true })
-vim.keymap.set("n", "<A-t><A-x>", ":tab close<CR>", { silent = true })
-vim.keymap.set("n", "<PageDown>", ":tabn<CR>", { silent = true })
-vim.keymap.set("n", "<PageUp>", ":tabp<CR>", { silent = true })
-vim.keymap.set("n", "<A-t><A-a>", "1gt", { silent = true })
-vim.keymap.set("n", "<A-t><A-s>", "2gt", { silent = true })
-vim.keymap.set("n", "<A-t><A-d>", "3gt", { silent = true })
-vim.keymap.set("n", "<A-t><A-f>", "4gt", { silent = true })
+map { "<A-t><A-g>",
+  "[ Tabs ] Switch to git status",
+  open_or_switch_to_git_status,
+  mode = "n" }
+map { "<A-t><A-c>",
+  "[ Tabs ] New tab",
+  ":tab new<CR>",
+  mode = "n" }
+map { "<A-t><A-x>",
+  "[ Tabs ] Close tab",
+  ":tab close<CR>",
+  mode = "n" }
+map { "<PageDown>",
+  "[ Tabs ] Next tab",
+  ":tabn<CR>",
+  mode = "n" }
+map { "<PageUp>",
+  "[ Tabs ] Prev tab",
+  ":tabp<CR>",
+  mode = "n" }
 
 -- -- [[ Windows ]] -- --
-
 vim.keymap.set("n", "sp", ":sp<CR>", { silent = true })       -- split horizontal
 vim.keymap.set("n", "sv", ":vsp<CR>", { silent = true })      -- split vertical
 vim.keymap.set("n", "so", ":only<CR>", { silent = true })     -- leave only current window

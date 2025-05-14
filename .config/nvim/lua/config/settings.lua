@@ -24,6 +24,6 @@ vim.opt.shiftwidth = 2
 -- -- [[ LSP ]] -- --
 -- time before writing swap files to disk
 -- and lsp diagnostics floating windows showup time
-vim.o.updatetime = 500
+vim.o.updatetime = 1000
 -- use lua print(:vim.lsp.get_log_path()) to see the log file path for below
 -- vim.lsp.set_log_level("debug")
