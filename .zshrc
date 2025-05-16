@@ -76,7 +76,7 @@ DISABLE_LS_COLORS="true"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git asdf rails)
+plugins=(git asdf rails fancy-ctrl-z)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -105,6 +105,17 @@ export PATH="/opt/homebrew/opt/postgresql@13/bin:$PATH"
 export LDFLAGS="-L/opt/homebrew/opt/postgresql@13/lib"
 export CPPFLAGS="-I/opt/homebrew/opt/postgresql@13/include"
 export PKG_CONFIG_PATH="/opt/homebrew/opt/postgresql@13/lib/pkgconfig"
+
+
+# fzf
+export FZF_PREVIEW_PREVIEW_BAT_THEME='Nord'
+export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --ansi'
+# show with catalogs content with alt-c
+# export FZF_ALT_C_OPTS="--preview 'tree -C {} | head -200'"
+export FZF_DEFAULT_COMMAND='fd --type f --strip-cwd-prefix --hidden --follow --exclude .git --color=always'
+export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+# setup key bindings and fuzzy completion
+source <(fzf --zsh)
 
 # Start tmux automatically if not already inside a tmux session
 if command -v tmux >/dev/null 2>&1; then
