@@ -55,7 +55,7 @@ vim.o.updatetime = 1000
 -- vim.opt.swapfile = false
 -- vim.opt.number = true
 -- vim.opt.relativenumber = false
--- vim.opt.signcolumn = "yes:1"
+vim.opt.signcolumn = "yes:1"
 -- vim.opt.cursorline = false
 
 -- to remove checkhealth warning: "Neovim::Ext" cpan module is not installed

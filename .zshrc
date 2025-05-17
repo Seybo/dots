@@ -86,6 +86,7 @@ source $ZSH/oh-my-zsh.sh
 export STOW_DIR="$HOME/.dots"
 source "$STOW_DIR/no_stow/.zsh_aliases_public"
 source "$STOW_DIR/private/.zsh_aliases_private"
+source "$STOW_DIR/private/.env"
 
 # export MANPATH="/usr/local/man:$MANPATH"
 
@@ -116,6 +117,7 @@ export FZF_DEFAULT_COMMAND='fd --type f --strip-cwd-prefix --hidden --follow --e
 export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 # setup key bindings and fuzzy completion
 source <(fzf --zsh)
+
 
 # Start tmux automatically if not already inside a tmux session
 if command -v tmux >/dev/null 2>&1; then

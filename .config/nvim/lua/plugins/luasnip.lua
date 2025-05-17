@@ -1,7 +1,9 @@
 return {
   {
     "L3MON4D3/LuaSnip",
-    event = "BufEnter",
+    version = "v2.*", -- Replace <CurrentMajor> by the latest released major (first number of latest release)
+    -- install jsregexp (optional!).
+    build = "make install_jsregexp",
     config = function(_, opts)
       local plugin = require "luasnip"
       local snippets_folder = "~/.config/nvim/lua/snippets/"
