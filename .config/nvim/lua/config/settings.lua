@@ -21,6 +21,11 @@ vim.opt.smartindent = true
 vim.opt.expandtab = true
 vim.opt.shiftwidth = 2
 
+-- -- [[ Left columens ]] -- --
+vim.opt.number = true         -- Enable line numbers
+vim.opt.relativenumber = true -- Enable relative line numbers
+vim.opt.signcolumn = "yes:1"  -- Always show signcolumn
+
 -- -- [[ LSP ]] -- --
 -- time before writing swap files to disk
 -- and lsp diagnostics floating windows showup time
@@ -53,9 +58,6 @@ vim.o.updatetime = 1000
 -- vim.opt.spelllang = "it"
 -- vim.opt.softtabstop = 2
 -- vim.opt.swapfile = false
--- vim.opt.number = true
--- vim.opt.relativenumber = false
-vim.opt.signcolumn = "yes:1"
 -- vim.opt.cursorline = false
 
 -- to remove checkhealth warning: "Neovim::Ext" cpan module is not installed

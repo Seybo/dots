@@ -38,7 +38,7 @@ tmux_conf_new_session_retain_current_path=false
 #   - true
 #   - false (default)
 #   - disabled (do not modify new-window bindings)
-tmux_conf_new_window_retain_current_path=false
+tmux_conf_new_window_retain_current_path=true
 
 # new window tries to reconnect ssh sessions, possible values are:
 #   - true
@@ -406,6 +406,7 @@ tmux_conf_urlscan_options="--compact --dedupe"
 set -gu prefix2
 unbind C-B
 set -g prefix F4
+unbind _ # was split-window -h
 
 # if you don't want Oh my tmux! to alter a binding or a setting, use #!important
 # bind c new-window -c '#{pane_current_path}' #!important
