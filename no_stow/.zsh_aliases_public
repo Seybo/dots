@@ -6,6 +6,7 @@ alias ..='cd ..'
 ### tmux ###
 alias tksv='tmux kill-server'
 alias tkss='tmux kill-session -t'
+alias mux='tmuxinator'
 
 
 ### git ###

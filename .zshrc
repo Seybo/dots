@@ -76,7 +76,7 @@ DISABLE_LS_COLORS="true"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git asdf rails fancy-ctrl-z)
+plugins=(git asdf rails fancy-ctrl-z tmuxinator)
 
 source $ZSH/oh-my-zsh.sh
 
