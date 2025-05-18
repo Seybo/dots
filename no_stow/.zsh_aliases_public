@@ -10,6 +10,7 @@ alias mux='tmuxinator'
 
 
 ### git ###
+alias lg='lazygit'
 alias gca='git commit -n --amend'
 alias gca!='git commit -n --amend --no-edit'
 alias gitc='git commit -n -v -m'

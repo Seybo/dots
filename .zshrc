@@ -76,7 +76,14 @@ DISABLE_LS_COLORS="true"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git asdf rails fancy-ctrl-z tmuxinator)
+plugins=(
+  asdf
+  git
+  fancy-ctrl-z
+  rails
+  tmuxinator
+  zsh-autosuggestions
+)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -118,6 +125,8 @@ export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 # setup key bindings and fuzzy completion
 source <(fzf --zsh)
 
+# dev
+export BROWSER_PATH="/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev"
 
 # Start tmux automatically if not already inside a tmux session
 if command -v tmux >/dev/null 2>&1; then
