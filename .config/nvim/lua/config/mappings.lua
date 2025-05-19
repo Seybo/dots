@@ -56,6 +56,10 @@ map { "<A-h>",
   "[ Edit ] Indent lines selection left",
   "<gv",
   mode = "v" }
+map { "<leader>fr",
+  "[ Edit ] Revert all the changes in the file",
+  ":e!<CR>",
+  mode = { "v", "n" } }
 
 -- -- [[ Navigation ]] -- --
 map { "Q",
@@ -123,48 +127,55 @@ map { "<CR>",
   "[ Selection ] Deselect all",
   ":noh<CR><CR>",
   mode = "n" }
-local function select_text_up_to_dot_or_quote()
-  local _row, col = unpack(vim.api.nvim_win_get_cursor(0))
-  local line = vim.api.nvim_get_current_line()
-  -- Adjusting for 0-based indexing in Vim
-  col = col + 1
-  local before_cursor = line:sub(1, col - 1)
-  local after_cursor = line:sub(col)
-  -- Detect if the cursor is within quotes and adjust the bounds accordingly
-  local quote_type = before_cursor:match("(['\"])[^%s]*$")
-  local start_quote, end_quote
-  if quote_type then
-    -- Find the starting position of the preceding quote
-    start_quote = before_cursor:reverse():find(quote_type)
-    start_quote = start_quote and (#before_cursor - start_quote + 2) -- +2 to move after the quote
-    -- Find the ending position of the following quote
-    end_quote = after_cursor:find(quote_type)
-    end_quote = end_quote and (col + end_quote - 2) -- -2 to exclude the quote itself
-  end
-  local start_col, end_col
-  if start_quote and end_quote then
-    -- If within quotes, adjust start and end based on quotes' positions
-    start_col = start_quote
-    end_col = end_quote
-  else
-    -- Normal operation, calculate start and end positions for selection
-    local reverse_index = before_cursor:reverse():find("%s")
-    start_col = reverse_index and (#before_cursor - reverse_index + 2) or 1
-    end_col = after_cursor:find("%.") and (col + after_cursor:find("%.") - 2) or (col + #after_cursor - 1)
-  end
-  -- Preparing key sequence for visual selection
-  local move_to_start = "0" .. string.rep("l", start_col - 1)
-  local select_to_end = "v" .. string.rep("l", end_col - start_col)
-  -- Combining commands and executing
-  local keys = move_to_start .. select_to_end
-  vim.fn.feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "")
-end
--- gf for rails calls like Foo::Bar::Baz.call
--- TODO_MM: sort out how to better do that
+
 vim.keymap.set("n", "<A-g><A-f>", function()
-  select_text_up_to_dot_or_quote()
-  vim.fn.feedkeys(vim.api.nvim_replace_termcodes("gf", true, false, true), "x")
-end, { noremap = true, silent = true })
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local line = vim.api.nvim_get_current_line()
+
+  -- Get word around cursor
+  local left = line:sub(1, col + 1)
+  local right = line:sub(col + 2)
+  local joined = left .. right
+
+  -- Try to extract a Ruby constant like Foo::Bar or just Foo
+  local match = joined:match("([%a_][%w_]*::[%w_:]+)") or joined:match("([%a_][%w_]*)")
+  if not match then
+    vim.notify("No valid constant near cursor", vim.log.levels.WARN)
+    return
+  end
+
+  -- Strip any trailing .call, .new, etc.
+  match = match:gsub("%..*$", "")
+
+  -- Convert CamelCase → snake_case + nested paths
+  local snake_path = match
+      :gsub("::", "/")
+      :gsub("([a-z0-9])([A-Z])", "%1_%2")
+      :gsub("([A-Z])([A-Z][a-z])", "%1_%2")
+      :lower()
+
+  -- List of fallback roots to search from (with ** recursive globbing)
+  local roots = {
+    "packs/*/app/services/",
+    "packs/*/app/models/",
+    "packs/*/lib/",
+    "app/services/",
+    "app/models/",
+    "lib/"
+  }
+
+  for _, root in ipairs(roots) do
+    local glob = root .. snake_path .. ".rb"
+    local full_path = vim.fn.glob(glob, 0, 1)[1]
+    if full_path and full_path ~= "" then
+      vim.cmd("edit " .. full_path)
+      return
+    end
+  end
+
+  vim.notify("File not found for: " .. snake_path .. ".rb", vim.log.levels.WARN)
+end, { noremap = true, silent = true, desc = "Smart Rails-style gf" })
+
 
 -- -- [[ Buffers ]] -- --
 map { "<A-u>",
@@ -270,10 +281,10 @@ local function open_or_switch_to_git_status()
     vim.cmd("tabnew | Git | wincmd k | q")
   end
 end
-map { "<A-t><A-g>",
-  "[ Tabs ] Switch to git status",
-  open_or_switch_to_git_status,
-  mode = "n" }
+-- map { "<A-t><A-g>",
+--   "[ Tabs ] Switch to git status",
+--   open_or_switch_to_git_status,
+--   mode = "n" }
 map { "<A-t><A-c>",
   "[ Tabs ] New tab",
   ":tab new<CR>",

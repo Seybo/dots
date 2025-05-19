@@ -8,18 +8,20 @@ return {
       git = { enabled = true },
       gitbrowse = { enabled = true },
       picker = { enabled = true },
+      scroll = { enabled = true },
     },
     keys = {
-      { "<leader>pp", function() Snacks.picker() end, desc = "[Snacks] Picker" },
+      { "<leader>sp", function() Snacks.picker() end, desc = "[Snacks] Picker" },
       {
-        "<leader>pe",
+        "<leader>sf",
         function()
           Snacks.explorer({
             auto_close = true,
             hidden = true,
+            ignored = true,
           })
         end,
-        desc = "[Snacks] Explorer"
+        desc = "[Snacks] File Explorer"
       },
     },
   }
