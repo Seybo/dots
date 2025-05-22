@@ -8,7 +8,13 @@ return {
       git = { enabled = true },
       gitbrowse = { enabled = true },
       picker = { enabled = true },
-      scroll = { enabled = true },
+      scroll = {
+        enabled = true,
+        filter = function(buf)
+          return vim.bo[buf].buftype ~= "terminal"
+              and vim.bo[buf].filetype ~= "Avante"
+        end,
+      },
     },
     keys = {
       { "<leader>sp", function() Snacks.picker() end, desc = "[Snacks] Picker" },
