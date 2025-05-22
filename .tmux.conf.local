@@ -379,6 +379,8 @@ set -g history-limit 12288
 # _myupd: set repeat wating time
 set-option -g repeat-time 300
 
+# _myupd: don't (re)name window titles
+set-option -w -g automatic-rename off
 
 # -- urlscan -------------------------------------------------------------------
 
