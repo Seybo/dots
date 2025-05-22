@@ -56,7 +56,7 @@ map { "<A-h>",
   "[ Edit ] Indent lines selection left",
   "<gv",
   mode = "v" }
-map { "<leader>fr",
+map { "<A-f><A-r>",
   "[ Edit ] Revert all the changes in the file",
   ":e!<CR>",
   mode = { "v", "n" } }
@@ -159,8 +159,10 @@ vim.keymap.set("n", "<A-g><A-f>", function()
     "packs/*/app/services/",
     "packs/*/app/models/",
     "packs/*/lib/",
-    "app/services/",
+    "app/components/",
+    "app/jobs/",
     "app/models/",
+    "app/services/",
     "lib/"
   }
 
@@ -206,8 +208,14 @@ map { "<A-f>pa",
   mode = "n" }
 map { "<A-f>pr",
   "[ Files ] Copy relative path",
-  ":let @+ = expand('%')<CR>",
+  ":let @+ = expand('%:.')<CR>",
   mode = "n" }
+-- vim.keymap.set("n", "<A-f>pr", function()
+--     local relative_path = vim.fn.expand("%:.")  -- Get the relative path
+--     vim.fn.setreg("+", relative_path)  -- Copy the relative path to the clipboard
+--     print("Copied relative path: " .. relative_path)  -- Optional: print confirmation
+-- end, { desc = "[Files] Copy relative path" })
+
 map { "<A-f>pf",
   "[ Files ] Copy filename",
   ":let @+ = expand('%:t')<CR>",
