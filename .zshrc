@@ -149,6 +149,8 @@ source <(fzf --zsh)
 # dev
 export BROWSER_PATH="/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev"
 
+eval "$(starship init zsh)"
+
 # Start tmux automatically if not already inside a tmux session
 if command -v tmux >/dev/null 2>&1; then
   if [ -z "$TMUX" ]; then
