@@ -18,6 +18,7 @@ alias gitc='git commit -n -v -m'
 alias gstt='git stash save temp'
 alias gc-='git checkout -'
 alias gro='git rebase --onto'
+alias greva='git reset --soft HEAD@{1}' # revert amend
 alias gsta='git stash save' # overwriting oh-my-zsh that uses git stash push
 alias gstt='git stash save temp'
 
@@ -27,8 +28,10 @@ alias stow_check="cd $STOW_DIR && stow -n -v ."
 alias stow_do="cd $STOW_DIR && stow -v ."
 
 
+### rails ###
 alias ber='bundle exec rspec'
-alias breset='bundle update anycable-rails && rdrs'
+alias breset='bundle && rdrs'
+alias rdr='rails db:rollback:primary'
 
 
 ### misc apps ###

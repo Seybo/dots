@@ -99,6 +99,7 @@ plugins=(
   asdf
   git
   fancy-ctrl-z
+  heroku
   rails
   tmuxinator
   vi-mode
