@@ -65,7 +65,7 @@ map { "<A-f><A-r>",
 map { "Q",
   "[ Navigation ] Exit vim",
   ":qa<CR>",
-  mode = { "n", "v", "t" } }
+  mode = { "n", "v" } }
 map { "qd",
   "[ Navigation ] Close winDow",
   ":q<CR>",
