@@ -113,6 +113,7 @@ source $ZSH/oh-my-zsh.sh
 export STOW_DIR="$HOME/.dots"
 source "$STOW_DIR/no_stow/.zsh_aliases_public"
 source "$STOW_DIR/no_stow/bash_utils.sh"
+source "$STOW_DIR/no_stow/rage_utils.sh"
 source "$STOW_DIR/private/.zsh_aliases_private"
 source "$STOW_DIR/private/.env"
 
