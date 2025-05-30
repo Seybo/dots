@@ -15,11 +15,33 @@ return {
     config = function(_, opts)
       local plugin = require "cmp"
       local lsnip = require "luasnip"
+      local supermaven = require('supermaven-nvim.completion_preview')
 
       local has_words_before = function()
         unpack = unpack or table.unpack
         local line, col = unpack(vim.api.nvim_win_get_cursor(0))
         return col ~= 0 and vim.api.nvim_buf_get_lines(0, line - 1, line, true)[1]:sub(col, col):match("%s") == nil
+      end
+
+      local function accept_line(suggestion_function)
+        local line = vim.fn.line('.')
+        local line_count = vim.fn.line('$')
+
+        suggestion_function()
+
+        local added_lines = vim.fn.line('$') - line_count
+
+        if added_lines > 1 then
+          vim.api.nvim_buf_set_lines(0, line + 1, line + added_lines, false, {})
+          local last_col = #vim.api.nvim_buf_get_lines(0, line, line + 1, true)[1] or 0
+          vim.api.nvim_win_set_cursor(0, { line + 1, last_col })
+        end
+      end
+
+      -- it creates more undo breakpoints (actually after every tab+something),
+      -- so when several tabs, I can undo each, and not the whole edit
+      function My_undobreak()
+        vim.o.undolevels = vim.o.undolevels
       end
 
       plugin.setup {
@@ -87,14 +109,43 @@ return {
               fallback()
             end
           end, { "i", "s" }),
-          ["<Right>"] = plugin.mapping.confirm({
-            behavior = plugin.ConfirmBehavior.Replace,
-            select = true,
-          }),
+          ["<Right>"] = plugin.mapping(function(fallback)
+            if supermaven.has_suggestion() then
+              My_undobreak()
+              supermaven.on_accept_suggestion_word()
+            else
+              plugin.confirm({
+                behavior = plugin.ConfirmBehavior.Replace,
+                select = true,
+              })
+            end
+          end, { "i", "s" }),
+          ["<Left>"] = plugin.mapping(function(fallback)
+            if supermaven.has_suggestion() then
+              supermaven.on_dispose_inlay()
+            else
+              fallback()
+            end
+          end, { "i", "s" }),
+          ["<Tab>"] = plugin.mapping(function(fallback)
+            if supermaven.has_suggestion() then
+              My_undobreak()
+              supermaven.on_accept_suggestion()
+            else
+              plugin.complete()
+            end
+          end, { "i", "s" }),
+          ["<S-Tab>"] = plugin.mapping(function(fallback)
+            if supermaven.has_suggestion() then
+              My_undobreak()
+              accept_line(supermaven.on_accept_suggestion)
+            else
+              fallback()
+            end
+          end, { "i", "s" }),
           ["<C-u>"] = plugin.mapping.scroll_docs(-4),
           ["<C-d>"] = plugin.mapping.scroll_docs(4),
-          -- ["<C-Space>"] = plugin.mapping.complete(),
-          -- ["<C-e>"] = plugin.mapping.close(),
+          ["<Esc>"] = plugin.mapping.close(),
         },
       }
     end,

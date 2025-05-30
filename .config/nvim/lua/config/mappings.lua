@@ -158,6 +158,7 @@ vim.keymap.set("n", "<A-g><A-f>", function()
   local roots = {
     "packs/*/app/services/",
     "packs/*/app/models/",
+    "packs/*/app/components/",
     "packs/*/lib/",
     "app/components/",
     "app/jobs/",

@@ -1,9 +1,11 @@
 return {
   {
     "supermaven-inc/supermaven-nvim",
-    enabled = false,
-    config = function()
-      require("supermaven-nvim").setup({})
-    end,
+    opts = {
+      disable_keymaps = true,
+      condition = function()
+        return string.match(vim.fn.expand("%:t"), "%.log$") -- skip log files
+      end,
+    }
   },
 }
