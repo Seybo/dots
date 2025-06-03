@@ -45,10 +45,7 @@ return {
       end
 
       plugin.setup {
-        completion = {
-          completeopt = "menu, menuone",
-          preselect = "always",
-        },
+        preselect = plugin.PreselectMode.None,
         sources = {
           { name = "luasnip" },
           { name = "nvim_lsp" },
@@ -113,11 +110,13 @@ return {
             if supermaven.has_suggestion() then
               My_undobreak()
               supermaven.on_accept_suggestion_word()
-            else
+            elseif lsnip.expand_or_jumpable() then
               plugin.confirm({
                 behavior = plugin.ConfirmBehavior.Replace,
                 select = true,
               })
+            else
+              fallback()
             end
           end, { "i", "s" }),
           ["<Left>"] = plugin.mapping(function(fallback)

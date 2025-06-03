@@ -20,8 +20,8 @@ map { "*",
   mode = "v" }
 
 -- -- [[ Edit ]] -- --
-map { "<C-s>",
-  "[ Edit ] Save buffer",
+map { "<Leader>fs",
+  "[ Edit ] Save file",
   ":w<CR>",
   mode = "n" }
 map { "<A-j>",
@@ -56,7 +56,7 @@ map { "<A-h>",
   "[ Edit ] Indent lines selection left",
   "<gv",
   mode = "v" }
-map { "<A-f><A-r>",
+map { "<Leader>fr",
   "[ Edit ] Revert all the changes in the file",
   ":e!<CR>",
   mode = { "v", "n" } }
@@ -203,11 +203,11 @@ map { "<Leader>fot",
   "[ Files ] Open temp file",
   ":e ./_mydev/temp.md<CR>",
   mode = "n" }
-map { "<A-f>pa",
+map { "<Leader>fpa",
   "[ Files ] Copy absolute path",
   ":let @+ = expand('%:p')<CR>",
   mode = "n" }
-map { "<A-f>pr",
+map { "<Leader>fpr",
   "[ Files ] Copy relative path",
   ":let @+ = expand('%:.')<CR>",
   mode = "n" }
@@ -217,7 +217,7 @@ map { "<A-f>pr",
 --     print("Copied relative path: " .. relative_path)  -- Optional: print confirmation
 -- end, { desc = "[Files] Copy relative path" })
 
-map { "<A-f>pf",
+map { "<Leader>fpf",
   "[ Files ] Copy filename",
   ":let @+ = expand('%:t')<CR>",
   mode = "n" }

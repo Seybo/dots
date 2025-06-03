@@ -7,7 +7,17 @@ return {
     opts = {
       git = { enabled = true },
       gitbrowse = { enabled = true },
-      picker = { enabled = true },
+      picker = {
+        enabled = true,
+        sources = {
+          explorer = {
+            layout = {
+              -- hide search input by default
+              auto_hide = { "input" },
+            },
+          },
+        },
+      },
       scroll = {
         enabled = true,
         filter = function(buf)
@@ -17,7 +27,9 @@ return {
       },
     },
     keys = {
-      { "<leader>sp", function() Snacks.picker() end, desc = "[Snacks] Picker" },
+      { "<leader>sp", function() Snacks.picker() end,           desc = "[Snacks] Picker" },
+      { "<Leader>sb", function() Snacks.picker.lines() end,     desc = "[Snacks] Fuzzy search in current buffer" },
+      { "<leader>sw", function() Snacks.picker.grep_word() end, desc = "[Snacks] Visual selection or word",      mode = { "n", "x" } },
       {
         "<leader>sf",
         function()
@@ -25,6 +37,9 @@ return {
             auto_close = true,
             hidden = true,
             ignored = true,
+            layout = {
+              preset = "default",
+            },
           })
         end,
         desc = "[Snacks] File Explorer"

@@ -4,7 +4,12 @@ return {
     opts = {
       disable_keymaps = true,
       condition = function()
-        return string.match(vim.fn.expand("%:t"), "%.log$") -- skip log files
+        -- Skip log files
+        if string.match(vim.fn.expand("%:t"), "%.log$") then
+          return true
+        end
+
+        return false
       end,
     }
   },
