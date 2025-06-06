@@ -364,9 +364,3 @@ vim.keymap.set("n", "<A-r><A-w>", ":%s/<C-r><C-w>/", { silent = true }) -- repla
 -- replace selection
 vim.keymap.set("v", "<A-r><A-w>", "\"sy:%s/<C-r>=substitute(@s, '\\n', '', 'g')<cr>/", { silent = true })
 vim.keymap.set("n", "<A-f><A-f>", ":b#<CR>", { silent = true }) -- swetch between last two buffers
--- make <F9> work in vim the same way as in ubuntu UI
-vim.keymap.set("n", "<F9>", ":call system('copyq toggle')<CR>", { silent = true })
--- <C-o> is a temp switch to normal mode for insert
-vim.keymap.set("i", "<F9>", "<C-o>:call system('copyq toggle')<CR>", { silent = true })
--- <C-\><C-n> is a temp switch to normal mode for terminal
-vim.keymap.set("t", "<F9>", "<C-\\><C-n>:call system('copyq toggle')<CR>", { silent = true })

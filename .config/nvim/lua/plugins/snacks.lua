@@ -39,6 +39,7 @@ return {
             ignored = true,
             layout = {
               preset = "default",
+              -- preset = "ivy",
             },
           })
         end,

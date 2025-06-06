@@ -24,6 +24,7 @@ return {
         timeout = 30000, -- Timeout in milliseconds
         temperature = 0,
         max_tokens = 4096,
+        disabled_tools = { "replace_in_file" },
         -- disabled_tools = { "python" },
       },
       windows = {
