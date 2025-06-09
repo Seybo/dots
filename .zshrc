@@ -140,7 +140,13 @@ export PKG_CONFIG_PATH="/opt/homebrew/opt/postgresql@13/lib/pkgconfig"
 
 # fzf
 export FZF_PREVIEW_PREVIEW_BAT_THEME='Nord'
-export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --ansi'
+# -- rose pine moon theme
+export FZF_DEFAULT_OPTS="--height 40% --layout=reverse --ansi
+	--color=fg:#908caa,bg:#232136,hl:#ea9a97
+	--color=fg+:#e0def4,bg+:#393552,hl+:#ea9a97
+	--color=border:#44415a,header:#3e8fb0,gutter:#232136
+	--color=spinner:#f6c177,info:#9ccfd8
+	--color=pointer:#c4a7e7,marker:#eb6f92,prompt:#908caa"
 # show with catalogs content with alt-c
 # export FZF_ALT_C_OPTS="--preview 'tree -C {} | head -200'"
 export FZF_DEFAULT_COMMAND='fd --type f --strip-cwd-prefix --hidden --follow --exclude .git --color=always'
