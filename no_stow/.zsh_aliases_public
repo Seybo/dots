@@ -20,6 +20,7 @@ alias gstt='git stash save temp'
 alias gc-='git checkout -'
 alias gro='git rebase --onto'
 alias greva='git reset --soft HEAD@{1}' # revert amend
+alias gitct='gaa && gitc "temp"'
 alias gsta='git stash save' # overwriting oh-my-zsh that uses git stash push
 alias gstt='git stash save temp'
 

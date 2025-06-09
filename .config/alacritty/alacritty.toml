@@ -5,7 +5,9 @@ TERM="xterm-256color"
 live_config_reload = true
 # themes
 import = [
-  "~/.dots/.config/alacritty/catppuccin-macchiato.toml"
+  # "~/.dots/.config/alacritty/catppuccin-macchiato.toml"
+  # "~/.dots/.config/alacritty/kanagawa_wave.toml"
+  "~/.dots/.config/alacritty/rosepine_moon.toml"
 ]
 
 [cursor]
@@ -20,19 +22,19 @@ family = "Hack Nerd Font"
 style = "Bold"
 
 [font.italic]
-family = "Hack Nerd Font"
+family = "Lekton Nerd Font Mono"
 style = "Italic"
 
 [font.normal]
-family = "Hack Nerd Font"
+family = "SauceCodePro Nerd Font Mono"
 style = "Regular"
 
 [font.offset]
 x = 0
-y = 4
+y = 2
 
 [scrolling]
-history = 20000
+history = 99000
 multiplier = 3
 
 [selection]
@@ -49,8 +51,8 @@ startup_mode = "Fullscreen"
 option_as_alt = "Both"
 
 [window.padding]
-x = 0
-y = 0
+x = 12 
+y = 4
 
 [keyboard]
 bindings = [
