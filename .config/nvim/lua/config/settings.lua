@@ -1,6 +1,6 @@
 -- -- [[ Global ]] -- --
-vim.ortermguicolors = true
 vim.g.mapleader = " "
+vim.opt.termguicolors = true
 vim.opt.mouse = "a"        -- enable mouse support
 vim.opt.backupcopy = "yes" -- create backup copy of file on save
 
