@@ -37,6 +37,6 @@ alias rdr='rails db:rollback:primary'
 
 
 ### misc apps ###
-alias rg='ranger'
+alias rgr='ranger'
 alias v='nvim'
 alias vim='nvim'

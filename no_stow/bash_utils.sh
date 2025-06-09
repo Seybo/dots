@@ -20,29 +20,48 @@ move_n_files() {
 
   mkdir -p -- "$dst"
 
-  # Build an array of **regular files only** (no directories).
-  # The glob qualifier `(.)` means “plain files,” and `.N` means “sort names”:
-  local files=( *(.) )
+  # Use ls with quoting to handle complex filenames
+  local -a files
+  files=( *(.) )
+  local -i total_files=${#files[@]}
 
-  # If you want to include hidden files as well, use: files=( *(D.) )
-
-  # “numfiles” is how many we actually have:
-  local -i numfiles=${#files}
-
-  if (( numfiles == 0 )); then
+  if (( total_files == 0 )); then
     echo "No files to move."
     return 0
   fi
 
-  # Cap n at the number of files we actually have:
-  if (( n > numfiles )); then
-    n=$numfiles
+  # Cap n at the number of files we actually have
+  if (( n > total_files )); then
+    n=$total_files
   fi
 
-  # Now move the first n items one by one:
-  for (( i = 1; i <= n; i++ )); do
-    mv -- "${files[i]}" "$dst/"
+  # Shuffle and move files
+  local -a selected_files
+  local -i i=0
+  
+  # Use a loop to select unique random files
+  while (( i < n )); do
+    local rand_index=$(( RANDOM % total_files ))
+    local candidate="${files[rand_index+1]}"
+    
+    # Check if file is already selected
+    if [[ ! " ${selected_files[@]} " =~ " $candidate " ]]; then
+      selected_files+=("$candidate")
+      (( i++ ))
+    fi
   done
 
-  echo "Moved $n of $numfiles files into '$dst/'."
+  # Move the selected files (macOS compatible)
+  for file in "${selected_files[@]}"; do
+    mv -- "$file" "$dst/"
+  done
+
+  echo "Moved $n of $total_files files randomly into '$dst/'."
 }
+
+undupe_history() {
+  nl "$1" | sort -k 2  -k 1,1nr| uniq -f 1 | sort -n | cut -f 2 > unduped_history
+  rm "$1"
+  mv unduped_history "$1"
+}
+
