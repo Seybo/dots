@@ -467,7 +467,7 @@ set -g @rose_pine_bar_bg_disable 'on'
 set -g @rose_pine_only_windows 'on'
 set -g @rose_pine_disable_active_window_menu 'on'
 set -g @rose_pine_bar_bg_disable 'on' # Disables background color, for transparent terminal emulators
-set -g @rose_pine_bar_bg_disabled_color_option '#2A2A37'
+set -g @rose_pine_bar_bg_disabled_color_option "$BG_COLOR"
 
 # set -g @rose_pine_host 'on' # Enables hostname in the status bar
 # set -g @rose_pine_date_time '' # It accepts the date UNIX command format (man date for info)
