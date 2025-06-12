@@ -98,7 +98,6 @@ DISABLE_LS_COLORS="true"
 plugins=(
   asdf
   git
-  fancy-ctrl-z
   heroku
   rails
   tmuxinator
@@ -108,6 +107,22 @@ plugins=(
 source $ZSH/oh-my-zsh.sh
 
 # User configuration
+
+# fancy ctrl-z
+fancy-ctrl-z() {
+  # 1) if INPUT BUFFER is empty, queue up an "fg"  
+  if [[ -z $BUFFER ]]; then
+    BUFFER="fg"
+    zle accept-line       # execute the fg
+  else
+    # 2) otherwise push current line into history & clear screen
+    zle push-input
+    zle clear-screen
+  fi
+}
+# register it as a ZLE widget and bind Ctrl-Z
+zle -N fancy-ctrl-z fancy-ctrl-z
+bindkey '^Z' fancy-ctrl-z
 
 # stow
 export STOW_DIR="$HOME/.dots"
@@ -142,9 +157,9 @@ export PKG_CONFIG_PATH="/opt/homebrew/opt/postgresql@13/lib/pkgconfig"
 export FZF_PREVIEW_PREVIEW_BAT_THEME='Nord'
 # -- rose pine moon theme
 export FZF_DEFAULT_OPTS="--height 40% --layout=reverse --ansi
-	--color=fg:#908caa,bg:#232136,hl:#ea9a97
+	--color=fg:#908caa,bg:#2A2A37,hl:#ea9a97
 	--color=fg+:#e0def4,bg+:#393552,hl+:#ea9a97
-	--color=border:#44415a,header:#3e8fb0,gutter:#232136
+	--color=border:#44415a,header:#3e8fb0,gutter:#2A2A37
 	--color=spinner:#f6c177,info:#9ccfd8
 	--color=pointer:#c4a7e7,marker:#eb6f92,prompt:#908caa"
 # show with catalogs content with alt-c
