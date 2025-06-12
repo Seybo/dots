@@ -1,0 +1,5 @@
+indent_type = 'Spaces'               # use spaces, not tabs
+indent_width = 2                     # exactly two spaces per indent
+quote_style = 'AutoPreferSingle'     # use single quotes wherever possible
+column_width = 150                   # ← allow up to 200 chars before wrapping
+collapse_simple_statement = 'Never'  # keep one-line functions (even inside tables) on a single line whenever they fit
