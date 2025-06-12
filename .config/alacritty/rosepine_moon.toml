@@ -1,10 +1,14 @@
 [env]
-BG_COLOR = "#2e2e2e"
+# BG_COLOR = "#1e1e1e" # dark dark
+# BG_COLOR = "#242424" # dark
+BG_COLOR = "#282c34" # vscode dark
+# BG_COLOR = "#2a2a2a" # medium dark grey
+# BG_COLOR = "#2e2e2e" # soft black, greenish
 
 [colors.primary]
 foreground = "#e0def4"
 # background = "#232136" -- default
-background = "#2e2e2e"
+background = "#282c34"
 dim_foreground = "#908caa"
 bright_foreground = "#e0def4"
 
