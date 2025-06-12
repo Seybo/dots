@@ -378,7 +378,8 @@ bind t run-shell "tmux setw -g status \$(tmux show -g -w status | grep -q off &&
 # bind c new-window -c '#{pane_current_path}' #!important
 
 # move status line to top
-#set -g status-position top
+set -g status-position top
+set -g status-justify right
 
 
 # -- tpm -----------------------------------------------------------------------
@@ -462,6 +463,7 @@ set -g @plugin 'rose-pine/tmux'
 set -g @rose_pine_variant 'moon' # Options are 'main', 'moon' or 'dawn'
 set -g @rose_pine_session_icon '🤙'
 set -g @rose_pine_bar_bg_disable 'on'
+# this make sure i only have windows list (and it is aligned to the right)
 set -g @rose_pine_only_windows 'on'
 set -g @rose_pine_disable_active_window_menu 'on'
 set -g @rose_pine_bar_bg_disable 'on' # Disables background color, for transparent terminal emulators

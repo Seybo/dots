@@ -51,8 +51,8 @@ startup_mode = "Fullscreen"
 option_as_alt = "Both"
 
 [window.padding]
-x = 12 
-y = 4
+x = 10 
+y = 6
 
 [keyboard]
 bindings = [
