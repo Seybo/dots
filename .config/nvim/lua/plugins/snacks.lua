@@ -1,50 +1,46 @@
 return {
   {
-    "folke/snacks.nvim",
+    'folke/snacks.nvim',
     priority = 1000,
     lazy = false,
     ---@type snacks.Config
     opts = {
+      debug = { enabled = true },
+      dim = { enabled = false },
       git = { enabled = true },
       gitbrowse = { enabled = true },
-      picker = {
-        enabled = true,
-        sources = {
-          explorer = {
-            layout = {
-              -- hide search input by default
-              auto_hide = { "input" },
-            },
-          },
-        },
-      },
+      input = { enabled = true },
+      notifier = { enabled = true },
+      picker = { enabled = false },
       scroll = {
         enabled = true,
-        filter = function(buf)
-          return vim.bo[buf].buftype ~= "terminal"
-              and vim.bo[buf].filetype ~= "Avante"
-        end,
+        animate = {
+          -- smaller per‐step delay and total time
+          duration = { step = 10, total = 125 },
+          easing = 'linear',
+        },
+        animate_repeat = {
+          -- as soon as you scroll twice within 100ms, it’ll be even snappier
+          delay = 100,
+          duration = { step = 3, total = 30 },
+          easing = 'linear',
+        },
+        filter = function(buf) return vim.bo[buf].buftype ~= 'terminal' and vim.bo[buf].filetype ~= 'Avante' end,
       },
+      zen = { enabled = true },
     },
     keys = {
-      { "<leader>sp", function() Snacks.picker() end,           desc = "[Snacks] Picker" },
-      { "<Leader>sb", function() Snacks.picker.lines() end,     desc = "[Snacks] Fuzzy search in current buffer" },
-      { "<leader>sw", function() Snacks.picker.grep_word() end, desc = "[Snacks] Visual selection or word",      mode = { "n", "x" } },
-      {
-        "<leader>sf",
-        function()
-          Snacks.explorer({
-            auto_close = true,
-            hidden = true,
-            ignored = true,
-            layout = {
-              preset = "default",
-              -- preset = "ivy",
-            },
-          })
-        end,
-        desc = "[Snacks] File Explorer"
-      },
+      -- git browse/blame [gb]
+      { 'gbl', function() Snacks.git.blame_line() end, desc = '[Snacks] Git blame line' },
+      { 'gbo', function() Snacks.gitbrowse.open() end, desc = '[Snacks] Git blame' },
+      { 'gbm', function()
+        require('snacks.gitbrowse').open({
+          what = 'file',
+          branch = 'master',
+        })
+      end, mode = { 'n', 'v' }, desc = '[Snacks] Git blame' },
+      { '<leader>u', function() Snacks.picker.undo() end, desc = '[Snacks] Undo history' },
+      { '<leader>n', function() Snacks.notifier.show_history() end, desc = '[Snacks] Show notifications history' },
     },
-  }
+  },
 }

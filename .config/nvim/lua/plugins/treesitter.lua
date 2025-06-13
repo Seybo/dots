@@ -1,55 +1,55 @@
 return {
-  -- Treesitter is a new parser generator tool that we can
-  -- use in Neovim to power faster and more accurate
-  -- syntax highlighting.
   {
-    "nvim-treesitter/nvim-treesitter",
-    version = false, -- last release is way too old and doesn't work on Windows
-    build = ":TSUpdate",
-    event = { "VeryLazy" },
-    lazy = vim.fn.argc(-1) == 0, -- load treesitter early when opening a file from the cmdline
-    init = function(plugin)
-      -- PERF: add nvim-treesitter queries to the rtp and it's custom query predicates early
-      -- This is needed because a bunch of plugins no longer `require("nvim-treesitter")`, which
-      -- no longer trigger the **nvim-treesitter** module to be loaded in time.
-      -- Luckily, the only things that those plugins need are the custom queries, which we make available
-      -- during startup.
-      require("lazy.core.loader").add_to_rtp(plugin)
-      require("nvim-treesitter.query_predicates")
+    'nvim-treesitter/nvim-treesitter',
+    branch = 'master',
+    lazy = false,
+    build = ':TSUpdate',
+    config = function()
+      local configs = require('nvim-treesitter.configs')
+
+      configs.setup({
+        ensure_installed = {
+          'bash',
+          'diff',
+          'html',
+          'javascript',
+          'jsdoc',
+          'json',
+          'jsonc',
+          'lua',
+          'vim',
+          'vimdoc',
+          'html',
+          'markdown',
+          'markdown_inline',
+          'printf',
+          'python',
+          'query',
+          'regex',
+          'ruby',
+          'toml',
+          'tsx',
+          'typescript',
+          'vim',
+          'vimdoc',
+          'xml',
+          'yaml',
+        },
+        sync_install = false,
+        highlight = { enable = true },
+        -- indentation as you type. Indentation fixes on save are handled by lsp (autocommand)
+        indent = { enable = true },
+        -- Incremental selection based on the named nodes from the grammar
+        incremental_selection = {
+          enable = true,
+          keymaps = {
+            init_selection = '<Enter>', -- set to `false` to disable one of the mappings
+            node_incremental = '<Enter>',
+            scope_incremental = false,
+            node_decremental = '<Backspace>',
+          },
+        },
+      })
     end,
-    cmd = { "TSUpdateSync", "TSUpdate", "TSInstall" },
-    opts_extend = { "ensure_installed" },
-    ---@type TSConfig
-    ---@diagnostic disable-next-line: missing-fields
-    opts = {
-      highlight = { enable = true },
-      indent = { enable = true },
-      ensure_installed = {
-        "bash",
-        "c",
-        "diff",
-        "html",
-        "javascript",
-        "jsdoc",
-        "json",
-        "jsonc",
-        "lua",
-        "luadoc",
-        "luap",
-        "markdown",
-        "markdown_inline",
-        "printf",
-        "python",
-        "query",
-        "regex",
-        "toml",
-        "tsx",
-        "typescript",
-        "vim",
-        "vimdoc",
-        "xml",
-        "yaml",
-      },
-    },
   },
 }

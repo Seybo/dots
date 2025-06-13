@@ -1,130 +1,51 @@
-local autocmds = {
-    { -- autoformat on save
-        { "BufWritePre" },
-        {
-            pattern = "*",
-            callback = function()
-                local filetype = vim.bo.filetype
-                local clients = vim.lsp.get_clients()
+local diagnostics_icons = require('utils.icons').diagnostics
 
-                local client
+-- higlight yanked text quickly
+vim.api.nvim_create_autocmd('TextYankPost', {
+  group = vim.api.nvim_create_augroup('YankHighlight', { clear = true }),
+  pattern = '*',
+  callback = function()
+    vim.highlight.on_yank()
+  end,
+  desc = 'Hightlight yank',
+})
 
-                -- Skip formatting if no clients are attached
-                if #clients == 0 then
-                    return
-                end
+-- -- [[ Saving folds across sessions ]] --
+-- create an augroup so you can clear it later if needed
+local view_grp = vim.api.nvim_create_augroup('SaveFolds', { clear = true })
+-- save a view (folds, cursor, window layout, etc.) on buffer/window leave
+vim.api.nvim_create_autocmd({ 'BufWinLeave', 'WinLeave' }, {
+  group = view_grp,
+  pattern = '*',
+  command = 'silent! mkview',
+})
+-- restore that view when you come back
+vim.api.nvim_create_autocmd({ 'BufWinEnter', 'WinEnter' }, {
+  group = view_grp,
+  pattern = '*',
+  command = 'silent! loadview',
+})
 
-                for _, c in ipairs(clients) do
-                    if c.config ~= nil and c.config.filetypes ~= nil then
-                        for _, ft in ipairs(c.config.filetypes) do
-                            if ft == filetype then
-                                client = c
-                                break
-                            end
-                        end
-                    end
-
-                    if client then
-                        break
-                    end
-                end
-
-                if client and client.supports_method and client.supports_method("textDocument/formatting") then
-                    -- Add error handling for format request with a reasonable timeout
-                    local ok, err = pcall(function()
-                        vim.lsp.buf.format({ timeout_ms = 1000 }) -- 1 second timeout
-                    end)
-                    if not ok then
-                        -- Just log the error without interrupting the workflow
-                        vim.schedule(function()
-                            vim.notify("Format skipped: " .. tostring(err), vim.log.levels.WARN)
-                        end)
-                    end
-                else -- just remove trailing whitespaces
-                    local bufname = vim.fn.expand "<afile>"
-                    local bufnr = vim.fn.bufnr(bufname)
-
-                    if bufnr == -1 then return end
-
-                    local modifiable = vim.api.nvim_buf_get_option(bufnr, "modifiable")
-
-                    if modifiable then
-                        local trimmer = require "mini.trailspace"
-
-                        vim.api.nvim_buf_set_lines(0, 0, vim.fn.nextnonblank(1) - 1, true, {})
-
-                        if filetype ~= "markdown" then
-                            trimmer.trim()
-                        end
-
-                        trimmer.trim_last_lines()
-                    end
-                end
-            end,
-        },
-    },
-
-    { -- lsp diagnostics popup window auto-open
-        { "CursorHold" },
-        {
-            pattern = "*",
-            callback = function()
-                local opts = {
-                    focusable = false,
-                    close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
-                    border = "rounded",
-                    source = "always",
-                    prefix = "🔔 ",
-                    scope = "cursor",
-                }
-                vim.diagnostic.open_float(nil, opts)
-            end,
-        } },
-
-    { -- disable line numbers in teminal windows
-        { "TermOpen" },
-        {
-            pattern = "*",
-            command = "setlocal norelativenumber nonumber",
-        },
-    },
-
-    {
-        { "BufRead" },
-        {
-            pattern = ".pryrc",
-            command = "set filetype=ruby",
-        },
-    },
-}
-
--- START: ad-hoc fold methods
-local foldmethod_map = {
-    ["aloha_pushes.rb"] = "indent",
-}
-
-local foldmethod_autocmds = {}
-for filename, foldmethod in pairs(foldmethod_map) do
-    table.insert(foldmethod_autocmds, {
-        { "BufRead" },
-        {
-            pattern = filename,
-            command = "setlocal foldmethod=" .. foldmethod,
-        },
-    })
-end
-
-for _, cmd in ipairs(foldmethod_autocmds) do
-    table.insert(autocmds, cmd)
-end
--- END: ad-hoc fold methods
-
--- clear = true prevents duplicate autocmds
-local augroup = vim.api.nvim_create_augroup("MyAutoCommands", { clear = true })
-
-for _, x in ipairs(autocmds) do
-    for _, event in ipairs(x[1]) do
-        local opts = vim.tbl_extend("force", x[2], { group = augroup })
-        vim.api.nvim_create_autocmd(event, opts)
-    end
-end
+-- vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
+--   callback = function(ev)
+--     vim.diagnostic.open_float(ev.buf, {
+--       focusable = false,
+--       border = 'rounded',
+--       scope = 'line', -- message is shown as soon as the cursor is on the problematic line
+--       prefix = function(d)
+--         local sev = d.severity
+--         if sev == vim.diagnostic.severity.ERROR then
+--           return diagnostics_icons.Error
+--         elseif sev == vim.diagnostic.severity.WARN then
+--           return diagnostics_icons.Warn
+--         elseif sev == vim.diagnostic.severity.INFO then
+--           return diagnostics_icons.Info
+--         elseif sev == vim.diagnostic.severity.HINT then
+--           return diagnostics_icons.Hint
+--         else
+--           return ''
+--         end
+--       end,
+--     })
+--   end,
+-- })

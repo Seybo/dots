@@ -1,66 +1,80 @@
 -- -- [[ Global ]] -- --
-vim.g.mapleader = " "
-vim.opt.termguicolors = true
-vim.opt.mouse = "a"        -- enable mouse support
-vim.opt.backupcopy = "yes" -- create backup copy of file on save
+-- Set <space> as the leader key
+-- See `:help mapleader`
+--  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
+vim.g.mapleader = ' '
+vim.g.maplocalleader = ' '
+vim.g.have_nerd_font = true
+vim.o.mouse = 'a' -- Enable mouse mode, can be useful for resizing splits for example
+vim.o.showmode = false -- Don't show the mode, since it's already in the status line
+vim.o.termguicolors = true
 
--- -- [[ Folding ]] -- --
-vim.opt.foldenable = false -- don't fold on file open
-vim.opt.foldmethod = "expr"
-vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
+-- [[ Setting options ]]
+-- See `:help vim.o`
+-- For more options, you can see `:help option-list`
 
--- -- [[ Tabline ]] -- --
-vim.opt.showtabline = 2 -- always visible
+-- Line number
+vim.o.number = true -- Show by default
+vim.o.relativenumber = true -- Relative numbers, to help with jumping
 
--- -- [[ History ]] -- --
-vim.opt.undofile = true
-vim.opt.undolevels = 1000
+-- Indentation
+vim.o.breakindent = true -- Enable break indent
+vim.o.expandtab = true -- Convert tabs to spaces
+vim.o.shiftwidth = 2 -- How manu spaces to use for indentation by default
+vim.o.tabstop = 2 -- This is similar to shiftwidth and it doesn't make sense to set them different
+vim.o.softtabstop = 2 -- This is similar to shiftwidth and it doesn't make sense to set them different
+vim.o.smarttab = true
+vim.o.smartindent = false
+vim.o.autoindent = true -- Keep indentation from the prev line
 
--- -- [[ Indentation ]] -- --
-vim.opt.smartindent = true
-vim.opt.expandtab = true
-vim.opt.shiftwidth = 2
+-- Folding
+vim.o.foldmethod = 'expr'
+vim.o.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+vim.o.foldlevel = 99 -- all folds up to level 99 will be open
+vim.o.foldlevelstart = 99 -- when opening a file, start with these folds open
 
--- -- [[ Left columens ]] -- --
-vim.opt.number = true         -- Enable line numbers
-vim.opt.relativenumber = true -- Enable relative line numbers
-vim.opt.signcolumn = "yes:1"  -- Always show signcolumn
+-- Save undo history
+vim.o.undofile = true
+vim.o.undolevels = 1000
 
--- -- [[ LSP ]] -- --
--- time before writing swap files to disk
--- and lsp diagnostics floating windows showup time
-vim.o.updatetime = 1000
--- use lua print(:vim.lsp.get_log_path()) to see the log file path for below
--- vim.lsp.set_log_level("debug")
+-- Case-insensitive searching UNLESS \C or one or more capital letters in the search term
+vim.o.ignorecase = true
+vim.o.smartcase = true
 
--- vim.opt.hidden = true
--- vim.opt.splitright = true
--- vim.opt.splitbelow = true
--- vim.opt.wrapscan = true
--- vim.opt.backup = false
--- vim.opt.writebackup = false
--- vim.opt.showcmd = true
--- vim.opt.showmatch = true
--- vim.opt.ignorecase = true
--- vim.opt.hlsearch = true
--- vim.opt.smartcase = true
--- vim.opt.errorbells = false
--- vim.opt.joinspaces = false
--- vim.opt.title = true
--- vim.opt.encoding = "UTF-8"
--- vim.opt.completeopt = { "menu", "menuone", "noselect" }
--- vim.opt.laststatus = 3
--- vim.opt.timeoutlen = 500
--- if vim.fn.has("nvim-0.9.0") == 1 then
---     vim.opt.splitkeep = "screen"
--- end
--- vim.opt.tabstop = 2
--- vim.opt.spelllang = "it"
--- vim.opt.softtabstop = 2
--- vim.opt.swapfile = false
--- vim.opt.cursorline = false
+-- Keep signcolumn on by default
+vim.o.signcolumn = 'yes'
 
--- to remove checkhealth warning: "Neovim::Ext" cpan module is not installed
--- vim.g.loaded_perl_provider = 0
--- vim.g.ruby_host_prog = "~/.rbenv/versions/2.7.6/bin/neovim-ruby-host"
--- vim.g.python3_host_prog = "$HOME/.pyenv/versions/3.12.2/bin/python"
+-- Decrease update time
+vim.o.updatetime = 250
+
+-- Decrease mapped sequence wait time
+vim.o.timeoutlen = 300
+
+-- Configure how new splits should be opened
+vim.o.splitright = true
+vim.o.splitbelow = true
+
+-- Sets how neovim will display certain whitespace characters in the editor.
+--  See `:help 'list'`
+--  and `:help 'listchars'`
+--
+--  Notice listchars is set using `vim.opt` instead of `vim.o`.
+--  It is very similar to `vim.o` but offers an interface for conveniently interacting with tables.
+--   See `:help lua-options`
+--   and `:help lua-options-guide`
+vim.o.list = true
+vim.opt.listchars = { tab = '» ', trail = '⋅', nbsp = '␣' }
+
+-- Preview substitutions live, as you type
+vim.o.inccommand = 'split'
+
+-- Show which line your cursor is on
+vim.o.cursorline = true
+
+-- Minimal number of screen lines to keep above and below the cursor.
+vim.o.scrolloff = 5
+
+-- if performing an operation that would fail due to unsaved changes in the buffer (like `:q`),
+-- instead raise a dialog asking if you wish to save the current file(s)
+-- See `:help 'confirm'`
+vim.o.confirm = true

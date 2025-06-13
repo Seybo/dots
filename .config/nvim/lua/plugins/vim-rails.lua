@@ -1,28 +1,22 @@
 return {
   {
-    "tpope/vim-rails",
-    event = { "BufReadPre", "BufNewFile" },
-    config = function(_, opts)
-      map { "ra",
-        "",
-        "ra",
-        mode = "n" } -- revert the original binding replaced with :A
-      map { "<A-r><A-a>",
-        "Rails Alternative file",
-        ":A<CR>",
-        mode = "n" }
-      map { "<A-r><A-s>",
-        "Rails Alternative file",
-        ":R<CR>",
-        mode = "n" }
-      map { "<A-g><A-b>",
-        "TODO_MM:",
-        'viw"sy:Efixtures <C-r>=tolower(substitute(substitute(@s, \'\\n\', \'\', \'g\'), \'/\', \'\\\\/\', \'g\'))<cr>_factories<cr>',
-        mode = "n" }
-      map { "<A-g><A-b>",
-        "TODO_MM:",
-        '"sy:Efixtures <C-r>=tolower(substitute(substitute(@s, \'\\n\', \'\', \'g\'), \'/\', \'\\\\/\', \'g\'))<cr>',
-        mode = "v" }
-    end,
+    'tpope/vim-rails',
+    event = { 'BufReadPre', 'BufNewFile' },
+    keys = {
+      { 'ra', '', desc = '[ Vim Rails ] Revert the original binding replaced with :A' },
+      { '<a-r><a-a>', ':A<CR>', desc = '[ Vim Rails ] Alternative file' },
+      { '<a-r><a-s>', ':R<CR>', desc = '[ Vim Rails ] Alternative file' },
+      {
+        '<a-g><a-b>',
+        "viw\"sy:Efixtures <C-r>=tolower(substitute(substitute(@s, '\\n', '', 'g'), '/', '\\\\/', 'g'))<cr>_factories<cr>",
+        desc = '[ Vim Rails ] Fixtures',
+      },
+      {
+        '<a-g><a-c>',
+        "viw\"sy:Econtrollers <C-r>=substitute(substitute(@s, '\\n', '', 'g'), '/', '\\\\/', 'g')<cr>",
+        'v',
+        desc = '[ Vim Rails ] Fixtures',
+      },
+    },
   },
 }
