@@ -4,12 +4,8 @@ TERM = 'xterm-256color'
 [general]
 working_directory = '.dots'
 live_config_reload = true
-# themes
-import = [
-  # '~/.dots/.config/alacritty/catppuccin-macchiato.toml'
-  # '~/.dots/.config/alacritty/kanagawa_wave.toml'
-  '~/.dots/.config/alacritty/rosepine_moon.toml',
-]
+# the whole env theme is managed by the theme script: themes/theme_switcher.rb and its zsh alias 'theme'
+import = ["~/.dots/no_stow/themes/active/alacritty.toml"]
 
 [cursor]
 style = 'Underline'

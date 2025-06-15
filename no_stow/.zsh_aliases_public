@@ -3,6 +3,11 @@ alias ll='ls -al -G'
 alias ..='cd ..'
 alias re_source='source ~/.zshrc'
 alias brew_update_all='brew update && brew upgrade && brew upgrade --cask && brew cleanup'
+theme() {
+  ruby ~/.dots/no_stow/themes/theme_switcher.rb "$@"
+  tmux kill-server # tmux has to be restarted
+  # alacritty has to be restarted manually after that as well
+}
 
 
 ### tmux ###

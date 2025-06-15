@@ -306,14 +306,6 @@ unknown_msg = '[◌](bold dimmed ellow)'
 symbol = "◇ "
 format = " spack [$symbol$environment]($style)"
 
-palette = "rose-pine-moon"
-
-[palettes.rose-pine-moon]
-# overlay = '#393552'
-overlay = "{{BG_COLOR}}"
-love = '#eb6f92'
-gold = '#f6c177'
-rose = '#ea9a97'
-pine = '#3e8fb0'
-foam = '#9ccfd8'
-iris = '#c4a7e7'
+# theme
+# the whole env theme is managed by the theme script: themes/theme_switcher.rb and its zsh alias 'theme'
+import = ["~/.dots/no_stow/themes/active/starship.toml"]
