@@ -53,30 +53,6 @@ return {
       callback = function() vim.diagnostic.open_float(nil, { focusable = false }) end,
     })
 
-    -- set up each LSP exactly once + highlights
-    vim.api.nvim_create_augroup('MyLspAttach', { clear = true })
-    vim.api.nvim_create_autocmd('LspAttach', {
-      group = 'MyLspAttach',
-      callback = function(ev)
-        local buf, client = ev.buf, vim.lsp.get_client_by_id(ev.data.client_id)
-
-        -- documentHighlight if supported
-        if client and client:supports_method('textDocument/documentHighlight') then
-          local hg = vim.api.nvim_create_augroup('MyLspDocumentHighlight_' .. buf, { clear = true })
-          vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
-            group = hg,
-            buffer = buf,
-            callback = vim.lsp.buf.document_highlight,
-          })
-          vim.api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI' }, {
-            group = hg,
-            buffer = buf,
-            callback = vim.lsp.buf.clear_references,
-          })
-        end
-      end,
-    })
-
     for name, opts in pairs(servers) do
       if name == 'rubocop' then
         lspconfig.rubocop.setup({

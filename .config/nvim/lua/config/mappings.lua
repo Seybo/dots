@@ -17,20 +17,57 @@ vim.keymap.set('n', '<a-d><a-d>', '"+dd', { desc = '[ Copy/Paste ] Cut the line 
 vim.keymap.set('n', '<a-p>', '"+p', { desc = '[ Copy/Paste ] Paste from system clipboard' })
 vim.keymap.set('v', '<a-.>', ":t'><cr>", { desc = '[ Copy/Paste ] Duplicate visual selection' })
 
+local function extract_word_around_cursor(line, col)
+  -- Adjust col to be 1-indexed and handle 0-based indexing
+  col = col + 1
+
+  local start_col = col
+  local end_col = col
+
+  -- If cursor is on a space, move to the next non-space character
+  if line:sub(col, col):match('%s') then
+    while start_col <= #line and line:sub(start_col, start_col):match('%s') do
+      start_col = start_col + 1
+    end
+    end_col = start_col
+  end
+
+  -- Move start_col left while it's a valid word character or namespace separator
+  while start_col > 1 do
+    local char = line:sub(start_col - 1, start_col - 1)
+    if not char:match('[%w_:]') then break end
+    start_col = start_col - 1
+  end
+
+  -- Move end_col right while it's a valid word character, namespace separator, or method call
+  while end_col <= #line do
+    local char = line:sub(end_col, end_col)
+    if not char:match('[%w_:.]') then
+      end_col = end_col - 1
+      break
+    end
+    end_col = end_col + 1
+  end
+
+  -- Extract the word
+  local word = line:sub(start_col, end_col)
+
+  -- Remove trailing method calls or dots
+  word = word:gsub('[.:][^:.:]*$', '')
+
+  return word
+end
+
 -- -- [[ Selection ]] -- --
 vim.keymap.set('n', '<c-a><c-a>', 'ggVG<cr>', { desc = '[ Selection ] Select all' })
 vim.keymap.set('n', '<esc>', ':noh<cr>', { desc = '[ Selection ] Deselect all' })
 vim.keymap.set('n', '<a-g><a-f>', function()
-  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local _, col = unpack(vim.api.nvim_win_get_cursor(0))
   local line = vim.api.nvim_get_current_line()
-
-  -- Get word around cursor
-  local left = line:sub(1, col + 1)
-  local right = line:sub(col + 2)
-  local joined = left .. right
+  local word = extract_word_around_cursor(line, col)
 
   -- Try to extract a Ruby constant like Foo::Bar or just Foo
-  local match = joined:match('([%a_][%w_]*::[%w_:]+)') or joined:match('([%a_][%w_]*)')
+  local match = word:match('([%a_][%w_]*::[%w_:]+)') or word:match('([%a_][%w_]*)')
   if not match then
     vim.notify('No valid constant near cursor', vim.log.levels.WARN)
     return
@@ -44,6 +81,8 @@ vim.keymap.set('n', '<a-g><a-f>', function()
 
   -- List of fallback roots to search from (with ** recursive globbing)
   local roots = {
+    'packs/*/app/public/',
+    'packs/*/app/public/concerns/',
     'packs/*/app/services/',
     'packs/*/app/models/',
     'packs/*/app/components/',
@@ -51,6 +90,7 @@ vim.keymap.set('n', '<a-g><a-f>', function()
     'app/components/',
     'app/jobs/',
     'app/models/',
+    'app/models/concerns/',
     'app/services/',
     'lib/',
   }
@@ -127,22 +167,11 @@ vim.keymap.set('n', '<S-left>', function() vim.cmd('vertical resize -' .. 5) end
 vim.keymap.set('n', '<S-up>', function() vim.cmd('resize +' .. 3) end, { silent = true })
 vim.keymap.set('n', '<S-down>', function() vim.cmd('resize -' .. 3) end, { silent = true })
 
--- -- [[ Spellcheck ]] -- --
+-- -- [[ Files ]] -- --
 
--- vim.keymap.set('n', '<A-s><A-r>', ':set spelllang=ru_yo<CR>', { silent = true }) -- RU
--- vim.keymap.set('n', '<A-s><A-e>', ':set spelllang=en_us<CR>', { silent = true }) -- EN
--- local function ToggleSpellCheck()
---   -- Toggle the 'spell' option
---   vim.cmd('set spell!')
---
---   -- Check the state of the 'spell' option and echo the corresponding message
---   if vim.o.spell then
---     print('Spellcheck ON')
---   else
---     print('Spellcheck OFF')
---   end
--- end
--- vim.keymap.set('n', '<A-s><A-t>', ToggleSpellCheck, { silent = true })
+vim.keymap.set('n', '<leader>pa', ":let @+ = expand('%:p')<cr>", { desc = '[ Files ] Copy absolute path', silent = true })
+vim.keymap.set('n', '<leader>pr', ":let @+ = expand('%:.')<cr>", { desc = '[ Files ] Copy relative path', silent = true })
+vim.keymap.set('v', '<leader>pf', ":let @+ = expand('%:t')<CR>", { desc = '[ Files ] Copy filename', silent = true })
 
 -- -- [[ Misc ]] -- --
 

@@ -5,6 +5,7 @@ return {
     version = false, -- Never set this value to "*"! Never!
     opts = {
       provider = 'claude',
+      mode = 'legacy', -- in legace mode disabled_tools are respected
       providers = {
         openai = {
           endpoint = 'https://api.openai.com/v1',
