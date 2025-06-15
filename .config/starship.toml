@@ -161,7 +161,7 @@ ignore_branches = ["main", "master"]
 only_attached = true
 
 [git_metrics]
-format = '([▴$added]($added_style))([▿$deleted]($deleted_style))'
+format = '([▴ $added]($added_style))([▿ $deleted]($deleted_style))'
 added_style = 'italic dimmed green'
 deleted_style = 'italic dimmed red'
 ignore_submodules = true
