@@ -1,33 +1,35 @@
 [env]
-TERM = "xterm-256color"
+TERM = 'xterm-256color'
 
 [general]
+working_directory = '.dots'
 live_config_reload = true
 # themes
 import = [
-  # "~/.dots/.config/alacritty/catppuccin-macchiato.toml"
-  # "~/.dots/.config/alacritty/kanagawa_wave.toml"
-  "~/.dots/.config/alacritty/rosepine_moon.toml",
+  # '~/.dots/.config/alacritty/catppuccin-macchiato.toml'
+  # '~/.dots/.config/alacritty/kanagawa_wave.toml'
+  '~/.dots/.config/alacritty/rosepine_moon.toml',
 ]
 
 [cursor]
-style = "Underline"
+style = 'Underline'
 unfocused_hollow = true
 
 [font]
 size = 16.0
 
 [font.bold]
-family = "Hack Nerd Font"
-style = "Bold"
+family = 'Hack Nerd Font'
+style = 'Bold'
 
 [font.italic]
-family = "Lekton Nerd Font Mono"
-style = "Italic"
+# family = 'Lekton Nerd Font Mono'
+family = 'Iosevka Nerd Font Mono'
+style = 'Italic'
 
 [font.normal]
-family = "SauceCodePro Nerd Font Mono"
-style = "Regular"
+family = 'SauceCodePro Nerd Font Mono'
+style = 'Regular'
 
 [font.offset]
 x = 0
@@ -42,13 +44,13 @@ save_to_clipboard = false
 semantic_escape_chars = ",│`|:\"' ()[]{}<>\t"
 
 [terminal]
-shell = { program = "/bin/zsh", args = ["-l"] }
+shell = { program = '/bin/zsh', args = ['-l'] }
 
 [window]
-decorations = "none"
+decorations = 'none'
 dynamic_padding = false
-startup_mode = "Fullscreen"
-option_as_alt = "Both"
+startup_mode = 'Fullscreen'
+option_as_alt = 'Both'
 
 [window.padding]
 x = 10
