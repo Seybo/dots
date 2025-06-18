@@ -52,8 +52,10 @@ local function extract_word_around_cursor(line, col)
   -- Extract the word
   local word = line:sub(start_col, end_col)
 
-  -- Remove trailing method calls or dots
-  word = word:gsub('[.:][^:.:]*$', '')
+  -- Strip off any trailing “.method” but leave Ruby namespaces intact
+  word = word:gsub('%.%w*$', '')
+  -- If there’s still a trailing “:”, drop it
+  word = word:gsub(':$', '')
 
   return word
 end
