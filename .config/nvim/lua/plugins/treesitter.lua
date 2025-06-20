@@ -36,9 +36,13 @@ return {
           'yaml',
         },
         sync_install = false,
-        highlight = { enable = true },
+        highlight = { enable = true, additional_vim_regex_highlighting = true },
         -- indentation as you type. Indentation fixes on save are handled by lsp (autocommand)
-        indent = { enable = true },
+        indent = {
+          enable = true,
+          -- disable only for ruby:
+          disable = { 'ruby' },
+        },
         -- Incremental selection based on the named nodes from the grammar
         incremental_selection = {
           enable = true,
