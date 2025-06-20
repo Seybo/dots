@@ -129,6 +129,8 @@ return {
             if supermaven.has_suggestion() then
               My_undobreak()
               accept_line(supermaven.on_accept_suggestion)
+              -- defer the exit so confirm() can finish feeding its keys
+              vim.schedule(function() vim.cmd('stopinsert') end)
             else
               fallback()
             end
