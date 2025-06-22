@@ -2,6 +2,9 @@ return {
   'stevearc/conform.nvim',
   opts = {
     formatters_by_ft = {
+      html = { 'htmlbeautifier' },
+      eruby = { 'htmlbeautifier' },
+      ['eruby.yaml'] = { 'rubocop' },
       -- jsx/tsx formatting is handled by lsp
       lua = { 'stylua' },
       ruby = { 'rubocop' },

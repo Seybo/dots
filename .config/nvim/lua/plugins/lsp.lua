@@ -21,6 +21,7 @@ return {
 
     local servers = {
       bashls = {},
+      html = {},
       lua_ls = {},
       marksman = {},
       rubocop = {},
