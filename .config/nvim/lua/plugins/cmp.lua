@@ -124,13 +124,18 @@ return {
               fallback()
             end
           end, { 'i', 's' }),
-          -- default TAB takes the whole suggestion
+          ['<Tab>'] = plugin.mapping(function(fallback)
+            if supermaven.has_suggestion() then
+              supermaven.on_accept_suggestion()
+              vim.schedule(function() vim.cmd('stopinsert') end)
+            else
+              fallback()
+            end
+          end, { 'i', 's' }),
           ['<PageDown>'] = plugin.mapping(function(fallback)
             if supermaven.has_suggestion() then
               My_undobreak()
               accept_line(supermaven.on_accept_suggestion)
-              -- defer the exit so confirm() can finish feeding its keys
-              vim.schedule(function() vim.cmd('stopinsert') end)
             else
               fallback()
             end
