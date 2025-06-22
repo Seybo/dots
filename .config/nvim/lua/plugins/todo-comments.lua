@@ -7,18 +7,19 @@ return {
       sign_priority = 8, -- sign priority
       -- keywords recognized as todo comments
       keywords = {
+        DEBUG_MM = { icon = ' ', color = 'warning' },
         START_MM = { icon = ' ', color = 'hint' },
         TODO_MM = {
           icon = ' ',
           color = 'warning',
           alt = { 'BOOKMARK_MM' },
         },
+        QUESTION_MM = { icon = ' ', color = 'info' },
         REVERT_MM = {
           icon = ' ',
           color = 'error',
-          alt = { 'COMMENT_MM' },
+          alt = { 'COMMENT_MM', 'DEBUG_MM' },
         },
-        QUESTION_MM = { icon = ' ', color = 'info' },
       },
       gui_style = {
         fg = 'NONE', -- The gui style to use for the fg highlight group.

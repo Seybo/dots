@@ -44,7 +44,6 @@ return {
     { '<leader>jt', function() require('fzf-lua').grep({ search = 'TODO_MM:' }) end, desc = '[Fzf] Search all TODO_MM' },
     { '<leader>jq', function() require('fzf-lua').grep({ search = 'QUESTION_MM:' }) end, desc = '[Fzf] Search all QUESTION_MM' },
     { '<leader>jc', function() require('fzf-lua').grep({ search = 'COMMENT_MM:' }) end, desc = '[Fzf] Search all COMMENT_MM' },
-    { '<leader>jp', function() require('fzf-lua').grep({ search = ' binding.pry' }) end, desc = '[Fzf] Search binding.pry' },
-    { '<leader>jd', function() require('fzf-lua').grep({ search = 'debugger: // eslint-disable-line' }) end, desc = '[Fzf] Search debugger: // eslint-disable-line' },
+    { '<leader>jc', function() require('fzf-lua').grep({ search = 'DEBUG_MM:' }) end, desc = '[Fzf] Search all DEBUG_MM' },
   },
 }
