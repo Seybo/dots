@@ -1,12 +1,14 @@
 ### console general ###
 alias ll='ls -al -G'
 alias ..='cd ..'
-alias re_source='source ~/.zshrc'
 alias brew_update_all='brew update && brew upgrade && brew upgrade --cask && brew cleanup'
+alias re_source='source ~/.zshrc'
+alias re_fzf='source $STOW_DIR/themes/active/fzf.zsh'
+alias re_tmux='tmux source-file $STOW_DIR/.tmux.conf'
 theme() {
-  ruby ~/.dots/no_stow/themes/theme_switcher.rb "$@"
-  tmux kill-server # tmux has to be restarted
-  # alacritty has to be restarted manually after that as well
+  ruby ~/.dots/themes/theme_switcher.rb "$@"
+  tmux source-file $STOW_DIR/.tmux.conf
+  re_fzf
 }
 
 
@@ -44,5 +46,6 @@ alias rdr='rails db:rollback:primary'
 
 ### misc apps ###
 alias rgr='ranger'
-alias v='nvim'
-alias vim='nvim'
+# re_fzf to refresh fzf theme in case of theme switch
+alias v='re_fzf && nvim'
+alias vim='re_fzf && nvim'

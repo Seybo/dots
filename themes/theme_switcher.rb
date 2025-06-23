@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
-# This script works best when invoked by zsh alias 'theme' which also re-sources .zshrc and .tmux.conf
+# This script works best when invoked by zsh alias 'theme'
 # frozen_string_literal: true
 
-THEMES_DIR  = File.expand_path('~/.dots/no_stow/themes')
-ACTIVE_DIR  = File.join(THEMES_DIR, 'active')
+THEMES_DIR = File.expand_path("#{ENV['STOW_DIR']}/themes")
+ACTIVE_DIR = File.join(THEMES_DIR, 'active')
 
 abort "Usage: #{$0} <theme_name>" unless ARGV[0]
 theme = ARGV[0].strip
@@ -27,4 +27,4 @@ Dir.glob(File.join(theme_dir, '*')).each do |src|
   File.write(dst, File.read(src))
 end
 
-# This script works best when invoked by zsh alias 'theme' which also re-sources .zshrc and .tmux.conf
+# This script works best when invoked by zsh alias 'theme'

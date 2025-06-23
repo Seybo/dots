@@ -1,5 +1,4 @@
--- bg color is defined in alacritty theme config
-local bg_color = vim.env.BG_COLOR
+local bg_color = '#282c34'
 
 require('rose-pine').setup({
   palette = {

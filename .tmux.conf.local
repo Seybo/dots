@@ -399,7 +399,7 @@ tmux_conf_update_plugins_on_launch=true
 # by default, reloading the configuration will update tpm and all plugins
 #   - true (default)
 #   - false
-tmux_conf_update_plugins_on_reload=true
+tmux_conf_update_plugins_on_reload=false
 
 # by default, reloading the configuration will uninstall tpm and plugins when no
 # plugins are enabled
@@ -425,4 +425,4 @@ tmux_conf_uninstall_plugins_on_reload=true
 
 # _myupd
 # the whole env theme is managed by the theme script: themes/theme_switcher.rb and its zsh alias 'theme'
-source-file ~/.dots/no_stow/themes/active/tmux.conf
+source-file ~/.dots/themes/active/tmux.conf
