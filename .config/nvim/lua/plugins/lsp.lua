@@ -87,5 +87,9 @@ return {
     vim.keymap.set('n', 'glw', require('fzf-lua').lsp_live_workspace_symbols, { desc = '[[ LSP ]] Open Workspace Symbols' })
     -- Jump to the type definition of the symbol under your cursor
     vim.keymap.set('n', 'glt', require('fzf-lua').lsp_typedefs, { desc = '[[ LSP ]] Goto Type Definition' })
+    -- Open Lsp log
+    vim.keymap.set('n', 'gll', ':e ~/.local/state/nvim/lsp.log<cr>', { desc = '[[ LSP ]] Open Log' })
+    -- Open Lsp Info
+    vim.keymap.set('n', 'glf', ':LspInfo<cr>', { desc = '[[ LSP ]] Open LspInfo' })
   end,
 }

@@ -1,6 +1,11 @@
 return {
   'stevearc/conform.nvim',
   opts = {
+    formatters = {
+      htmlbeautifier = {
+        append_args = { '--keep-blank-lines', '1' },
+      },
+    },
     formatters_by_ft = {
       html = { 'htmlbeautifier' },
       eruby = { 'htmlbeautifier' },
