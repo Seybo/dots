@@ -81,25 +81,20 @@ vim.keymap.set('n', '<a-g><a-f>', function()
   -- Convert CamelCase → snake_case + nested paths
   local snake_path = match:gsub('::', '/'):gsub('([a-z0-9])([A-Z])', '%1_%2'):gsub('([A-Z])([A-Z][a-z])', '%1_%2'):lower()
 
-  -- List of fallback roots to search from (with ** recursive globbing)
-  local roots = {
-    'packs/*/app/public/',
-    'packs/*/app/public/concerns/',
-    'packs/*/app/services/',
-    'packs/*/app/models/',
-    'packs/*/app/components/',
-    'packs/*/lib/',
-    'app/components/',
-    'app/jobs/',
-    'app/models/',
-    'app/models/concerns/',
-    'app/services/',
-    'lib/',
-  }
+  -- find project root
+  local git_dir = vim.fn.finddir('.git', vim.fn.getcwd() .. ';')
+  local project_root = vim.fn.fnamemodify(git_dir, ':h')
+  -- load project’s .nvim_project_cfg.lua if present
+  local project_cfg = project_root .. '/.nvim_project_cfg.lua'
+  local roots = {}
+  if vim.fn.filereadable(project_cfg) == 1 then
+    local ok, cfg = pcall(dofile, project_cfg)
+    if ok and type(cfg) == 'table' and type(cfg.roots) == 'table' then roots = cfg.roots end
+  end
 
   for _, root in ipairs(roots) do
-    local glob = root .. snake_path .. '.rb'
-    local full_path = vim.fn.glob(glob, 0, 1)[1]
+    local glob = project_root .. '/' .. root .. snake_path .. '.rb'
+    local full_path = vim.fn.glob(glob, false, true)[1]
     if full_path and full_path ~= '' then
       vim.cmd('edit ' .. full_path)
       return
