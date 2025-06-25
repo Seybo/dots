@@ -2,6 +2,10 @@ vim.keymap.set('i', 'jj', '<esc>', { silent = true })
 vim.keymap.set('t', 'jj', '<c-\\><c-n>', { silent = true })
 vim.keymap.set({ 'n', 'v' }, 'Q', ':qa<cr>', { silent = true })
 
+-- -- [[ Navigation }} -- --
+vim.keymap.set('n', 'j', 'gj', { silent = true })
+vim.keymap.set('n', 'k', 'gk', { silent = true })
+
 -- -- [[ Search }} -- --
 vim.keymap.set('n', '*', '<Cmd>keepjumps normal! mi*`i<cr>', {
   desc = '[ Search ] Dont jump to next search result on * (search word under cursor)',
