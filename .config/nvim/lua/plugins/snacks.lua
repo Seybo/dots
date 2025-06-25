@@ -41,6 +41,33 @@ return {
           set = function() vim.g.autoformat = not vim.g.autoformat end,
         })
         :map('<c-t>f')
+
+      vim.g.diags_enabled = false
+      require('snacks').toggle
+        .new({
+          id = '[Toggle] Diagnostics',
+          name = '[Toggle] Diagnostics',
+          get = function() return vim.g.diags_enabled end,
+          set = function()
+            vim.g.diags_enabled = not vim.g.diags_enabled
+            vim.diagnostic.config({
+              virtual_text = vim.g.diags_enabled,
+              signs = vim.g.diags_enabled,
+              underline = vim.g.diags_enabled,
+              update_in_insert = false,
+            })
+          end,
+        })
+        :map('<c-t>d')
+      vim.g.spell_enabled = false
+      require('snacks').toggle
+        .new({
+          id = '[Toggle] Spell Check',
+          name = '[Toggle] Spell Check',
+          get = function() return vim.wo.spell end,
+          set = function() vim.wo.spell = not vim.wo.spell end,
+        })
+        :map('<c-t>s')
     end,
     keys = {
       -- git browse/blame [gb]
