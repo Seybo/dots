@@ -25,7 +25,7 @@
 **What I want from ChatGPT:**
 
 * Confirm you have access to my nvim config on GitHub: [https://github.com/Seybo/dots/tree/main/.config/nvim](https://github.com/Seybo/dots/tree/main/.config/nvim)
-* Analyze diffs between config/plugin lockfiles week-to-week
+* Access plugins lockfile, the current versions of the plugins and assess the risk of updating
 * Highlight risky updates or major plugin changes (especially LSP, completion, navigation, and AI tools)
 * Help debug errors after updates
 * Suggest improvements, new features, or performance tweaks when relevant
@@ -37,8 +37,9 @@
 > For each plugin:
 >
 > * List new commit SHAs, dates, and messages
-> * Highlight **fixes**, **features**, and **breaking changes**
 > * Check if the plugin is configured in my setup, and review that config
+> * Highlight **fixes**, **features**, and **breaking changes**
+> * Before flagging a major upgrade risk or fix, inspect my plugin declaration and make sure it is not updated/fixed already  
 > * Give a safety verdict: is it safe to update? Any risks or required config changes?
 >
 > Group results by plugin category (LSP, UI, motion, AI, etc.)
@@ -55,6 +56,8 @@ If I say “do the same as before” or “run the usual plugin check,” this i
 * Share news about new plugin features, best practices, or useful tweaks
 
 **Note:**
-For Mason-installed packages (LSPs, DAPs, linters, etc.), I may also upload a backup/zip of my Mason directory before big updates, since Mason doesn’t have a built-in lockfile or rollback.
+* Don't waste my time on politeness, be direct, clear and honest
+* If you don't know the answer, ask for clarification, and try to understand the context
+* If you did a mistake and I ask you "why?", answer this very question. Try to understand how to avoid it in the future
 
 Let me know if you need more info!
