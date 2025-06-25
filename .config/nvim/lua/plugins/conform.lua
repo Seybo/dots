@@ -1,26 +1,39 @@
 return {
   'stevearc/conform.nvim',
-  opts = {
-    formatters = {
-      htmlbeautifier = {
-        append_args = { '--keep-blank-lines', '1' },
+  opts = function()
+    return {
+      formatters_by_ft = {
+        html = { 'htmlbeautifier' },
+        eruby = { 'htmlbeautifier' },
+        ['eruby.yaml'] = { 'rubocop' },
+        lua = { 'stylua' },
+        ruby = { 'rubocop' },
+        rust = { 'rustfmt' },
+        toml = { 'taplo' },
       },
-    },
-    formatters_by_ft = {
-      html = { 'htmlbeautifier' },
-      eruby = { 'htmlbeautifier' },
-      ['eruby.yaml'] = { 'rubocop' },
-      -- jsx/tsx formatting is handled by lsp
-      lua = { 'stylua' },
-      ruby = { 'rubocop' },
-      rust = { 'rustfmt' },
-      toml = { 'taplo' },
-    },
-    format_on_save = {
-      -- These options will be passed to conform.format()
-      timeout_ms = 5000,
-      -- if no other formatters available and lsp allows it, use lsp formatting
-      lsp_format = 'fallback',
-    },
-  },
+      formatters = {
+        htmlbeautifier = {
+          -- preserve blank lines
+          append_args = { '--keep-blank-lines', '1' },
+        },
+      },
+      format_on_save = function(bufnr)
+        if vim.g.autoformat then
+          local disable_filetypes = {}
+          local lsp_format_opt
+          if disable_filetypes[vim.bo[bufnr].filetype] then
+            lsp_format_opt = 'never'
+          else
+            lsp_format_opt = 'fallback'
+          end
+          return {
+            timeout_ms = 5000,
+            lsp_format = lsp_format_opt,
+          }
+        else
+          return
+        end
+      end,
+    }
+  end,
 }

@@ -29,6 +29,19 @@ return {
       },
       zen = { enabled = true },
     },
+    config = function(_, opts)
+      require('snacks').setup(opts)
+
+      vim.g.autoformat = true
+      require('snacks').toggle
+        .new({
+          id = '[Toggle] Format on Save',
+          name = '[Toggle] Format on Save',
+          get = function() return vim.g.autoformat end,
+          set = function() vim.g.autoformat = not vim.g.autoformat end,
+        })
+        :map('<c-t>f')
+    end,
     keys = {
       -- git browse/blame [gb]
       { 'gbl', function() Snacks.git.blame_line() end, desc = '[Snacks] Git blame line' },
