@@ -13,6 +13,7 @@
   "debugprint.nvim": { "branch": "main", "commit": "bc3008074c6fafce2f3bef8062cff424239ec4f8" },
   "dressing.nvim": { "branch": "master", "commit": "2d7c2db2507fa3c4956142ee607431ddb2828639" },
   "fidget.nvim": { "branch": "main", "commit": "d9ba6b7bfe29b3119a610892af67602641da778e" },
+  "flash.nvim": { "branch": "main", "commit": "3c942666f115e2811e959eabbdd361a025db8b63" },
   "flit.nvim": { "branch": "main", "commit": "1ef72de6a02458d31b10039372c8a15ab8989e0d" },
   "fzf-lua": { "branch": "main", "commit": "3d4342120cf12f36b60a8161a8835b111ec5ec9a" },
   "git-blame.nvim": { "branch": "master", "commit": "8503b199edf9a666fe7b1a989cf14e3c26b2eb03" },

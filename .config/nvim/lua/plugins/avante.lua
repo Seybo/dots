@@ -4,12 +4,12 @@ return {
     event = 'VeryLazy',
     version = false, -- Never set this value to "*"! Never!
     opts = {
-      provider = 'claude',
+      provider = 'openai',
       mode = 'legacy', -- in legace mode disabled_tools are respected
       providers = {
         openai = {
           endpoint = 'https://api.openai.com/v1',
-          model = '4o-mini-high',
+          model = 'gpt-4o',
           disabled_tools = { 'replace_in_file' },
           timeout = 30000,
           extra_request_body = {
@@ -36,8 +36,8 @@ return {
       { '<leader>an', ':AvanteChatNew<cr>', desc = '[Avante] New chat', mode = 'n' },
       { '<leader>as', ':AvanteStop<cr>', desc = '[Avante] Stop', mode = 'n' },
       { '<leader>at', ':AvanteToggle<cr>', desc = '[Avante] Toggle chat window', mode = 'n' },
-      { '<leader>apc', ':AvanteSwitchProvider claude<cr>', desc = '[Avante] Use Claude', mode = 'n' },
-      { '<leader>apo', ':AvanteSwitchProvider openai-gpt-4o-mini<cr>', desc = '[Avante] Use OpenAI GPT-4o-mini', mode = 'n' },
+      -- { '<leader>apc', ':AvanteSwitchProvider claude<cr>', desc = '[Avante] Use Claude', mode = 'n' },
+      -- { '<leader>apo', ':AvanteSwitchProvider openai-gpt-4o-mini<cr>', desc = '[Avante] Use OpenAI GPT-4o-mini', mode = 'n' },
     },
     -- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
     build = 'make',
