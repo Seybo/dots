@@ -65,3 +65,26 @@ undupe_history() {
   mv unduped_history "$1"
 }
 
+
+pss () {
+    folder=$(pwd)
+    filename="ss_$(date +%Y%m%d_%H%M%S).png"
+
+    if [ $# -ne 0 ]; then
+        if [[ -d $1 ]]; then
+            if [ "$1" != "." ]; then folder=$1; fi
+        else
+            a=$(dirname "$1")
+            b=$(basename "$1" .png)
+
+            if [ "$b" != "" ]; then filename=$b.png; fi
+
+            if [ "$a" != "." ]; then folder=$a; fi
+        fi
+    fi
+
+    osascript -e "tell application \"System Events\" to ¬
+            write (the clipboard as «class PNGf») to ¬
+            (make new file at folder \"$folder\" ¬
+            with properties {name:\"$filename\"})"
+}
