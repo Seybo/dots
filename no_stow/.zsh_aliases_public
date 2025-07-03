@@ -45,7 +45,7 @@ alias rdr='rails db:rollback:primary'
 
 
 ### misc apps ###
-alias rgr='ranger'
+alias rgr='yazi'
 # re_fzf to refresh fzf theme in case of theme switch
 alias v='re_fzf && nvim'
 alias vim='re_fzf && nvim'
