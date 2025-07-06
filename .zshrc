@@ -83,9 +83,11 @@ source "$STOW_DIR/private/.env"
 source "$STOW_DIR/themes/active/fzf.zsh"
 
 export EDITOR='nvim'
-eval "$(jump shell)"
 eval "$(gdircolors -b ~/.dircolors)"
 eval "$(thefuck --alias)"
+# zoxide
+export _ZO_DATA_DIR="$HOME/.zoxide"
+eval "$(zoxide init zsh --cmd j)"
 
 export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"
 
