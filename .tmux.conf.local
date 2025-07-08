@@ -376,6 +376,8 @@ bind t run-shell "tmux setw -g status \$(tmux show -g -w status | grep -q off &&
 
 # if you don't want Oh my tmux! to alter a binding or a setting, use #!important
 # bind c new-window -c '#{pane_current_path}' #!important
+unbind C-c
+bind n new-session
 
 # move status line to top
 set -g status-position top
