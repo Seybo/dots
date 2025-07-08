@@ -1,6 +1,7 @@
 return {
   {
     'ggandor/leap.nvim',
+    enabled = false, -- switching to flash
     opts = {
       -- make jumps more flexible: symbols within each group considered the same
       equivalence_classes = {
