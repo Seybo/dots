@@ -174,6 +174,12 @@ vim.keymap.set('n', '<leader>pa', ":let @+ = expand('%:p')<cr>", { desc = '[ Fil
 vim.keymap.set('n', '<leader>pr', ":let @+ = expand('%:.')<cr>", { desc = '[ Files ] Copy relative path', silent = true })
 vim.keymap.set('v', '<leader>pf', ":let @+ = expand('%:t')<CR>", { desc = '[ Files ] Copy filename', silent = true })
 
+-- -- [[ Git ]] -- --
+vim.keymap.set('n', '<c-g>cm', function()
+  vim.cmd('!git checkout master -- %')
+  vim.cmd('edit!')
+end, { desc = '[ Git ] Checkout master' })
+
 -- -- [[ Misc ]] -- --
 
 vim.keymap.set('n', '<a-n><a-n>', ':set nornu<CR>', { silent = true }) -- absolute line numbers
