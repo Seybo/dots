@@ -10,5 +10,13 @@ return {
     global_keymaps = true,
     global_keymaps_prefix = '<leader>r',
     kulala_keymaps_prefix = '',
+    kulala_keymaps = {
+      ['Show verbose'] = { 'Z', function() require('kulala.ui').show_verbose() end },
+    },
+    ui = {
+      display_mode = 'float',
+      -- removed script_output
+      default_winbar_panes = { 'body', 'headers', 'headers_body', 'verbose', 'report', 'help' },
+    },
   },
 }
