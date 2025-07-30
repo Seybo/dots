@@ -241,6 +241,11 @@ puts "Loaded ~/.pryrc. Run 'more_help' or 'display_shortcuts' for more tips"
 
 # seybo START
 # Projects related
-project_helpers = File.join Dir.getwd, '_mydev', 'pry_helpers.rb'
-require project_helpers if File.exist?(project_helpers)
+project_helpers_paths = [
+  File.join(Dir.getwd, '_mydev', 'pry_helpers.rb'),
+  File.join(Dir.getwd, '..', '_mydev', 'pry_helpers.rb')
+]
+project_helpers_paths.each do |path|
+  require path if File.exist?(path)
+end
 # seybo END
