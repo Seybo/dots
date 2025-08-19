@@ -10,6 +10,13 @@ return {
         return false
       end,
     },
+    keys = {
+      {
+        '<c-t>m',
+        ':SupermavenToggle<cr>',
+        desc = '[ Toggl ] SuperMaven',
+      },
+    },
     config = function(opts) require('supermaven-nvim').setup(opts) end,
   },
 }

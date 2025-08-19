@@ -70,8 +70,7 @@ return {
         :map('<c-t>s')
     end,
     keys = {
-      -- git browse/blame [gb]
-      { 'gbl', function() Snacks.git.blame_line() end, desc = '[Snacks] Git blame line' },
+      -- git browse [gb]
       { 'gbo', function() Snacks.gitbrowse.open() end, desc = '[Snacks] Git blame' },
       { 'gbm', function()
         require('snacks.gitbrowse').open({
