@@ -17,6 +17,7 @@ return {
       display_mode = 'float',
       -- removed script_output
       default_winbar_panes = { 'body', 'headers', 'headers_body', 'verbose', 'report', 'help' },
+      max_response_size = 32000000,
     },
   },
 }

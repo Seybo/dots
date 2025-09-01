@@ -3,9 +3,12 @@ return {
     'supermaven-inc/supermaven-nvim',
     opts = {
       disable_keymaps = true,
+      ignore_filetypes = { 'json.kulala_ui' },
       condition = function()
+        local filename = vim.fn.expand('%:t')
+
         -- Skip log files
-        if string.match(vim.fn.expand('%:t'), '%.log$') then return true end
+        if string.match(filename, '%.log$') then return true end
 
         return false
       end,
@@ -17,6 +20,6 @@ return {
         desc = '[ Toggl ] SuperMaven',
       },
     },
-    config = function(opts) require('supermaven-nvim').setup(opts) end,
+    config = function(_, opts) require('supermaven-nvim').setup(opts) end,
   },
 }

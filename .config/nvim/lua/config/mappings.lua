@@ -172,7 +172,8 @@ vim.keymap.set('n', '<S-down>', function() vim.cmd('resize -' .. 3) end, { silen
 
 vim.keymap.set('n', '<leader>pa', ":let @+ = expand('%:p')<cr>", { desc = '[ Files ] Copy absolute path', silent = true })
 vim.keymap.set('n', '<leader>pr', ":let @+ = expand('%:.')<cr>", { desc = '[ Files ] Copy relative path', silent = true })
-vim.keymap.set('v', '<leader>pf', ":let @+ = expand('%:t')<CR>", { desc = '[ Files ] Copy filename', silent = true })
+vim.keymap.set('v', '<leader>pf', ":let @+ = expand('%:t')<cr>", { desc = '[ Files ] Copy filename', silent = true })
+vim.keymap.set('n', '<leader>pd', ":let @+ = fnamemodify(expand('%:p:h'), ':t')<cr>", { desc = '[ Files ] Copy file parent dir', silent = true })
 
 -- -- [[ Git ]] -- --
 vim.keymap.set('n', '<c-g>cm', function()
