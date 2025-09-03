@@ -36,7 +36,10 @@ return {
           'yaml',
         },
         sync_install = false,
-        highlight = { enable = true, additional_vim_regex_highlighting = true },
+        highlight = {
+          enable = true,
+          additional_vim_regex_highlighting = { 'markdown', 'markdown_inline' },
+        },
         -- indentation as you type. Indentation fixes on save are handled by lsp (autocommand)
         indent = {
           enable = true,

@@ -11,7 +11,7 @@ return {
       gitbrowse = { enabled = true },
       input = { enabled = true },
       notifier = { enabled = true },
-      picker = { enabled = false },
+      picker = { enabled = true },
       scroll = {
         enabled = true,
         animate = {

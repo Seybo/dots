@@ -2,8 +2,7 @@
 -- Set <space> as the leader key
 -- See `:help mapleader`
 --  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
-vim.g.mapleader = ' '
-vim.g.maplocalleader = ' '
+--  leader and localleader are set in plugins/lazy.lua
 vim.g.have_nerd_font = true
 vim.o.mouse = 'a' -- Enable mouse mode, can be useful for resizing splits for example
 vim.o.showmode = false -- Don't show the mode, since it's already in the status line

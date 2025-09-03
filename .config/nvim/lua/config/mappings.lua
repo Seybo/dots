@@ -1,5 +1,4 @@
 vim.keymap.set('i', 'jj', '<esc>', { silent = true })
-vim.keymap.set('t', 'jj', '<c-\\><c-n>', { silent = true })
 vim.keymap.set({ 'n', 'v' }, 'Q', ':qa<cr>', { silent = true })
 
 -- -- [[ Navigation }} -- --
