@@ -16,6 +16,6 @@ return {
     },
   },
   keys = {
-    { '<leader>sf', ':Oil --preview<cr>', desc = '[ Oil ] Open' },
+    { '<leader>fo', ':Oil --preview<cr>', desc = '[ Oil ] Open' },
   },
 }

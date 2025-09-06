@@ -1,4 +1,6 @@
 vim.keymap.set('i', 'jj', '<esc>', { silent = true })
+-- this is to be able to go to normal mode from terminal mode and then change tab for example
+vim.keymap.set('t', 'jj', '<c-\\><c-n>', { silent = true })
 vim.keymap.set({ 'n', 'v' }, 'Q', ':qa<cr>', { silent = true })
 
 -- -- [[ Navigation }} -- --
