@@ -3,15 +3,7 @@ return {
     'supermaven-inc/supermaven-nvim',
     opts = {
       disable_keymaps = true,
-      ignore_filetypes = { 'json.kulala_ui' },
-      condition = function()
-        local filename = vim.fn.expand('%:t')
-
-        -- Skip log files
-        if string.match(filename, '%.log$') then return true end
-
-        return false
-      end,
+      ignore_filetypes = { 'json.kulala_ui', 'log', 'railslog' },
     },
     keys = {
       {
