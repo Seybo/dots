@@ -124,3 +124,4 @@ if command -v tmux >/dev/null 2>&1; then
     tmux
   fi
 fi
+export PATH="$HOME/.local/bin:$PATH"
