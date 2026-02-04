@@ -13,7 +13,7 @@ return {
       -- vim.keymap.set({ 'i', 's' }, 'Q', ':qa<cr>', { silent = true })
       -- map({ '<C-j>', '[ Cmp ] Luasnip jump to next input', function() plugin.jump(1) end, mode = { 'i', 's' } })
       -- map({ '<C-k>', '[ Cmp ] Luasnip jump to prev input', function() plugin.jump(-1) end, mode = { 'i', 's' } })
-      -- map({ '<F6>', ' [ Cmp ] Luasnip edit snippets', require('luasnip.loaders').edit_snippet_files, mode = { 'n' } })
+      vim.keymap.set('n', '<Leader>es', require('luasnip.loaders').edit_snippet_files, { desc = ' [ Cmp ] Luasnip edit snippets' })
     end,
   },
 }
