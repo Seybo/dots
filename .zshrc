@@ -118,10 +118,14 @@ bindkey '^P' forward-char # does completion the same way as i have configured in
 bindkey '^K' kill-line # should be default but it's not mapped for some reason
 
 
-# Start tmux automatically if not already inside a tmux session
-if command -v tmux >/dev/null 2>&1; then
-  if [ -z "$TMUX" ]; then
-    tmux
+# if not already inside a tmux session
+if command -v tmux >/dev/null 2>&1 && [ -z "$TMUX" ]; then
+  # if SSH →  attach to main session
+  if [ -n "$SSH_CONNECTION" ]; then
+    tmux attach -t dev_mb 2>/dev/null || tmux new -s dev_mb
+  else
+    # if local →  start tmux automatically
+    tmux new
   fi
 fi
 export PATH="$HOME/.local/bin:$PATH"
