@@ -338,6 +338,10 @@ tmux_conf_copy_to_os_clipboard=false
 # _myupd: increase history size
 set -g history-limit 12288
 
+# Pi coding agent asked for this but it still doesn't handle Shift+Enter
+set -g extended-keys on
+set -g extended-keys-format csi-u
+
 # _myupd: set repeat wating time
 set-option -g repeat-time 300
 
