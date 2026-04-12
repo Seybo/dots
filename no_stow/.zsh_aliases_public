@@ -49,3 +49,11 @@ alias rgr='yazi'
 # re_fzf to refresh fzf theme in case of theme switch
 alias v='re_fzf && nvim'
 alias vim='re_fzf && nvim'
+
+### pi ###
+pi-p() {
+  PI_CODING_AGENT_DIR=~/.pi/personal/agent pi "$@"
+}
+pi-w() {
+  PI_CODING_AGENT_DIR=~/.pi/work/agent pi "$@"
+}

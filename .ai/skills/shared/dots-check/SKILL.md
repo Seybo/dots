@@ -14,25 +14,25 @@ Requires `git`, `ruby` (3.x recommended). No extra gems.
 Place this skill where your harness can discover it, e.g. stow to `~/.agents/skills/dots-check` and add `~/.agents/skills` to your skills paths.
 
 ### Agent guard (important)
-- Before running anything else, execute **only** `pwd` and compare to `$STOW_DIR`.
-- If `pwd` != `$STOW_DIR`, **stop immediately**. Do not run `ls`, `git`, or the scanner.
+- Before running anything else, read `$STOW_DIR` from the environment and execute `pwd`.
 - If `STOW_DIR` is unset, **stop immediately**.
+- If `pwd` != `$STOW_DIR`, **stop immediately**. Do not run `ls`, `git`, or the scanner.
 - Run the scanner only when `pwd` == `$STOW_DIR`.
 
 ## Usage
 
 ```bash
 # Default: scan staged changes; if none, scans working-tree changes vs HEAD
-./scripts/scan.rb
+./.ai/skills/shared/dots-check/scripts/scan.rb
 
 # Scan all tracked files
-./scripts/scan.rb --all
+./.ai/skills/shared/dots-check/scripts/scan.rb --all
 
 # Include untracked files (text only)
-./scripts/scan.rb --untracked
+./.ai/skills/shared/dots-check/scripts/scan.rb --untracked
 
 # Filter to a glob
-./scripts/scan.rb --path 'home/**/config/**'
+./.ai/skills/shared/dots-check/scripts/scan.rb --path 'home/**/config/**'
 ```
 
 Exit codes:
