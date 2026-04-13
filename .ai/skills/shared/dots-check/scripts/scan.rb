@@ -199,6 +199,11 @@ if targets.empty?
   exit 0
 end
 
+puts "Checking files (#{targets.size}):"
+targets.keys.sort.each do |path|
+  puts "- #{path}"
+end
+
 findings = []
 
 targets.each do |path, lines|

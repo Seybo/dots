@@ -52,5 +52,6 @@ Exit codes:
 
 ## Notes
 - Keep output short to save model tokens. The scanner truncates snippets.
+- The scanner prints the files it checks before reporting findings.
 - False positives happen; prefer auditing each finding rather than suppressing by default.
 - Requires `STOW_DIR` to be set and the current working directory to equal that path (`pwd` must be `STOW_DIR`); otherwise the script exits with an error.
