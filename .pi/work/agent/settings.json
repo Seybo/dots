@@ -1,8 +1,0 @@
-{
-  "lastChangelogVersion": "0.66.1",
-  "skills": [
-    "~/.ai/skills/shared",
-    "~/.ai/skills/work"
-  ],
-  "enableSkillCommands": true
-}

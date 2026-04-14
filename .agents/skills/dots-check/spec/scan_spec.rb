@@ -21,7 +21,7 @@ class ScanSpec < Minitest::Test
   end
 
   def run_scan(dir, *args)
-    Open3.capture3({ "DOTS_CHECK_ROOT" => dir }, SCRIPT, *args, chdir: dir)
+    Open3.capture3(SCRIPT, *args, chdir: dir)
   end
 
   def test_detects_github_token_in_staged_file

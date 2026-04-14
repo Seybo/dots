@@ -52,8 +52,10 @@ alias vim='re_fzf && nvim'
 
 ### pi ###
 pi-p() {
-  PI_CODING_AGENT_DIR=~/.pi/personal/agent pi "$@"
+  ln -sfn ~/.pi/agent/auth-personal.json ~/.pi/agent/auth.json
+  pi "$@"
 }
 pi-w() {
-  PI_CODING_AGENT_DIR=~/.pi/work/agent pi "$@"
+  ln -sfn ~/.pi/agent/auth-work.json ~/.pi/agent/auth.json
+  pi "$@"
 }
