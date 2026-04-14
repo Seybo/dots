@@ -3,6 +3,7 @@
 
 require 'optparse'
 require 'open3'
+require 'set'
 
 EXIT_USAGE = 2
 MAX_FILE_BYTES = 1_000_000
@@ -36,19 +37,6 @@ RULES = [
 
 CANDIDATE_TOKEN_REGEX = %r{[A-Za-z0-9+/_-]{#{ENTROPY_MIN_LEN},#{ENTROPY_MAX_LEN}}}
 
-stow_dir_env = ENV['STOW_DIR']
-if stow_dir_env.nil? || stow_dir_env.strip.empty?
-  warn 'Error: STOW_DIR is not set'
-  exit EXIT_USAGE
-end
-
-ROOT_DIR = File.expand_path(stow_dir_env)
-
-unless File.expand_path(Dir.pwd) == ROOT_DIR
-  warn "Error: working directory must be STOW_DIR (#{ROOT_DIR}). Current: #{Dir.pwd}"
-  exit EXIT_USAGE
-end
-
 options = {
   all: false,
   untracked: false,
@@ -78,6 +66,14 @@ unless system('git rev-parse --is-inside-work-tree > /dev/null 2>&1')
   warn 'Error: not inside a git repository'
   exit EXIT_USAGE
 end
+
+repo_root, ok = Open3.capture2('git rev-parse --show-toplevel')
+unless ok.success?
+  warn 'Error: failed to resolve git repository root'
+  exit EXIT_USAGE
+end
+
+Dir.chdir(repo_root.strip)
 
 def capture(cmd)
   stdout, status = Open3.capture2(cmd)
