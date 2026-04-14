@@ -31,25 +31,19 @@ No extra repo-detection guard is needed: if this skill is available, you're alre
 ./.agents/skills/dots-check/scripts/scan.rb --path 'home/**/config/**'
 ```
 
-## Bare invocation behavior
+## Invocation
 
-If the user invokes `dots-check` by name without additional options or qualifiers, immediately run the default scan:
+There is exactly one command-style invocation for this skill:
+
+- `/dots-check`
+
+When the user invokes `/dots-check`, immediately run the default scan:
 
 ```bash
 ./.agents/skills/dots-check/scripts/scan.rb
 ```
 
-Interpret bare invocation as an execution request, not as a request for explanation or confirmation.
-
-Examples:
-- `dots-check` → run default scan
-- `/dots-check` → run default scan
-- `use dots-check` → run default scan
-- `run dots-check on everything` → run `./.agents/skills/dots-check/scripts/scan.rb --all`
-
-Only do not execute immediately if the user is clearly asking about the skill itself, for example:
-- `what does dots-check do?`
-- `how does dots-check work?`
+Treat `/dots-check` as an execution request, not as a request for explanation or confirmation.
 
 Exit codes:
 - `0` = no findings
