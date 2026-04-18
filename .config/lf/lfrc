@@ -1,2 +1,15 @@
 set hidden
 map D delete
+map <enter> open
+
+cmd open ${{
+    mime="$(file --mime-type -Lb "$f")"
+    case "$mime:$f" in
+        text/*:*|*/json:*|*/xml:*|*/yaml:*|*/x-yaml:*|*/javascript:*|*/x-javascript:*|*/typescript:*|*/x-typescript:*|*/shellscript:*|*/x-shellscript:*|*/x-sh:*|*/x-empty:*|*:.env|*:.env.*|*:*.md|*:*.mdx|*:*.txt|*:*.rst|*:*.adoc|*:*.org|*:*.norg|*:*.json|*:*.jsonc|*:*.yaml|*:*.yml|*:*.toml|*:*.ini|*:*.conf|*:*.config|*:*.cfg|*:*.env|*:*.sh|*:*.bash|*:*.zsh|*:*.fish|*:*.vim|*:*.lua|*:*.py|*:*.rb|*:*.pl|*:*.php|*:*.js|*:*.mjs|*:*.cjs|*:*.ts|*:*.tsx|*:*.jsx|*:*.css|*:*.scss|*:*.html|*:*.htm|*:*.xml|*:*.sql|*:*.c|*:*.h|*:*.cpp|*:*.cc|*:*.hpp|*:*.rs|*:*.go|*:*.java|*:*.kt|*:*.swift|*:*.dart|*:*.nix|*:*.tf|*:*.tfvars|*:Dockerfile|*:dockerfile|*:Makefile|*:makefile|*:*.mk)
+            "$EDITOR" "$f"
+            ;;
+        *)
+            "$OPENER" "$f"
+            ;;
+    esac
+}}
