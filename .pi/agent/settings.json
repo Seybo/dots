@@ -3,5 +3,16 @@
   "skills": [
     "~/.ai/skills-shared"
   ],
-  "enableSkillCommands": true
+  "enableSkillCommands": true,
+  "packages": [
+    {
+      "source": "~/.dots/.pi/agent/external_extensions/agentic-af",
+      "extensions": [
+        "-extensions/web-search/index.ts"
+      ],
+      "skills": [],
+      "prompts": [],
+      "themes": []
+    }
+  ]
 }
