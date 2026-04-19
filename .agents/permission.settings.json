@@ -1,0 +1,9 @@
+{
+  "defaultMode": "ask",
+  "allow": [
+    "bash(pwd)",
+    "bash(rg --files *)",
+    "bash(head *)",
+    "read"
+  ]
+}
