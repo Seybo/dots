@@ -1,62 +1,53 @@
+local parsers = {
+  'bash',
+  'diff',
+  'html',
+  'javascript',
+  'jsdoc',
+  'json',
+  'lua',
+  'markdown',
+  'markdown_inline',
+  'printf',
+  'python',
+  'query',
+  'regex',
+  'ruby',
+  'toml',
+  'tsx',
+  'typescript',
+  'vim',
+  'vimdoc',
+  'xml',
+  'yaml',
+}
+
 return {
   {
     'nvim-treesitter/nvim-treesitter',
-    branch = 'master',
+    branch = 'main',
+    main = 'nvim-treesitter',
     lazy = false,
     build = ':TSUpdate',
-    config = function()
-      local configs = require('nvim-treesitter.configs')
+    init = function()
+      local ts_filetypes = vim.tbl_filter(function(parser)
+        return parser ~= 'markdown_inline' and parser ~= 'printf'
+      end, parsers)
 
-      configs.setup({
-        ensure_installed = {
-          'bash',
-          'diff',
-          'html',
-          'javascript',
-          'jsdoc',
-          'json',
-          'jsonc',
-          'lua',
-          'vim',
-          'vimdoc',
-          'html',
-          'markdown',
-          'markdown_inline',
-          'printf',
-          'python',
-          'query',
-          'regex',
-          'ruby',
-          'toml',
-          'tsx',
-          'typescript',
-          'vim',
-          'vimdoc',
-          'xml',
-          'yaml',
-        },
-        sync_install = false,
-        highlight = {
-          enable = true,
-          additional_vim_regex_highlighting = { 'markdown', 'markdown_inline' },
-        },
-        -- indentation as you type. Indentation fixes on save are handled by lsp (autocommand)
-        indent = {
-          enable = true,
-          -- disable only for ruby:
-          disable = { 'ruby' },
-        },
-        -- Incremental selection based on the named nodes from the grammar
-        incremental_selection = {
-          enable = true,
-          keymaps = {
-            init_selection = '<Enter>', -- set to `false` to disable one of the mappings
-            node_incremental = '<Enter>',
-            scope_incremental = false,
-            node_decremental = '<Backspace>',
-          },
-        },
+      vim.api.nvim_create_autocmd('FileType', {
+        pattern = ts_filetypes,
+        callback = function(event)
+          pcall(vim.treesitter.start, event.buf)
+
+          -- indentation as you type. Indentation fixes on save are handled by lsp (autocommand)
+          if vim.bo[event.buf].filetype ~= 'ruby' then
+            vim.bo[event.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+          end
+        end,
       })
+    end,
+    config = function()
+      require('nvim-treesitter').setup()
     end,
   },
 }
