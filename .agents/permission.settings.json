@@ -4,6 +4,7 @@
     "bash(pwd)",
     "bash(rg --files *)",
     "bash(head *)",
-    "read"
+    "read",
+    "find"
   ]
 }
