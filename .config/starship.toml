@@ -308,4 +308,4 @@ format = " spack [$symbol$environment]($style)"
 
 # theme
 # the whole env theme is managed by the theme script: themes/theme_switcher.rb and its zsh alias 'theme'
-import = ["~/.dots/no_stow/themes/active/starship.toml"]
+import = ["~/.dots/themes/active/starship.toml"]
