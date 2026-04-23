@@ -35,15 +35,15 @@ No extra repo-detection guard is needed: if this skill is available, you're alre
 
 There is exactly one command-style invocation for this skill:
 
-- `/dots-check`
+- `/skill:dots-check`
 
-When the user invokes `/dots-check`, immediately run the default scan:
+When the user invokes `/skill:dots-check`, immediately run the default scan:
 
 ```bash
 ./.agents/skills/dots-check/scripts/scan.rb
 ```
 
-Treat `/dots-check` as an execution request, not as a request for explanation or confirmation.
+Treat `/skill:dots-check` as an execution request, not as a request for explanation or confirmation.
 
 Exit codes:
 - `0` = no findings
