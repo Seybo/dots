@@ -131,14 +131,13 @@ lf() {
   esac
 }
 
-# if not already inside a tmux session
+# this is used by both alacritty and ghostty
 if command -v tmux >/dev/null 2>&1 && [ -z "$TMUX" ]; then
-  # if SSH →  attach to main session
+  # if not already inside a tmux session
+  # and SSH →  attach-to/create session automatically
   if [ -n "$SSH_CONNECTION" ]; then
     tmux attach -t dev_mb 2>/dev/null || tmux new -s dev_mb
-  else
-    # if local →  start tmux automatically
-    tmux new
   fi
+  # otherwise it should be attached/created manually (because tmux is used with alacritty only)
 fi
 export PATH="$HOME/.local/bin:$PATH"
