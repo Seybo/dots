@@ -12,4 +12,3 @@
 - When a request refers to "dev-env docs" without a path, treat it as referring to `docs/dev-env`.
 - Be explicit about file paths when reading or editing files there.
 - Summarize which files were read or changed.
-- Skill commands are invoked only via explicit slash commands like `/dots-check`. Do not treat non-slash phrasings as skill invocation.
