@@ -1,8 +1,101 @@
+keybinds clear-defaults=true {
+    shared {
+        bind "" { SwitchToMode "Tab"; } // Cmd T
+        bind "" { SwitchToMode "Session"; } // Cmd S
+        bind "" { SwitchToMode "Pane"; } // Cmd P
+        bind "" { SwitchToMode "EnterSearch"; SearchInput 0; } // Cmd /
+        bind "" { SwitchToMode "Scroll"; } // Cmd ;
+        bind "" { MoveFocus "Left"; } // Cmd H
+        bind "" { MoveFocus "Down"; } // Cmd J
+        bind "" { MoveFocus "Up"; } // Cmd K
+        bind "" { MoveFocus "Right"; } // Cmd L
+        bind "Super u" { GoToPreviousTab; } // Cmd U
+        bind "Super m" { GoToNextTab; } // Cmd M
+    }
+
+    tab {
+        bind "Esc" { SwitchToMode "Normal"; } // exit tab mode
+        bind "j" { GoToNextTab; } // Cmd T, then J
+        bind "k" { GoToPreviousTab; } // Cmd T, then K
+        bind "n" { NewTab; SwitchToMode "Normal"; } // Cmd T, then N
+        bind "r" { SwitchToMode "RenameTab"; TabNameInput 0; } // Cmd T, then R
+        bind "x" { CloseTab; SwitchToMode "Normal"; } // Cmd T, then X
+        bind "J" { MoveTab "Right"; } // Cmd T, then Shift J
+        bind "K" { MoveTab "Left"; } // Cmd T, then Shift K
+    }
+
+    session {
+        bind "Esc" { SwitchToMode "Normal"; } // exit session mode
+        bind "s" {
+            LaunchOrFocusPlugin "session-manager" {
+                floating true
+                move_to_focused_tab true
+            };
+            SwitchToMode "Normal";
+        } // Cmd S, then S
+        bind "d" { Detach; } // Cmd S, then D
+        bind "q" { Quit; } // Cmd S, then Q
+    }
+
+    pane {
+        bind "Esc" { SwitchToMode "Normal"; } // exit pane mode
+        bind "n" { NewPane "Right"; SwitchToMode "Normal"; } // Cmd P, then N
+        bind "N" { NewPane "Down"; SwitchToMode "Normal"; } // Cmd P, then Shift N
+        bind "r" { SwitchToMode "RenamePane"; PaneNameInput 0; } // Cmd P, then R
+        bind "b" { TogglePaneFrames; SwitchToMode "Normal"; } // Cmd P, then B
+        bind "f" { ToggleFocusFullscreen; SwitchToMode "Normal"; } // Cmd P, then F
+        bind "o" { ToggleFloatingPanes; SwitchToMode "Normal"; } // Cmd P, then O
+        bind "x" { CloseFocus; SwitchToMode "Normal"; } // Cmd P, then X
+        bind "h" { MoveFocus "Left"; } // Cmd P, then H
+        bind "l" { MoveFocus "Right"; } // Cmd P, then L
+        bind "k" { MoveFocus "Up"; } // Cmd P, then K
+        bind "j" { MoveFocus "Down"; } // Cmd P, then J
+        bind "H" { MovePane "Left"; } // Cmd P, then Shift H
+        bind "L" { MovePane "Right"; } // Cmd P, then Shift L
+        bind "K" { MovePane "Up"; } // Cmd P, then Shift K
+        bind "J" { MovePane "Down"; } // Cmd P, then Shift J
+    }
+
+    search {
+        bind "Esc" { ScrollToBottom; SwitchToMode "Normal"; }
+        bind "n" { Search "down"; }
+        bind "N" { Search "up"; }
+        bind "c" { SearchToggleOption "CaseSensitivity"; }
+        bind "r" { SearchToggleOption "Wrap"; }
+        bind "w" { SearchToggleOption "WholeWord"; }
+    }
+
+    entersearch {
+        bind "Esc" { SwitchToMode "Normal"; }
+        bind "Enter" { SwitchToMode "Search"; }
+    }
+
+    scroll {
+        bind "Esc" { ScrollToBottom; SwitchToMode "Normal"; }
+        bind "/" { SwitchToMode "EnterSearch"; SearchInput 0; }
+        bind "j" { ScrollDown; } // line down
+        bind "k" { ScrollUp; } // line up
+        bind "PageDown" { HalfPageScrollDown; } // half page down
+        bind "PageUp" { HalfPageScrollUp; } // half page up
+    }
+
+    renametab {
+        bind "Enter" { SwitchToMode "Normal"; }
+        bind "Esc" { UndoRenameTab; SwitchToMode "Tab"; }
+    }
+
+    renamepane {
+        bind "Enter" { SwitchToMode "Normal"; }
+        bind "Esc" { UndoRenamePane; SwitchToMode "Pane"; }
+    }
+}
+
 plugins {
     tab-bar { path "tab-bar"; }
     status-bar { path "status-bar"; }
     strider { path "strider"; }
     compact-bar { path "compact-bar"; }
+    session-manager { path "session-manager"; }
 }
 
 // Choose what to do when zellij receives SIGTERM, SIGINT, SIGQUIT or SIGHUP
@@ -35,7 +128,7 @@ theme "active"
 
 // The name of the default layout to load on startup
 // Default: "default"
-default_layout "terminal"
+default_layout "default"
 
 // Choose the mode that zellij uses when starting up.
 // Default: normal

@@ -30,3 +30,32 @@ mouse-hide-while-typing = true
 copy-on-select = clipboard
 clipboard-paste-protection = true
 macos-option-as-alt = true
+quit-after-last-window-closed = true
+
+# Zellij tabs
+# cmd+t => enter tab mode
+keybind = cmd+t=text:
+
+# Zellij sessions
+# cmd+s => enter session mode
+keybind = cmd+s=text:
+
+# Zellij panes
+# cmd+p => enter pane mode
+keybind = cmd+p=text:
+
+# Zellij search
+# cmd+/ => enter search mode
+keybind = cmd+slash=text:
+
+# Zellij scroll
+# cmd+; => enter scroll mode
+keybind = cmd+semicolon=text:
+
+# Zellij pane navigation
+# cmd+h/j/k/l => move focus left/down/up/right
+keybind = cmd+h=text:
+keybind = cmd+j=text:
+keybind = cmd+k=text:
+keybind = cmd+l=text:
+
