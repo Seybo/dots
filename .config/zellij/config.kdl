@@ -9,6 +9,30 @@ keybinds clear-defaults=true {
         bind "" { MoveFocus "Down"; } // Cmd J
         bind "" { MoveFocus "Up"; } // Cmd K
         bind "" { MoveFocus "Right"; } // Cmd L
+        bind "󰎤" {
+            Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "to" "system" {
+                floating true;
+                close_on_exit true;
+                borderless true;
+                x "98%";
+                y "1%";
+                width 1;
+                height 1;
+                name "switch-session";
+            }
+        } // Cmd 1
+        bind "󰎠" {
+            Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "last" {
+                floating true;
+                close_on_exit true;
+                borderless true;
+                x "98%";
+                y "1%";
+                width 1;
+                height 1;
+                name "switch-session";
+            }
+        } // Cmd 0
         bind "Super u" { GoToPreviousTab; } // Cmd U
         bind "Super m" { GoToNextTab; } // Cmd M
     }
@@ -75,6 +99,8 @@ keybinds clear-defaults=true {
         bind "/" { SwitchToMode "EnterSearch"; SearchInput 0; }
         bind "j" { ScrollDown; } // line down
         bind "k" { ScrollUp; } // line up
+        bind "Ctrl d" { HalfPageScrollDown; } // vim-style half page down
+        bind "Ctrl u" { HalfPageScrollUp; } // vim-style half page up
         bind "PageDown" { HalfPageScrollDown; } // half page down
         bind "PageUp" { HalfPageScrollUp; } // half page up
     }
