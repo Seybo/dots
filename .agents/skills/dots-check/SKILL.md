@@ -18,7 +18,7 @@ No extra repo-detection guard is needed: if this skill is available, you're alre
 ## Usage
 
 ```bash
-# Default: scan staged changes; if none, scans working-tree changes vs HEAD
+# Default: scan unstaged changes; if none, scan the last commit
 ./.agents/skills/dots-check/scripts/scan.rb
 
 # Scan all tracked files
@@ -61,6 +61,7 @@ Exit codes:
 - Add private domain/email checks
 
 ## Notes
+- Default behavior is: scan unstaged changes; if there are none, scan `HEAD`.
 - Keep output short to save model tokens. The scanner truncates snippets.
 - The scanner prints the files it checks before reporting findings.
 - False positives happen; prefer auditing each finding rather than suppressing by default.
