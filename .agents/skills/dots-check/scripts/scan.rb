@@ -124,14 +124,14 @@ def collect_targets(options)
 
     out.lines.map(&:chomp).each { |f| targets[f] = :full unless f.empty? }
   else
-    staged, = capture('git diff --cached --name-only')
+    unstaged, = capture('git diff --name-only')
     diff_cmd = nil
 
-    if staged.strip.empty?
-      head_exists = system('git rev-parse --verify HEAD > /dev/null 2>&1')
-      diff_cmd = 'git diff -U0 HEAD' if head_exists
+    if !unstaged.strip.empty?
+      diff_cmd = 'git diff -U0'
     else
-      diff_cmd = 'git diff --cached -U0'
+      head_exists = system('git rev-parse --verify HEAD > /dev/null 2>&1')
+      diff_cmd = 'git show --format= --unified=0 HEAD' if head_exists
     end
 
     if diff_cmd
