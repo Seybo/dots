@@ -17,6 +17,51 @@ return {
       local lsnip = require('luasnip')
       local supermaven = require('supermaven-nvim.completion_preview')
 
+      local pi_cmp_source = {}
+
+      function pi_cmp_source:complete(params, callback)
+        local line = params.context.cursor_before_line
+
+        if params.context.cursor.row == 1 and line:sub(1, 1) == '/' then
+          callback({
+            items = require('pi.completion').complete_commands(
+              line:sub(2),
+              function(cmd)
+                return {
+                  label = '/' .. cmd.name,
+                  insertText = '/' .. cmd.name,
+                  kind = vim.lsp.protocol.CompletionItemKind.Function,
+                }
+              end
+            ),
+            isIncomplete = true,
+          })
+          return
+        end
+
+        local at_col = line:match('.*()@[^ ]*$')
+        if not at_col then
+          callback({ items = {}, isIncomplete = false })
+          return
+        end
+
+        callback({
+          items = require('pi.completion').complete_files(
+            line:sub(at_col + 1),
+            function(path, kind)
+              return {
+                label = '@' .. path,
+                insertText = '@' .. path,
+                kind = kind == 'dir' and vim.lsp.protocol.CompletionItemKind.Folder or vim.lsp.protocol.CompletionItemKind.File,
+              }
+            end
+          ),
+          isIncomplete = true,
+        })
+      end
+
+      plugin.register_source('pi', pi_cmp_source)
+
       local has_words_before = function()
         unpack = unpack or table.unpack
         local line, col = unpack(vim.api.nvim_win_get_cursor(0))
@@ -143,6 +188,14 @@ return {
           ['<C-u>'] = plugin.mapping.scroll_docs(-4),
           ['<C-d>'] = plugin.mapping.scroll_docs(4),
           ['<Esc>'] = plugin.mapping.close(),
+        },
+      })
+
+      plugin.setup.filetype('pi-chat-prompt', {
+        sources = {
+          { name = 'pi' },
+          { name = 'buffer' },
+          { name = 'path' },
         },
       })
     end,
