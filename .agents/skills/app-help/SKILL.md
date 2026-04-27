@@ -1,11 +1,11 @@
 ---
 name: app-help
-description: Helps answer short how-to questions about terminal apps by checking app-specific sources in apps/<app>.md, preferring local docs first, and creating a new apps/<app>.md when the app is unknown and decent sources can be discovered.
+description: Helps answer short how-to questions about terminal apps and Neovim plugins by checking app-specific sources in apps/<app>.md and plugin-specific sources in nvim/plugins/<plugin>.md, preferring local docs first, and creating a new registry file when the app or plugin is unknown and decent sources can be discovered.
 ---
 
 # App Help
 
-Use this skill for short how-to questions about command-line or terminal applications.
+Use this skill for short how-to questions about command-line or terminal applications, and for Neovim plugins.
 
 Typical input:
 
@@ -19,8 +19,10 @@ Typical input:
 - Prefer local documentation first
 - Include local config files in the context when they exist
 - Keep a small app registry in `apps/`
-- Use app files only as source registries, not as replacement manuals
+- Keep a small Neovim plugin registry in `nvim/plugins/`
+- Use registry files only as source registries, not as replacement manuals
 - If an app is unknown, discover sources and add `apps/<app>.md` before answering
+- If a Neovim plugin is unknown, discover sources and add `nvim/plugins/<plugin>.md` before answering
 - Always cite the source actually used
 
 ## Files
@@ -28,6 +30,7 @@ Typical input:
 - Skill root: `~/.dots/.agents/skills/app-help`
 - App registry: `~/.dots/.agents/skills/app-help/apps`
 - App template: `~/.dots/.agents/skills/app-help/apps/_template.md`
+- Neovim plugin registry: `~/.dots/.agents/skills/app-help/nvim/plugins`
 - Local dotfiles root: `~/.dots`
 
 The local dotfiles tree is managed by GNU Stow by the user. Do not run any `stow` commands.
@@ -46,17 +49,18 @@ If the input is ambiguous or missing the app name, ask one short clarifying ques
 
 ## Workflow
 
-1. Parse the app name and question.
-2. Look for `~/.dots/.agents/skills/app-help/apps/<app>.md`.
-3. If the app file exists, read it only to learn which sources and config files to consult.
-4. Then consult the actual docs and local config files named there for the current question, even if the same question was answered before.
-5. If the app file does not exist:
-   - discover decent sources for the app
-   - discover likely local config files for the app under `~/.dots`
-   - create `~/.dots/.agents/skills/app-help/apps/<app>.md`
+1. Parse whether the question is about a terminal app or a Neovim plugin, then extract the name and question.
+2. For terminal apps, look for `~/.dots/.agents/skills/app-help/apps/<app>.md`.
+3. For Neovim plugins, look for `~/.dots/.agents/skills/app-help/nvim/plugins/<plugin>.md`.
+4. If the registry file exists, read it only to learn which sources and config files to consult.
+5. Then consult the actual docs and local config files named there for the current question, even if the same question was answered before.
+6. If the registry file does not exist:
+   - discover decent sources for the app or plugin
+   - discover likely local config files under `~/.dots`
+   - create the appropriate registry file
    - then consult the actual docs/configs and answer
-6. Answer in a short form.
-7. Include the source used.
+7. Answer in a short form.
+8. Include the source used.
 
 ## Source priority
 
@@ -76,7 +80,7 @@ Do not prefer random third-party pages over official docs when official docs are
 
 ## Unknown app discovery
 
-When `apps/<app>.md` is missing, do a best-effort discovery.
+When `apps/<app>.md` or `nvim/plugins/<plugin>.md` is missing, do a best-effort discovery.
 
 ### Local discovery
 
@@ -114,11 +118,12 @@ Do not run `stow`.
 ### Official source discovery
 
 If local docs mention a homepage, repo, maintainer URL, or bundled doc path, use that.
-If a clearly official upstream source can be identified, include it in the new app file.
+For Neovim plugins, prefer the plugin repo, README, `:help` tags, and any bundled docs under the plugin.
+If a clearly official upstream source can be identified, include it in the new registry file.
 
 ### Creation rule
 
-Create `apps/<app>.md` only if you found at least one decent source, such as:
+Create `apps/<app>.md` or `nvim/plugins/<plugin>.md` only if you found at least one decent source, such as:
 
 - a working man page
 - usable help output
@@ -126,13 +131,13 @@ Create `apps/<app>.md` only if you found at least one decent source, such as:
 - a real local config path in `~/.dots`
 - a clearly official upstream doc or repo
 
-If discovery is too weak, do not create a low-quality app file. Answer from the best local evidence available and say that a curated app file was not added yet.
+If discovery is too weak, do not create a low-quality registry file. Answer from the best local evidence available and say that a curated registry file was not added yet.
 
-## App file format
+## Registry file format
 
-Keep each app file concise and structured. Follow `apps/_template.md`.
+Keep each app or plugin registry file concise and structured. Follow `apps/_template.md` for app files, and use the same structure for plugin files under `nvim/plugins/`.
 
-App files are only source registries. They should point to the real manuals and docs, not summarize them.
+Registry files are only source registries. They should point to the real manuals and docs, not summarize them.
 
 Expected sections:
 
@@ -141,7 +146,7 @@ Expected sections:
 - `## Local configs`
 - `## Official sources`
 
-When creating or updating an app file:
+When creating or updating a registry file:
 
 - prefer concrete commands, file paths, and URLs
 - keep bullets short
@@ -182,15 +187,15 @@ For online sources, include a short label and URL:
 - If the answer came from an online source, cite a short label plus URL.
 - Cite the actual source used, not every source consulted.
 
-## When updating app files
+## When updating registry files
 
-Update an existing app file when discovery reveals a clearly better official source, local doc path, or real local config path.
+Update an existing app or plugin registry file when discovery reveals a clearly better official source, local doc path, `:help` entry, plugin repo, or real local config path.
 Keep edits small and maintain the existing structure.
 
 ## Constraints
 
-- Focus on terminal apps.
-- Assume the installed app is reasonably up to date.
+- Focus on terminal apps and Neovim plugins.
+- Assume the installed app or plugin is reasonably up to date.
 - Do not over-explain unless asked.
 - Prefer local docs over memory.
 - Prefer official docs over third-party pages.
