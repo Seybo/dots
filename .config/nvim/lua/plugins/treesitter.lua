@@ -30,17 +30,22 @@ return {
     lazy = false,
     build = ':TSUpdate',
     init = function()
-      local ts_filetypes = vim.tbl_filter(function(parser)
-        return parser ~= 'markdown_inline' and parser ~= 'printf'
-      end, parsers)
-
       vim.api.nvim_create_autocmd('FileType', {
-        pattern = ts_filetypes,
         callback = function(event)
-          pcall(vim.treesitter.start, event.buf)
+          if vim.b[event.buf].ts_highlight then
+            return
+          end
+
+          -- Generic startup is needed so custom filetypes like pi-chat-history can still
+          -- resolve to a real parser via treesitter language aliases (pi maps to markdown).
+          local lang = vim.treesitter.language.get_lang(vim.bo[event.buf].filetype)
+          if lang and vim.treesitter.language.add(lang) then
+            pcall(vim.treesitter.start, event.buf, lang)
+          end
 
           -- indentation as you type. Indentation fixes on save are handled by lsp (autocommand)
-          if vim.bo[event.buf].filetype ~= 'ruby' then
+          -- Skip pi-chat-history: it's a rendered chat buffer, not an editable source buffer.
+          if vim.bo[event.buf].filetype ~= 'ruby' and vim.bo[event.buf].filetype ~= 'pi-chat-history' then
             vim.bo[event.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
           end
         end,
