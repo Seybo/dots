@@ -17,6 +17,14 @@ alias tksv='tmux kill-server'
 alias tkss='tmux kill-session -t'
 alias mux='tmuxinator'
 
+### zellij ###
+alias zscs='zellij --new-session-with-layout system -s system'
+alias zsas='zellij attach system'
+alias zsch='zellij --new-session-with-layout help -s help'
+alias zsah='zellij attach help'
+alias zsct='zellij -c temp'
+alias zsat='zellij attach temp'
+
 
 ### git ###
 alias lg='lazygit'
@@ -45,10 +53,8 @@ alias rdr='rails db:rollback:primary'
 
 
 ### misc apps ###
-alias rgr='yazi'
-# re_fzf to refresh fzf theme in case of theme switch
-alias v='re_fzf && nvim'
-alias vim='re_fzf && nvim'
+alias v='nvim'
+alias vim='nvim'
 
 ### pi ###
 pi-p() {
