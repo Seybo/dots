@@ -20,15 +20,9 @@ layout {
         }
     }
 
-    tab name="vim" {
-        pane command="zsh" {
-            args "-lic" "v"
-        }
-    }
-
     tab name="pi" {
         pane command="zsh" {
-            args "-lic" "pi-w"
+            args "-lic" "pi-p"
         }
     }
 
