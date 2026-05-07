@@ -7,7 +7,12 @@ alias re_fzf='source $STOW_DIR/themes/active/fzf.zsh'
 alias re_tmux='tmux source-file $STOW_DIR/.tmux.conf'
 theme() {
   ruby ~/.dots/themes/theme_switcher.rb "$@"
-  tmux source-file $STOW_DIR/.tmux.conf
+  if command -v tmux >/dev/null 2>&1 && tmux info >/dev/null 2>&1; then
+    tmux source-file "$STOW_DIR/.tmux.conf"
+  fi
+  if [ "$TERM_PROGRAM" = "ghostty" ]; then
+    echo "ghostty: press cmd+shift+, to reload config"
+  fi
   re_fzf
 }
 
