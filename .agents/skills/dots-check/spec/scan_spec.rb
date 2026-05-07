@@ -34,6 +34,24 @@ class ScanSpec < Minitest::Test
     end
   end
 
+  def test_staged_changes_take_precedence_over_unstaged_changes
+    with_repo do |dir|
+      staged_path = File.join(dir, "staged.txt")
+      unstaged_path = File.join(dir, "unstaged.txt")
+
+      File.write(staged_path, "safe staged change\n")
+      system({"HOME" => dir}, "git", "add", "staged.txt", chdir: dir)
+      File.write(unstaged_path, "ghp_1234567890abcdef12345678\n")
+
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 0, status.exitstatus
+      assert_match(/Checking files \(1\):/, stdout)
+      assert_match(/staged\.txt/, stdout)
+      refute_match(/unstaged\.txt/, stdout)
+      refute_match(/github_token/, stdout)
+    end
+  end
+
   def test_only_changed_lines_are_scanned_by_default
     with_repo do |dir|
       path = File.join(dir, "config.txt")
