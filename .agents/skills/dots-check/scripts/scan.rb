@@ -13,6 +13,7 @@ ENTROPY_MAX_LEN = 128
 
 Rule = Struct.new(:name, :regex)
 Finding = Struct.new(:rule, :path, :line, :snippet)
+Target = Struct.new(:lines, :source)
 
 RULES = [
   Rule.new('aws_access_key', /AKIA[0-9A-Z]{16}/),
@@ -122,28 +123,37 @@ def collect_targets(options)
     out, ok = capture('git ls-files')
     raise 'git ls-files failed' unless ok
 
-    out.lines.map(&:chomp).each { |f| targets[f] = :full unless f.empty? }
+    out.lines.map(&:chomp).each { |f| targets[f] = Target.new(:full, :worktree) unless f.empty? }
   else
+    staged, = capture('git diff --cached --name-only')
     unstaged, = capture('git diff --name-only')
     diff_cmd = nil
+    source = nil
 
-    if !unstaged.strip.empty?
+    if !staged.strip.empty?
+      diff_cmd = 'git diff --cached -U0'
+      source = :index
+    elsif !unstaged.strip.empty?
       diff_cmd = 'git diff -U0'
+      source = :worktree
     else
       head_exists = system('git rev-parse --verify HEAD > /dev/null 2>&1')
-      diff_cmd = 'git show --format= --unified=0 HEAD' if head_exists
+      if head_exists
+        diff_cmd = 'git show --format= --unified=0 HEAD'
+        source = :head
+      end
     end
 
     if diff_cmd
       parse_changed_lines(diff_cmd).each do |path, lines|
-        targets[path] = lines
+        targets[path] = Target.new(lines, source)
       end
     end
   end
 
   if options[:untracked]
     untracked, = capture('git ls-files --others --exclude-standard')
-    untracked.lines.map(&:chomp).each { |f| targets[f] = :full unless f.empty? }
+    untracked.lines.map(&:chomp).each { |f| targets[f] = Target.new(:full, :worktree) unless f.empty? }
   end
 
   if options[:path]
@@ -162,6 +172,14 @@ def binary_file?(path)
   false
 rescue StandardError
   false
+end
+
+def blob_content(path, source)
+  ref = source == :index ? ":#{path}" : "HEAD:#{path}"
+  content, status = Open3.capture2('git', 'show', ref)
+  return nil unless status.success?
+
+  content
 end
 
 def entropy(str)
@@ -202,27 +220,46 @@ end
 
 findings = []
 
-targets.each do |path, lines|
-  next unless File.file?(path)
+targets.each do |path, target|
+  lines = target.lines
+  content = nil
+
+  if target.source == :worktree
+    next unless File.file?(path)
+
+    begin
+      size = File.size(path)
+    rescue Errno::ENOENT
+      next
+    end
+
+    if size > MAX_FILE_BYTES
+      warn "Skipping #{path} (size > #{MAX_FILE_BYTES} bytes)"
+      next
+    end
+
+    if binary_file?(path)
+      warn "Skipping #{path} (binary)"
+      next
+    end
+  else
+    content = blob_content(path, target.source)
+    next unless content
+
+    if content.bytesize > MAX_FILE_BYTES
+      warn "Skipping #{path} (size > #{MAX_FILE_BYTES} bytes)"
+      next
+    end
+
+    if content.include?("\x00")
+      warn "Skipping #{path} (binary)"
+      next
+    end
+  end
 
   begin
-    size = File.size(path)
-  rescue Errno::ENOENT
-    next
-  end
-
-  if size > MAX_FILE_BYTES
-    warn "Skipping #{path} (size > #{MAX_FILE_BYTES} bytes)"
-    next
-  end
-
-  if binary_file?(path)
-    warn "Skipping #{path} (binary)"
-    next
-  end
-
-  begin
-    File.foreach(path).with_index(1) do |line, lineno|
+    each_line = content ? content.each_line : File.foreach(path)
+    each_line.with_index(1) do |line, lineno|
       next unless lines == :full || lines.include?(lineno)
 
       RULES.each do |rule|

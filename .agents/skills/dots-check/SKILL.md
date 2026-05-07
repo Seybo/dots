@@ -1,6 +1,6 @@
 ---
 name: dots-check
-description: Scan dotfiles changes for secrets or sensitive data before publishing. Uses Ruby, git diffs, regexes, and entropy heuristics. Defaults to changed files; supports full and untracked scans.
+description: Scan dotfiles changes for secrets or sensitive data before publishing. Uses Ruby, git diffs, regexes, and entropy heuristics. Defaults to staged changes, then unstaged changes, then the last commit; supports full and untracked scans.
 ---
 
 # Dots Check
@@ -18,7 +18,7 @@ No extra repo-detection guard is needed: if this skill is available, you're alre
 ## Usage
 
 ```bash
-# Default: scan unstaged changes; if none, scan the last commit
+# Default: scan staged changes; if none, scan unstaged changes; if none, scan the last commit
 ./.agents/skills/dots-check/scripts/scan.rb
 
 # Scan all tracked files
@@ -50,6 +50,24 @@ Exit codes:
 - `1` = findings present
 - `2` = usage error or fatal error
 
+## Maintenance / TDD
+
+When changing this skill, especially `scripts/scan.rb`:
+
+1. Read the existing specs in `.agents/skills/dots-check/spec/`.
+2. For behavior changes, add or update a failing spec first.
+3. Run the spec and confirm the new/changed spec fails for the expected reason.
+4. Implement the change.
+5. Run the full spec suite:
+
+   ```bash
+   ruby .agents/skills/dots-check/spec/scan_spec.rb
+   ```
+
+6. Report the spec result when finished.
+
+Do not report a scanner behavior change as complete unless the relevant spec was added/updated and the full spec suite passes.
+
 ## What it checks (MVP)
 - High-signal token patterns (AWS, GitHub, Slack, Stripe, Twilio, Google API, OpenAI/Anthropic/etc keys, Hugging Face, JWT-ish, PEM blocks)
 - Entropy heuristic for long random-looking strings (base58/64-ish) of length 32-128
@@ -61,7 +79,7 @@ Exit codes:
 - Add private domain/email checks
 
 ## Notes
-- Default behavior is: scan unstaged changes; if there are none, scan `HEAD`.
+- Default behavior is: scan staged changes; if there are none, scan unstaged changes; if there are none, scan `HEAD`.
 - Keep output short to save model tokens. The scanner truncates snippets.
 - The scanner prints the files it checks before reporting findings.
 - False positives happen; prefer auditing each finding rather than suppressing by default.
