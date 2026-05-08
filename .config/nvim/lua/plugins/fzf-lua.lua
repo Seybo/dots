@@ -55,7 +55,7 @@ return {
     map_with_cursor_restore('n', '<leader>ff', fzf.git_files, nil, '[Fzf] Search Git Files')
     map_with_cursor_restore('n', '<leader>fp', fzf.files, { cwd = '../_apis' }, '[Fzf] Search in my api')
     map_with_cursor_restore('n', '<leader>fm', fzf.files, { cwd = '../_mydev' }, '[Fzf] Search in my dev')
-    map_with_cursor_restore('n', '<leader>ft', fzf.files, { cwd = '../_tasks' }, '[Fzf] Search in my tasks')
+    map_with_cursor_restore('n', '<leader>ft', fzf.files, { cwd = '/Volumes/dev/_tasks' }, '[Fzf] Search in my tasks')
     map_with_cursor_restore('n', '<leader>fc', fzf.git_status, nil, '[Fzf] Search Git Changed Files')
     map_with_cursor_restore('n', '<leader>fha', fzf.oldfiles, nil, '[Fzf] Files History (all)')
     map_with_cursor_restore('n', '<leader>fhf', function() fzf.oldfiles({ cwd_only = true }) end, nil, '[Fzf] Files History (within repo)')
