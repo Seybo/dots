@@ -60,8 +60,10 @@ keybind = cmd+k=text:
 keybind = cmd+l=text:
 
 # Zellij direct session switch
-# cmd+1 => switch to system session
-keybind = cmd+1=text:󰎤
-# cmd+0 => switch to last session
+# cmd+0 => switch to session 0
 keybind = cmd+0=text:󰎠
+# cmd+1 => switch to session 1
+keybind = cmd+1=text:󰎤
+# cmd+2 => switch to session 2
+keybind = cmd+2=text:󰎧
 

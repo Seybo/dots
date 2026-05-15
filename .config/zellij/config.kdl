@@ -21,6 +21,18 @@ keybinds clear-defaults=true {
                 name "switch-session";
             }
         } // Cmd 1
+        bind "󰎧" {
+            Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "to" "gtm" {
+                floating true;
+                close_on_exit true;
+                borderless true;
+                x "98%";
+                y "1%";
+                width 1;
+                height 1;
+                name "switch-session";
+            }
+        } // Cmd 2
         bind "󰎠" {
             Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "last" {
                 floating true;
@@ -35,6 +47,12 @@ keybinds clear-defaults=true {
         } // Cmd 0
         bind "Super u" { GoToPreviousTab; } // Cmd U
         bind "Super m" { GoToNextTab; } // Cmd M
+
+        // Termius/SSH-friendly chords (no Ghostty key translation available)
+        bind "Ctrl y" { SwitchToMode "Scroll"; }
+        bind "Ctrl t" { SwitchToMode "Tab"; }
+        bind "Ctrl p" { SwitchToMode "Pane"; }
+        bind "Ctrl Alt x" { SwitchToMode "Session"; }
     }
 
     tab {
@@ -57,6 +75,13 @@ keybinds clear-defaults=true {
             };
             SwitchToMode "Normal";
         } // Cmd S, then S
+        bind "x" {
+            LaunchOrFocusPlugin "session-manager" {
+                // Floating session-manager is not visible on tablet Termius.
+                move_to_focused_tab true
+            };
+            SwitchToMode "Normal";
+        } // Cmd S / Ctrl Alt X, then X
         bind "d" { Detach; } // Cmd S, then D
         bind "q" { Quit; } // Cmd S, then Q
     }
@@ -218,5 +243,5 @@ copy_on_select true
 //
 theme_dir "/Users/inseybo/.dots/themes/active"
 
-session_serialization false
+session_serialization true
 disable_session_metadata false
