@@ -1,5 +1,5 @@
 layout {
-    cwd "/Users/inseybo/.dots"
+    cwd "/Volumes/dev/shaka/gtm"
 
     default_tab_template {
         pane size=1 borderless=true {
@@ -20,9 +20,20 @@ layout {
         }
     }
 
-    tab name="pi" {
+    tab name="claude" {
         pane command="zsh" {
-            args "-lic" "pi-p"
+            args "-lic" "claude"
+        }
+    }
+
+    tab name="hermes" {
+        pane split_direction="vertical" {
+            pane command="zsh" {
+                args "-lic" "gtm chat"
+            }
+            pane command="zsh" {
+                args "-lic" "hermes chat"
+            }
         }
     }
 
