@@ -120,6 +120,25 @@ Examples:
    - show the full task folder path
    - show the full `task.md` path
 
+8. **Set up the development branch (GTM project, Shortcut mode only):**
+   - This step runs only when `<project>` is `gtm` AND the mode is Shortcut. Skip for other projects or Manual mode.
+   - Generate the branch name manually:
+     ```text
+     mikhail/sc-{story_id}/{slug}
+     ```
+     - Always use `mikhail` as the branch prefix, regardless of story owner.
+     - Do NOT call `mcp__shortcut__stories-get-branch-name` — the MCP returns incorrect names (triple dashes, truncation).
+   - Verify the branch does not already exist:
+     ```bash
+     git -C /Volumes/dev/shaka/gtm rev-parse --verify --quiet <branch-name>
+     ```
+   - If it exists (exit 0), stop and ask the user how to proceed.
+   - Otherwise (exit 1), create and check out the branch with exactly this form — `-C` flag required, no `cd`, no bare `git`:
+     ```bash
+     git -C /Volumes/dev/shaka/gtm checkout -b <branch-name>
+     ```
+   - Report the branch name alongside the created paths from step 7.
+
 ## Important Notes
 
 - Create only; do not modify existing task folders or files
@@ -130,3 +149,4 @@ Examples:
 - Do not add extra files
 - Do not add extra sections to `task.md`
 - Do not auto-use this skill without the explicit `/taskit` command
+- Step 8 (branch setup) is GTM-specific and Shortcut-mode-only. For Manual mode in GTM, or any non-GTM project, do not touch git.
