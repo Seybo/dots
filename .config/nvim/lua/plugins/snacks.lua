@@ -40,7 +40,7 @@ return {
           get = function() return vim.g.autoformat end,
           set = function() vim.g.autoformat = not vim.g.autoformat end,
         })
-        :map('<c-t>f')
+        :map('<a-o>f')
 
       vim.g.diags_enabled = false
       require('snacks').toggle
@@ -58,7 +58,7 @@ return {
             })
           end,
         })
-        :map('<c-t>d')
+        :map('<a-o>d')
       vim.g.spell_enabled = false
       require('snacks').toggle
         .new({
@@ -67,7 +67,16 @@ return {
           get = function() return vim.wo.spell end,
           set = function() vim.wo.spell = not vim.wo.spell end,
         })
-        :map('<c-t>s')
+        :map('<a-o>s')
+
+      require('snacks').toggle
+        .new({
+          id = '[Toggle] Wrap',
+          name = '[Toggle] Wrap',
+          get = function() return vim.wo.wrap end,
+          set = function() vim.wo.wrap = not vim.wo.wrap end,
+        })
+        :map('<a-o>w')
     end,
     keys = {
       -- git browse [gb]
