@@ -37,13 +37,15 @@ There is exactly one command-style invocation for this skill:
 
 - `/skill:dots-check`
 
-When the user invokes `/skill:dots-check`, immediately run the default scan:
+In pi, when the user types `/skill:dots-check`, the agent may receive this `SKILL.md` content as a `<skill name="dots-check" ...>` block instead of seeing the raw slash command in the conversation. **That skill block means the skill was invoked.**
+
+When this skill is invoked, immediately run the default scan:
 
 ```bash
 ./.agents/skills/dots-check/scripts/scan.rb
 ```
 
-Treat `/skill:dots-check` as an execution request, not as a request for explanation or confirmation.
+Do not ask the user to type `/skill:dots-check` again. Do not explain how to invoke it. Do not wait for confirmation. Treat the invocation and/or the received skill block as an execution request.
 
 Exit codes:
 - `0` = no findings
