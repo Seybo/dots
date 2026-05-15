@@ -131,13 +131,14 @@ lf() {
   esac
 }
 
-# this is used by both alacritty and ghostty
-if command -v tmux >/dev/null 2>&1 && [ -z "$TMUX" ]; then
-  # if not already inside a tmux session
-  # and SSH →  attach-to/create session automatically
-  if [ -n "$SSH_CONNECTION" ]; then
-    tmux attach -t dev_mb 2>/dev/null || tmux new -s dev_mb
+# SSH → attach-to/create a zellij session, exit shell on detach
+# locally zellij is started manually (or by the terminal emulator)
+if [ -n "$SSH_CONNECTION" ] && [ -z "$ZELLIJ" ]; then
+  if zellij list-sessions --short 2>/dev/null | grep -Fxq remote_dev; then
+    zsar
+  else
+    zscr
   fi
-  # otherwise it should be attached/created manually (because tmux is used with alacritty only)
+  exit
 fi
 export PATH="$HOME/.local/bin:$PATH"
