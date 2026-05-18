@@ -1,0 +1,10 @@
+palette = 'github_light_default'
+
+[palettes.github_light_default]
+overlay = '#d0d7de'
+love = '#cf222e'
+gold = '#9a6700'
+rose = '#bf3989'
+pine = '#116329'
+foam = '#1b7c83'
+iris = '#8250df'
