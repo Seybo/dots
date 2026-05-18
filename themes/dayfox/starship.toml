@@ -1,0 +1,10 @@
+palette = 'dayfox'
+
+[palettes.dayfox]
+overlay = '#e4dcd4'
+love = '#a5222f'
+gold = '#ac5402'
+rose = '#955f61'
+pine = '#396847'
+foam = '#287980'
+iris = '#6e33ce'
