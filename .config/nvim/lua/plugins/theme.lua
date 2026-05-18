@@ -6,6 +6,10 @@ return {
     'EdenEast/nightfox.nvim',
   },
   {
+    'projekt0n/github-nvim-theme',
+    name = 'github-theme',
+  },
+  {
     name = 'active-theme',
     dir = vim.fn.stdpath('config'),
     config = function()
