@@ -9,7 +9,7 @@
 ## Local configs
 - `/Users/inseybo/.dots/.pi/agent/settings.json`
 - `/Users/inseybo/.dots/.pi/agent/keybindings.json`
-- `/Users/inseybo/.dots/docs/dev-env/pi.md`
+- `/Users/inseybo/.dots/refs/dev-env/pi.md`
 
 ## Official sources
 - https://pi.dev
