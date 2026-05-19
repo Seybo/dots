@@ -2,13 +2,13 @@
 
 ## Path shorthands
 
-- When I say "dev-env docs", I mean `docs/dev-env` in this repo.
-- "read dev-env docs" means inspect files under `docs/dev-env`.
-- "update dev-env docs" means modify documentation in `docs/dev-env`.
-- Prefer starting by listing the directory and reading relevant Markdown or documentation files in `docs/dev-env` before making changes.
+- When I say "dev-env refs", I mean `refs/dev-env` in this repo.
+- "read dev-env refs" means inspect files under `refs/dev-env`.
+- "update dev-env refs" means modify documentation in `refs/dev-env`.
+- Prefer starting by listing the directory and reading relevant Markdown or reference files in `refs/dev-env` before making changes.
 
 ## Working style
 
-- When a request refers to "dev-env docs" without a path, treat it as referring to `docs/dev-env`.
+- When a request refers to "dev-env refs" without a path, treat it as referring to `refs/dev-env`.
 - Be explicit about file paths when reading or editing files there.
 - Summarize which files were read or changed.
