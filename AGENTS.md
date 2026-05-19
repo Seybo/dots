@@ -12,3 +12,8 @@
 - When a request refers to "dev-env refs" without a path, treat it as referring to `refs/dev-env`.
 - Be explicit about file paths when reading or editing files there.
 - Summarize which files were read or changed.
+
+## Tool permissions
+
+- Before using bash patterns that may be restricted, check `.agents/permission.settings.json` mentally/explicitly and avoid commands matching the `deny` list when practical.
+- In particular, avoid `find ... -exec`, `find ... -delete`, `find ... -ok`, and `find ... -execdir`; prefer separate `find`, `ls`, `rg`, or shell-safe follow-up commands.
