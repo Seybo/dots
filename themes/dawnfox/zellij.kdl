@@ -1,4 +1,4 @@
-// Extracted from upstream Nightfox Zellij theme and renamed to `active`.
+// Extracted from upstream Nightfox Zellij theme.
 // Upstream: https://github.com/EdenEast/nightfox.nvim/raw/main/extra/zellij/nightfox.kdl
 
 themes {

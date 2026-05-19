@@ -1,5 +1,9 @@
 palette = 'github_light_default'
 
+# No upstream Starship theme exists in projekt0n/github-nvim-theme.
+# Values below are extracted from its github_light_default palette/primitives:
+# https://github.com/projekt0n/github-nvim-theme/raw/main/lua/github-theme/palette/github_light_default.lua
+# https://github.com/projekt0n/github-nvim-theme/raw/main/lua/github-theme/palette/primitives/light.lua
 [palettes.github_light_default]
 overlay = '#d0d7de'
 love = '#cf222e'
