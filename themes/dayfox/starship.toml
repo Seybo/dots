@@ -1,10 +1,17 @@
-palette = 'dayfox'
+palette = "dayfox"
 
+# Extracted from upstream Nightfox Starship palette:
+# https://github.com/EdenEast/nightfox.nvim/raw/main/extra/dayfox/starship.toml
 [palettes.dayfox]
-overlay = '#e4dcd4'
-love = '#a5222f'
-gold = '#ac5402'
-rose = '#955f61'
-pine = '#396847'
-foam = '#287980'
-iris = '#6e33ce'
+red = "#a5222f"
+green = "#396847"
+purple = "#6e33ce"
+yellow = "#ac5402"
+os_bg = "#824d5b"
+os_fg = "#e4dcd4"
+dir_bg = "#396847"
+dir_fg = "#f6f2ee"
+git_bg = "#ac5402"
+git_fg = "#dbd1dd"
+lang_bg = "#2848a9"
+lang_fg = "#d3c7bb"
