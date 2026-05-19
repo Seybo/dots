@@ -1,5 +1,7 @@
-palette = 'rose-pine-dawn'
+palette = "rose-pine-dawn"
 
+# Extracted from upstream Rose Pine Starship palette:
+# https://github.com/rose-pine/starship/raw/main/rose-pine-dawn.toml
 [palettes.rose-pine-dawn]
 overlay = '#f2e9e1'
 love = '#b4637a'

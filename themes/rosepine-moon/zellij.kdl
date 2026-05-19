@@ -1,8 +1,11 @@
+// Extracted from upstream Rose Pine Zellij theme.
+// Upstream: https://github.com/rose-pine/zellij/raw/main/dist/rose-pine-moon.kdl
+
 themes {
   active {
     text_unselected {
       base 224 222 244
-      background 40 44 52
+      background 42 40 62
       emphasis_0 234 154 151
       emphasis_1 156 207 216
       emphasis_2 62 143 176
@@ -50,7 +53,7 @@ themes {
     }
     table_cell_unselected {
       base 224 222 244
-      background 40 44 52
+      background 42 40 62
       emphasis_0 234 154 151
       emphasis_1 156 207 216
       emphasis_2 62 143 176
@@ -66,7 +69,7 @@ themes {
     }
     list_unselected {
       base 224 222 244
-      background 40 44 52
+      background 42 40 62
       emphasis_0 234 154 151
       emphasis_1 156 207 216
       emphasis_2 62 143 176
