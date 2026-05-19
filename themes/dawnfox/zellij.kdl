@@ -1,0 +1,18 @@
+// Extracted from upstream Nightfox Zellij theme and renamed to `active`.
+// Upstream: https://github.com/EdenEast/nightfox.nvim/raw/main/extra/zellij/nightfox.kdl
+
+themes {
+  active {
+    bg "#d0d8d8"
+    fg "#575279"
+    red "#b4637a"
+    green "#618774"
+    blue "#286983"
+    yellow "#ea9d34"
+    magenta "#907aa9"
+    orange "#d7827e"
+    cyan "#56949f"
+    black "#ebdfe4"
+    white "#625c87"
+  }
+}

@@ -1,0 +1,17 @@
+palette = "nordfox"
+
+# Extracted from upstream Nightfox Starship palette:
+# https://github.com/EdenEast/nightfox.nvim/raw/main/extra/nordfox/starship.toml
+[palettes.nordfox]
+red = "#bf616a"
+green = "#a3be8c"
+purple = "#b48ead"
+yellow = "#ebcb8b"
+os_bg = "#7e8188"
+os_fg = "#232831"
+dir_bg = "#a3be8c"
+dir_fg = "#2e3440"
+git_bg = "#ebcb8b"
+git_fg = "#39404f"
+lang_bg = "#81a1c1"
+lang_fg = "#444c5e"
