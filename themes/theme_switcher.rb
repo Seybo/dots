@@ -4,6 +4,7 @@
 
 THEMES_DIR = File.expand_path("#{ENV['STOW_DIR']}/themes")
 ACTIVE_DIR = File.join(THEMES_DIR, 'active')
+ZELLIJ_CONFIG = File.expand_path('~/.config/zellij/config.kdl')
 
 abort "Usage: #{$0} <theme_name>" unless ARGV[0]
 theme = ARGV[0].strip
@@ -26,5 +27,9 @@ Dir.glob(File.join(theme_dir, '*')).each do |src|
   dst = File.join(ACTIVE_DIR, fname)
   File.write(dst, File.read(src))
 end
+
+# Touch Zellij config so running sessions notice config/theme changes.
+# Zellij watches the active config file, but not necessarily external theme files.
+File.utime(Time.now, Time.now, ZELLIJ_CONFIG) if File.exist?(ZELLIJ_CONFIG)
 
 # This script works best when invoked by zsh alias 'theme'
