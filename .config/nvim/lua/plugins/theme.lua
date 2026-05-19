@@ -10,6 +10,9 @@ return {
     name = 'github-theme',
   },
   {
+    'sainnhe/everforest',
+  },
+  {
     name = 'active-theme',
     dir = vim.fn.stdpath('config'),
     config = function()

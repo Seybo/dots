@@ -1,0 +1,13 @@
+palette = "everforest-hard-dark"
+
+# Converted from canonical upstream Everforest palette:
+# https://github.com/sainnhe/everforest/blob/master/palette.md
+[palettes.everforest-hard-dark]
+red = '#E67E80'
+green = '#A7C080'
+yellow = '#DBBC7F'
+blue = '#7FBBB3'
+purple = '#D699B6'
+magenta = '#D699B6'
+cyan = '#83C092'
+white = '#D3C6AA'

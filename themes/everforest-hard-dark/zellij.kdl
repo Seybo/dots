@@ -1,0 +1,19 @@
+// Everforest hard dark theme for Zellij.
+// Converted from canonical upstream Everforest palette:
+// https://github.com/sainnhe/everforest/blob/master/palette.md
+
+themes {
+  active {
+    bg "#272E33"
+    fg "#D3C6AA"
+    red "#E67E80"
+    green "#A7C080"
+    blue "#7FBBB3"
+    yellow "#DBBC7F"
+    magenta "#D699B6"
+    orange "#E69875"
+    cyan "#83C092"
+    black "#4F5B58"
+    white "#D3C6AA"
+  }
+}
