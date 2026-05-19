@@ -26,14 +26,9 @@ layout {
         }
     }
 
-    tab name="hermes" {
-        pane split_direction="vertical" {
-            pane command="zsh" {
-                args "-lic" "gtm chat"
-            }
-            pane command="zsh" {
-                args "-lic" "hermes chat"
-            }
+    tab name="hermes gtm" {
+        pane command="zsh" {
+            args "-lic" "gtm chat"
         }
     }
 
