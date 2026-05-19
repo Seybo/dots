@@ -1,0 +1,17 @@
+palette = "dawnfox"
+
+# Extracted from upstream Nightfox Starship palette:
+# https://github.com/EdenEast/nightfox.nvim/raw/main/extra/dawnfox/starship.toml
+[palettes.dawnfox]
+red = "#b4637a"
+green = "#618774"
+purple = "#907aa9"
+yellow = "#ea9d34"
+os_bg = "#a8a3b3"
+os_fg = "#ebe5df"
+dir_bg = "#618774"
+dir_fg = "#faf4ed"
+git_bg = "#ea9d34"
+git_fg = "#ebe0df"
+lang_bg = "#286983"
+lang_fg = "#ebdfe4"
