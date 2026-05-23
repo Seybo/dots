@@ -82,7 +82,7 @@ When changing this skill, especially `scripts/scan.rb`:
 Do not report a scanner behavior change as complete unless the relevant spec was added/updated and the full spec suite passes.
 
 ## What it checks (MVP)
-- High-signal token patterns (AWS, GitHub, Slack, Stripe, Twilio, Google API, OpenAI/Anthropic/etc keys, Hugging Face, JWT-ish, PEM blocks)
+- High-signal token patterns (AWS, GitHub, Slack, Stripe, Twilio, Google API, OpenAI/Anthropic/etc keys, Hugging Face, JWT-ish, age secret keys, PEM blocks)
 - Entropy heuristic for long random-looking strings (base58/64-ish) of length 32-128
 - Skips binaries and files >1MB
 
@@ -94,7 +94,7 @@ Do not report a scanner behavior change as complete unless the relevant spec was
 ## Notes
 - Default behavior is: scan staged changes; if there are none, scan unstaged changes; if there are none, scan `HEAD`.
 - `--last-commits N` / `--last N` scans changed lines in each of the last `N` commits; it can be combined with `--path`, but not with `--all` or `--untracked`.
-- Keep output short to save model tokens. The scanner truncates snippets.
+- Keep output short to save model tokens. The scanner redacts matched secrets, absolute local user/volume paths, and truncates snippets.
 - The scanner prints the files it checks before reporting findings.
 - False positives happen; prefer auditing each finding rather than suppressing by default.
 - The script resolves the git repo root itself, so it does not depend on `STOW_DIR` or the caller's current directory.

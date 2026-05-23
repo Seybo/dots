@@ -26,7 +26,8 @@ class ScanSpec < Minitest::Test
 
   def test_detects_github_token_in_staged_file
     with_repo do |dir|
-      File.write(File.join(dir, "tok.txt"), "ghp_1234567890abcdef12345678")
+      token = ["ghp_", "1234567890abcdef", "12345678"].join
+      File.write(File.join(dir, "tok.txt"), token)
       system({"HOME" => dir}, "git", "add", "tok.txt", chdir: dir)
       stdout, _stderr, status = run_scan(dir)
       assert_equal 1, status.exitstatus
@@ -41,7 +42,8 @@ class ScanSpec < Minitest::Test
 
       File.write(staged_path, "safe staged change\n")
       system({"HOME" => dir}, "git", "add", "staged.txt", chdir: dir)
-      File.write(unstaged_path, "ghp_1234567890abcdef12345678\n")
+      token = ["ghp_", "1234567890abcdef", "12345678"].join
+      File.write(unstaged_path, "#{token}\n")
 
       stdout, _stderr, status = run_scan(dir)
       assert_equal 0, status.exitstatus
@@ -55,7 +57,8 @@ class ScanSpec < Minitest::Test
   def test_only_changed_lines_are_scanned_by_default
     with_repo do |dir|
       path = File.join(dir, "config.txt")
-      File.write(path, "token ghp_999999999999999999999999\n")
+      token = ["ghp_", "999999999999", "999999999999"].join
+      File.write(path, "token #{token}\n")
       system({"HOME" => dir}, "git", "add", "config.txt", chdir: dir)
       system({"HOME" => dir}, "git", "commit", "-m", "init", chdir: dir)
 
@@ -72,7 +75,8 @@ class ScanSpec < Minitest::Test
   def test_all_option_scans_full_files
     with_repo do |dir|
       path = File.join(dir, "config.txt")
-      File.write(path, "token ghp_aaaaaaaaaaaaaaaaaaaaaaaa\n")
+      token = ["ghp_", "aaaaaaaaaaaa", "aaaaaaaaaaaa"].join
+      File.write(path, "token #{token}\n")
       system({"HOME" => dir}, "git", "add", "config.txt", chdir: dir)
       system({"HOME" => dir}, "git", "commit", "-m", "init", chdir: dir)
 
@@ -89,7 +93,8 @@ class ScanSpec < Minitest::Test
       system({"HOME" => dir}, "git", "add", "config.txt", chdir: dir)
       system({"HOME" => dir}, "git", "commit", "-m", "init", chdir: dir)
 
-      File.write(path, "now token ghp_changedtoken12345678901234\n")
+      token = ["ghp_", "changedtoken", "12345678901234"].join
+      File.write(path, "now token #{token}\n")
 
       stdout, _stderr, status = run_scan(dir)
       assert_equal 1, status.exitstatus
@@ -107,6 +112,28 @@ class ScanSpec < Minitest::Test
     end
   end
 
+  def test_detects_aws_secret_assignment
+    with_repo do |dir|
+      secret = "A" * 40
+      File.write(File.join(dir, "env.txt"), "AWS_SECRET_ACCESS_KEY=#{secret}\n")
+      system({"HOME" => dir}, "git", "add", "env.txt", chdir: dir)
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 1, status.exitstatus
+      assert_match(/aws_secret/, stdout)
+    end
+  end
+
+  def test_does_not_flag_aws_rule_source_as_secret
+    with_repo do |dir|
+      source_line = "Rule.new('aws_access_key', /AKIA[0-9A-Z]{16}/),\n"
+      File.write(File.join(dir, "scanner.rb"), source_line)
+      system({"HOME" => dir}, "git", "add", "scanner.rb", chdir: dir)
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 0, status.exitstatus
+      refute_match(/aws_secret/, stdout)
+    end
+  end
+
   def test_detects_entropy_token
     with_repo do |dir|
       token = SecureRandom.alphanumeric(48)
@@ -120,16 +147,71 @@ class ScanSpec < Minitest::Test
 
   def test_detects_pem_private_key_marker
     with_repo do |dir|
+      begin_marker = ["-----BEGIN ", "PRIVATE KEY-----"].join
+      end_marker = ["-----END ", "PRIVATE KEY-----"].join
       pem = <<~PEM
-        -----BEGIN PRIVATE KEY-----
+        #{begin_marker}
         ABCDEF123456
-        -----END PRIVATE KEY-----
+        #{end_marker}
       PEM
       File.write(File.join(dir, "key.pem"), pem)
       system({"HOME" => dir}, "git", "add", "key.pem", chdir: dir)
       stdout, _stderr, status = run_scan(dir)
       assert_equal 1, status.exitstatus
       assert_match(/pem_private_key/, stdout)
+    end
+  end
+
+  def test_detects_encrypted_pem_private_key_marker
+    with_repo do |dir|
+      begin_marker = ["-----BEGIN ", "ENCRYPTED PRIVATE KEY-----"].join
+      end_marker = ["-----END ", "ENCRYPTED PRIVATE KEY-----"].join
+      pem = <<~PEM
+        #{begin_marker}
+        ABCDEF123456
+        #{end_marker}
+      PEM
+      File.write(File.join(dir, "key.pem"), pem)
+      system({"HOME" => dir}, "git", "add", "key.pem", chdir: dir)
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 1, status.exitstatus
+      assert_match(/pem_private_key/, stdout)
+    end
+  end
+
+  def test_detects_age_secret_key
+    with_repo do |dir|
+      key = ["AGE-SECRET-KEY-1", "q" * 58].join
+      File.write(File.join(dir, "identity.txt"), key)
+      system({"HOME" => dir}, "git", "add", "identity.txt", chdir: dir)
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 1, status.exitstatus
+      assert_match(/age_secret_key/, stdout)
+    end
+  end
+
+  def test_redacts_regex_secret_values_in_output
+    with_repo do |dir|
+      token = ["ghp_", "1234567890abcdef", "12345678"].join
+      File.write(File.join(dir, "tok.txt"), "token #{token}\n")
+      system({"HOME" => dir}, "git", "add", "tok.txt", chdir: dir)
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 1, status.exitstatus
+      assert_match(/github_token/, stdout)
+      assert_match(/<redacted>/, stdout)
+      refute_includes stdout, token
+    end
+  end
+
+  def test_redacts_absolute_user_paths_in_snippets
+    with_repo do |dir|
+      token = ["ghp_", "1234567890abcdef", "12345678"].join
+      File.write(File.join(dir, "tok.txt"), "path /Users/alice/.config token #{token}\n")
+      system({"HOME" => dir}, "git", "add", "tok.txt", chdir: dir)
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 1, status.exitstatus
+      refute_includes stdout, "/Users/alice"
+      assert_includes stdout, "/Users/<redacted>"
     end
   end
 
