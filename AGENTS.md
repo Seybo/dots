@@ -15,5 +15,6 @@
 
 ## Tool permissions
 
+- For permission prompts / allowlist changes, read `refs/dev-env/agent-permissions.md` or use the shared `agent-permissions` skill. Default: update both Claude Code and Pi permissions unless the user explicitly scopes to one.
 - Before using bash patterns that may be restricted, check `.agents/permission.settings.json` mentally/explicitly and avoid commands matching the `deny` list when practical.
 - In particular, avoid `find ... -exec`, `find ... -delete`, `find ... -ok`, and `find ... -execdir`; prefer separate `find`, `ls`, `rg`, or shell-safe follow-up commands.
