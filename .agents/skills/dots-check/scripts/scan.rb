@@ -18,7 +18,7 @@ Target = Struct.new(:lines, :source)
 
 RULES = [
   Rule.new('aws_access_key', /AKIA[0-9A-Z]{16}/),
-  Rule.new('aws_secret', %r{(?i)aws(.{0,20})?(secret|access).{0,10}["']?[0-9A-Za-z/+={16,}"']?}),
+  Rule.new('aws_secret', /\baws[\w-]{0,20}(?:secret|access)[\w-]{0,20}key(?:_id)?\b["']?\s*[:=]\s*["']?[0-9A-Za-z\/+]{32,}["']?/i),
   Rule.new('github_token', /gh[pous]_[0-9A-Za-z]{24,}/),
   Rule.new('slack_token', /xox(?:p|b|o|a)-[0-9A-Za-z-]{10,}/),
   Rule.new('stripe_live', /sk_live_[0-9A-Za-z]{16,}/),
@@ -34,7 +34,8 @@ RULES = [
   Rule.new('supabase', /supabase\.[A-Za-z0-9]{40}/i),
   Rule.new('cloudflare', /cf_[A-Za-z0-9]{30,}/),
   Rule.new('jwt', /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/),
-  Rule.new('pem_private_key', /-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/)
+  Rule.new('age_secret_key', /AGE-SECRET-KEY-1[0-9A-Z]{58}/i),
+  Rule.new('pem_private_key', /-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----/)
 ].freeze
 
 CANDIDATE_TOKEN_REGEX = %r{[A-Za-z0-9+/_-]{#{ENTROPY_MIN_LEN},#{ENTROPY_MAX_LEN}}}
@@ -233,7 +234,13 @@ end
 
 def sanitize_snippet(line)
   snippet = line.chomp.strip
+  snippet = snippet.gsub(%r{/Users/[^/\s:'"]+}, '/Users/<redacted>')
+  snippet = snippet.gsub(%r{/Volumes/[^/\s:'"]+}, '/Volumes/<redacted>')
   snippet.length > 180 ? snippet[0, 180] + '…' : snippet
+end
+
+def redact_regex_matches(line, regex)
+  sanitize_snippet(line.gsub(regex, '<redacted>'))
 end
 
 def print_targets(targets)
@@ -289,7 +296,9 @@ def scan_targets(targets)
         next unless lines == :full || lines.include?(lineno)
 
         RULES.each do |rule|
-          findings << Finding.new(rule.name, path, lineno, sanitize_snippet(line)) if line.match?(rule.regex)
+          if line.match?(rule.regex)
+            findings << Finding.new(rule.name, path, lineno, redact_regex_matches(line, rule.regex))
+          end
         end
 
         high_entropy_tokens(line).each do |token|
