@@ -132,4 +132,50 @@ class ScanSpec < Minitest::Test
       assert_match(/pem_private_key/, stdout)
     end
   end
+
+  def test_last_commits_scans_each_requested_commit
+    with_repo do |dir|
+      File.write(File.join(dir, "safe.txt"), "safe\n")
+      system({"HOME" => dir}, "git", "add", "safe.txt", chdir: dir)
+      system({"HOME" => dir}, "git", "commit", "-m", "init", chdir: dir)
+
+      github_token = ["ghp_", "1234567890abcdef", "12345678"].join
+      File.write(File.join(dir, "secret.txt"), "token #{github_token}\n")
+      system({"HOME" => dir}, "git", "add", "secret.txt", chdir: dir)
+      system({"HOME" => dir}, "git", "commit", "-m", "secret", chdir: dir)
+
+      File.write(File.join(dir, "newer.txt"), "safe newer\n")
+      system({"HOME" => dir}, "git", "add", "newer.txt", chdir: dir)
+      system({"HOME" => dir}, "git", "commit", "-m", "newer", chdir: dir)
+
+      stdout, _stderr, status = run_scan(dir, "--last-commits", "2")
+      assert_equal 1, status.exitstatus
+      assert_match(/Checking commits \(2\):/, stdout)
+      assert_match(/secret\.txt/, stdout)
+      assert_match(/github_token/, stdout)
+    end
+  end
+
+  def test_last_commits_count_excludes_older_commits
+    with_repo do |dir|
+      github_token = ["ghp_", "1234567890abcdef", "12345678"].join
+      File.write(File.join(dir, "secret.txt"), "token #{github_token}\n")
+      system({"HOME" => dir}, "git", "add", "secret.txt", chdir: dir)
+      system({"HOME" => dir}, "git", "commit", "-m", "old secret", chdir: dir)
+
+      File.write(File.join(dir, "safe1.txt"), "safe one\n")
+      system({"HOME" => dir}, "git", "add", "safe1.txt", chdir: dir)
+      system({"HOME" => dir}, "git", "commit", "-m", "safe one", chdir: dir)
+
+      File.write(File.join(dir, "safe2.txt"), "safe two\n")
+      system({"HOME" => dir}, "git", "add", "safe2.txt", chdir: dir)
+      system({"HOME" => dir}, "git", "commit", "-m", "safe two", chdir: dir)
+
+      stdout, _stderr, status = run_scan(dir, "--last-commits", "2")
+      assert_equal 0, status.exitstatus
+      assert_match(/Checking commits \(2\):/, stdout)
+      refute_match(/secret\.txt/, stdout)
+      refute_match(/github_token/, stdout)
+    end
+  end
 end

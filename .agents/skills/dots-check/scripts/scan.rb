@@ -4,6 +4,7 @@
 require 'optparse'
 require 'open3'
 require 'set'
+require 'shellwords'
 
 EXIT_USAGE = 2
 MAX_FILE_BYTES = 1_000_000
@@ -41,14 +42,18 @@ CANDIDATE_TOKEN_REGEX = %r{[A-Za-z0-9+/_-]{#{ENTROPY_MIN_LEN},#{ENTROPY_MAX_LEN}
 options = {
   all: false,
   untracked: false,
-  path: nil
+  path: nil,
+  last_commits: nil
 }
 
 parser = OptionParser.new do |opts|
-  opts.banner = 'Usage: scan.rb [--all] [--untracked] [--path GLOB]'
+  opts.banner = 'Usage: scan.rb [--all] [--untracked] [--path GLOB] [--last-commits COUNT]'
   opts.on('--all', 'Scan all tracked files') { options[:all] = true }
   opts.on('--untracked', 'Include untracked files') { options[:untracked] = true }
   opts.on('--path GLOB', 'Only scan files matching glob') { |g| options[:path] = g }
+  opts.on('--last-commits COUNT', '--last COUNT', Integer, 'Scan changed lines in the last COUNT commits') do |count|
+    options[:last_commits] = count
+  end
   opts.on('-h', '--help', 'Show help') do
     puts opts
     exit 0
@@ -59,6 +64,18 @@ begin
   parser.parse!
 rescue OptionParser::ParseError => e
   warn "Error: #{e.message}"
+  warn parser
+  exit EXIT_USAGE
+end
+
+if options[:last_commits] && options[:last_commits] <= 0
+  warn 'Error: --last-commits must be a positive integer'
+  warn parser
+  exit EXIT_USAGE
+end
+
+if options[:last_commits] && (options[:all] || options[:untracked])
+  warn 'Error: --last-commits cannot be combined with --all or --untracked'
   warn parser
   exit EXIT_USAGE
 end
@@ -116,6 +133,12 @@ def parse_changed_lines(diff_cmd)
   changes
 end
 
+def filter_targets(targets, glob)
+  return targets unless glob
+
+  targets.select { |path, _| File.fnmatch?(glob, path, File::FNM_PATHNAME | File::FNM_EXTGLOB) }
+end
+
 def collect_targets(options)
   targets = {}
 
@@ -140,7 +163,7 @@ def collect_targets(options)
       head_exists = system('git rev-parse --verify HEAD > /dev/null 2>&1')
       if head_exists
         diff_cmd = 'git show --format= --unified=0 HEAD'
-        source = :head
+        source = 'HEAD'
       end
     end
 
@@ -156,12 +179,18 @@ def collect_targets(options)
     untracked.lines.map(&:chomp).each { |f| targets[f] = Target.new(:full, :worktree) unless f.empty? }
   end
 
-  if options[:path]
-    glob = options[:path]
-    targets = targets.select { |path, _| File.fnmatch?(glob, path, File::FNM_PATHNAME | File::FNM_EXTGLOB) }
+  filter_targets(targets, options[:path])
+end
+
+def collect_commit_targets(ref, path_glob)
+  targets = {}
+  diff_cmd = "git show --format= --unified=0 #{Shellwords.escape(ref)}"
+
+  parse_changed_lines(diff_cmd).each do |path, lines|
+    targets[path] = Target.new(lines, ref)
   end
 
-  targets
+  filter_targets(targets, path_glob)
 end
 
 def binary_file?(path)
@@ -175,7 +204,7 @@ rescue StandardError
 end
 
 def blob_content(path, source)
-  ref = source == :index ? ":#{path}" : "HEAD:#{path}"
+  ref = source == :index ? ":#{path}" : "#{source}:#{path}"
   content, status = Open3.capture2('git', 'show', ref)
   return nil unless status.success?
 
@@ -207,82 +236,148 @@ def sanitize_snippet(line)
   snippet.length > 180 ? snippet[0, 180] + '…' : snippet
 end
 
+def print_targets(targets)
+  puts "Checking files (#{targets.size}):"
+  targets.keys.sort.each do |path|
+    puts "- #{path}"
+  end
+end
+
+def scan_targets(targets)
+  findings = []
+
+  targets.each do |path, target|
+    lines = target.lines
+    content = nil
+
+    if target.source == :worktree
+      next unless File.file?(path)
+
+      begin
+        size = File.size(path)
+      rescue Errno::ENOENT
+        next
+      end
+
+      if size > MAX_FILE_BYTES
+        warn "Skipping #{path} (size > #{MAX_FILE_BYTES} bytes)"
+        next
+      end
+
+      if binary_file?(path)
+        warn "Skipping #{path} (binary)"
+        next
+      end
+    else
+      content = blob_content(path, target.source)
+      next unless content
+
+      if content.bytesize > MAX_FILE_BYTES
+        warn "Skipping #{path} (size > #{MAX_FILE_BYTES} bytes)"
+        next
+      end
+
+      if content.include?("\x00")
+        warn "Skipping #{path} (binary)"
+        next
+      end
+    end
+
+    begin
+      each_line = content ? content.each_line : File.foreach(path)
+      each_line.with_index(1) do |line, lineno|
+        next unless lines == :full || lines.include?(lineno)
+
+        RULES.each do |rule|
+          findings << Finding.new(rule.name, path, lineno, sanitize_snippet(line)) if line.match?(rule.regex)
+        end
+
+        high_entropy_tokens(line).each do |token|
+          findings << Finding.new('high_entropy', path, lineno, sanitize_snippet(line.sub(token, '<redacted>')))
+        end
+      end
+    rescue StandardError => e
+      warn "Error reading #{path}: #{e.message}"
+    end
+  end
+
+  findings
+end
+
+def print_findings(findings)
+  puts "🚨 Findings (#{findings.size}):"
+  findings.each do |f|
+    puts "- [#{f.rule}] #{f.path}:#{f.line} :: #{f.snippet}"
+  end
+end
+
+def commit_subject(ref)
+  subject, ok = capture("git log -1 --format=%s #{Shellwords.escape(ref)}")
+  ok ? subject.strip : ''
+end
+
+def commit_short(ref)
+  short, ok = capture("git rev-parse --short #{Shellwords.escape(ref)}")
+  ok ? short.strip : ref[0, 7]
+end
+
+if options[:last_commits]
+  commits_out, ok = capture("git rev-list --max-count=#{options[:last_commits]} HEAD")
+  unless ok
+    warn 'Error: failed to list commits'
+    exit EXIT_USAGE
+  end
+
+  commits = commits_out.lines.map(&:chomp).reject(&:empty?)
+  if commits.empty?
+    puts 'No commits to scan.'
+    exit 0
+  end
+
+  puts "Checking commits (#{commits.size}):"
+  all_findings = []
+
+  commits.each do |ref|
+    puts "===== #{commit_short(ref)} #{commit_subject(ref)} ====="
+    targets = collect_commit_targets(ref, options[:path])
+
+    if targets.empty?
+      puts 'No files to scan (diff is empty).'
+      next
+    end
+
+    print_targets(targets)
+    findings = scan_targets(targets)
+    if findings.empty?
+      puts '✅ No findings'
+    else
+      print_findings(findings)
+      all_findings.concat(findings)
+    end
+  end
+
+  if all_findings.empty?
+    puts "✅ No findings across #{commits.size} commits"
+    exit 0
+  end
+
+  puts "🚨 Findings across #{commits.size} commits: #{all_findings.size}"
+  exit 1
+end
+
 targets = collect_targets(options)
 if targets.empty?
   puts 'No files to scan (diff is empty).'
   exit 0
 end
 
-puts "Checking files (#{targets.size}):"
-targets.keys.sort.each do |path|
-  puts "- #{path}"
-end
-
-findings = []
-
-targets.each do |path, target|
-  lines = target.lines
-  content = nil
-
-  if target.source == :worktree
-    next unless File.file?(path)
-
-    begin
-      size = File.size(path)
-    rescue Errno::ENOENT
-      next
-    end
-
-    if size > MAX_FILE_BYTES
-      warn "Skipping #{path} (size > #{MAX_FILE_BYTES} bytes)"
-      next
-    end
-
-    if binary_file?(path)
-      warn "Skipping #{path} (binary)"
-      next
-    end
-  else
-    content = blob_content(path, target.source)
-    next unless content
-
-    if content.bytesize > MAX_FILE_BYTES
-      warn "Skipping #{path} (size > #{MAX_FILE_BYTES} bytes)"
-      next
-    end
-
-    if content.include?("\x00")
-      warn "Skipping #{path} (binary)"
-      next
-    end
-  end
-
-  begin
-    each_line = content ? content.each_line : File.foreach(path)
-    each_line.with_index(1) do |line, lineno|
-      next unless lines == :full || lines.include?(lineno)
-
-      RULES.each do |rule|
-        findings << Finding.new(rule.name, path, lineno, sanitize_snippet(line)) if line.match?(rule.regex)
-      end
-
-      high_entropy_tokens(line).each do |token|
-        findings << Finding.new('high_entropy', path, lineno, sanitize_snippet(line.sub(token, '<redacted>')))
-      end
-    end
-  rescue StandardError => e
-    warn "Error reading #{path}: #{e.message}"
-  end
-end
+print_targets(targets)
+findings = scan_targets(targets)
 
 if findings.empty?
   puts '✅ No findings'
   exit 0
 end
 
-puts "🚨 Findings (#{findings.size}):"
-findings.each do |f|
-  puts "- [#{f.rule}] #{f.path}:#{f.line} :: #{f.snippet}"
-end
-
+print_findings(findings)
 exit 1

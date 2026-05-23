@@ -1,6 +1,6 @@
 ---
 name: dots-check
-description: Scan dotfiles changes for secrets or sensitive data before publishing. Uses Ruby, git diffs, regexes, and entropy heuristics. Defaults to staged changes, then unstaged changes, then the last commit; supports full and untracked scans.
+description: Scan dotfiles changes for secrets or sensitive data before publishing. Uses Ruby, git diffs, regexes, and entropy heuristics. Defaults to staged changes, then unstaged changes, then the last commit; supports full, untracked, and last-N-commit scans.
 ---
 
 # Dots Check
@@ -29,6 +29,11 @@ No extra repo-detection guard is needed: if this skill is available, you're alre
 
 # Filter to a glob
 ./.agents/skills/dots-check/scripts/scan.rb --path 'home/**/config/**'
+
+# Scan changed lines in the last N commits
+./.agents/skills/dots-check/scripts/scan.rb --last-commits 5
+# Short alias
+./.agents/skills/dots-check/scripts/scan.rb --last 5
 ```
 
 ## Invocation
@@ -39,10 +44,16 @@ There is exactly one command-style invocation for this skill:
 
 In pi, when the user types `/skill:dots-check`, the agent may receive this `SKILL.md` content as a `<skill name="dots-check" ...>` block instead of seeing the raw slash command in the conversation. **That skill block means the skill was invoked.**
 
-When this skill is invoked, immediately run the default scan:
+When this skill is invoked without a commit count, immediately run the default scan:
 
 ```bash
 ./.agents/skills/dots-check/scripts/scan.rb
+```
+
+If the user invokes or asks for dots-check with a last-commit count (for example, "last 5 commits"), immediately run:
+
+```bash
+./.agents/skills/dots-check/scripts/scan.rb --last-commits 5
 ```
 
 Do not ask the user to type `/skill:dots-check` again. Do not explain how to invoke it. Do not wait for confirmation. Treat the invocation and/or the received skill block as an execution request.
@@ -82,6 +93,7 @@ Do not report a scanner behavior change as complete unless the relevant spec was
 
 ## Notes
 - Default behavior is: scan staged changes; if there are none, scan unstaged changes; if there are none, scan `HEAD`.
+- `--last-commits N` / `--last N` scans changed lines in each of the last `N` commits; it can be combined with `--path`, but not with `--all` or `--untracked`.
 - Keep output short to save model tokens. The scanner truncates snippets.
 - The scanner prints the files it checks before reporting findings.
 - False positives happen; prefer auditing each finding rather than suppressing by default.
