@@ -20,15 +20,15 @@ layout {
         }
     }
 
-    tab name="claude" {
+    tab name="pi" {
         pane command="zsh" {
-            args "-lic" "claude"
+            args "-lic" "pi-w"
         }
     }
 
-    tab name="hermes gtm" {
+    tab name="claude" {
         pane command="zsh" {
-            args "-lic" "gtm chat"
+            args "-lic" "claude"
         }
     }
 
