@@ -26,3 +26,7 @@ Universal Ruby and Rails conventions. These apply to any Ruby/Rails project unle
 - No raw SQL interpolation. Use parameterized queries (`?` placeholders, named params, or ORM query methods).
 - API keys, tokens, and other credentials live in environment variables — never in code or committed config.
 - Sensitive data (PII, credentials, raw provider responses with secrets) must not appear in logs, error messages, or stored debug artifacts. Sanitize before logging or persisting.
+
+## GitHub PR reviews
+
+- When the user links a specific GitHub PR review URL or review ID, fetch the review directly with `gh api repos/<owner>/<repo>/pulls/<pr>/reviews/<review_id> --jq '{user: .user.login, state: .state, body: .body}'` and fetch inline comments with `gh api repos/<owner>/<repo>/pulls/<pr>/reviews/<review_id>/comments --jq '.[] | {path: .path, line: .line, body: .body}'`. Do not rely on web fetch or only `gh pr view`; those can miss inline review comments.
