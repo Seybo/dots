@@ -38,7 +38,7 @@ Do not auto-use this skill from a general "work on this task" request. Wait for 
 
 ## What it does
 
-Locate an existing task folder under the selected project, read its `task.md`, and proceed with the work described in it.
+Locate an existing task folder under the selected project, read its `task.md`, create a `steps.md` implementation plan first, and then proceed with the work described in it.
 
 Companion to `/taskit` (which creates the folder). `/workit` consumes folders that `/taskit` produced.
 
@@ -100,19 +100,36 @@ The project name must match a first-level folder name under `/Volumes/dev/_tasks
    - any project-level `CLAUDE.md` in the project root or current working directory will be picked up automatically by the agent — do not re-read it as a separate step unless asked
    - do not modify `task.md` unless the user asks you to
 
-6. **Proceed with the task:**
-   - work on what `task.md` describes
+6. **Create or load the steps plan before implementation:**
+   - before making production code/docs changes for the task, ensure `<task_folder>/steps.md` exists
+   - if `steps.md` already exists, read it and follow it; update it only if the task needs a corrected or more incremental plan
+   - if `steps.md` is missing, create it first from `task.md` before implementation
+   - structure `steps.md` as gradual, reviewable implementation slices; each step should leave the repo in a working state
+   - start with the smallest deterministic/local behavior and slowly add complexity, edge cases, persistence, integration, and docs
+   - preserve existing logic/behavior as much as possible; do not add new features, new policy, theoretical fields, or imaginary scenario handling beyond the task scope
+   - when adding schema, commands, config, APIs, artifacts, or persisted fields, include only what is grounded in `task.md`, current docs, or existing implementation behavior; do not add speculative/provenance/convenience fields unless the task explicitly asks for them or existing runtime behavior requires them
+   - boolean fields must be named with an `is_` or `has_` prefix (prefer `is_` when natural), must be `NOT NULL`, and must have an explicit default value
+   - fix real bugs discovered in existing logic when they block correctness or violate documented behavior
+   - actively notice and capture useful improvements, validations, edge-case handling, and behavior changes; if they are not already in the task/current implementation, keep them out of the implementation and propose them to the user as a separate follow-up conversation before doing that work
+   - keep the plan aligned with the task's acceptance criteria and non-goals
+
+7. **Proceed with the task:**
+   - work on what `task.md` describes, following `steps.md` incrementally
+   - after completing each numbered step/slice from `steps.md`, stop and report the changes made, checks run, open questions, and any deviations or findings; ask the user to confirm before starting the next step
+   - do not continue into the next `steps.md` step without explicit user confirmation, even if the next step seems obvious or mechanical
+   - if the user has questions, requests changes, or wants to adjust scope at a step boundary, handle that before proceeding
    - if `task.md` does not name a working directory, default to `/Volumes/dev/shaka/<project>/`
-   - only `task.md` defines the work — do not read other files in the task folder (e.g. `next.md`, notes, drafts) as instructions unless `task.md` explicitly references them
+   - only `task.md` and `steps.md` define the work — do not read other files in the task folder (e.g. `next.md`, notes, drafts) as instructions unless `task.md` explicitly references them
    - if the body is just `# Context` (or otherwise empty of instructions), ask the user what they want done before proceeding
 
-7. **After completing the task:**
-   - re-read `task.md` and verify nothing was missed
+8. **After completing the task:**
+   - re-read `task.md` and `steps.md` and verify nothing was missed
    - report what was done
+   - separately propose all improvements, findings, validations, edge cases, follow-up tasks, and behavior changes you noticed but intentionally did not implement because they were outside the current task/current behavior
 
 ## Important Notes
 
 - Do not auto-use this skill without the explicit `/workit` command
-- Do not create or modify task folders here — that is `/taskit`'s job
+- Do not create or modify task folders here except for creating/updating the selected task's `steps.md` implementation plan
 - Do not modify `task.md` content unless explicitly asked
 - The task folder must already exist; if it doesn't, suggest the user run `/taskit` first
