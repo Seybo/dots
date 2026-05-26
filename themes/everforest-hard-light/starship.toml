@@ -1,5 +1,7 @@
 palette = "everforest-hard-light"
 
+# Everforest hard light Starship colors.
+# Customized local variant with adjusted contrast.
 # Converted from canonical upstream Everforest palette:
 # https://github.com/sainnhe/everforest/blob/master/palette.md
 [palettes.everforest-hard-light]
@@ -10,4 +12,4 @@ blue = '#3A94C5'
 purple = '#DF69BA'
 magenta = '#DF69BA'
 cyan = '#35A77C'
-white = '#5C6A72'
+white = '#3D484D'

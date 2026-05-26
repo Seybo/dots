@@ -1,4 +1,5 @@
-# Everforest hard light colors for Ghostty
+# Everforest hard light colors for Ghostty.
+# Customized local variant with adjusted contrast.
 # Converted from canonical upstream Everforest palette:
 # https://github.com/sainnhe/everforest/blob/master/palette.md
 
@@ -18,8 +19,8 @@ palette = 12=#3A94C5
 palette = 13=#DF69BA
 palette = 14=#35A77C
 palette = 15=#FFFBEF
-background = #FFFBEF
-foreground = #5C6A72
+background = #FFFDF6
+foreground = #3D484D
 cursor-color = #5C6A72
 cursor-text = #FFFBEF
 selection-background = #F0F2D4
