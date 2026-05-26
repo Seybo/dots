@@ -243,5 +243,5 @@ copy_on_select true
 //
 theme_dir "/Users/inseybo/.dots/themes/active"
 
-session_serialization true
+session_serialization false
 disable_session_metadata false
