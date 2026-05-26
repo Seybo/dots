@@ -1,11 +1,12 @@
 // Everforest hard light theme for Zellij.
+// Customized local variant with adjusted contrast and tab backgrounds.
 // Converted from canonical upstream Everforest palette:
 // https://github.com/sainnhe/everforest/blob/master/palette.md
 
 themes {
   active {
-    bg "#FFFBEF"
-    fg "#5C6A72"
+    bg "#FFFDF6"
+    fg "#3D484D"
     red "#F85552"
     green "#8DA101"
     blue "#3A94C5"
@@ -15,5 +16,38 @@ themes {
     cyan "#35A77C"
     black "#5C6A72"
     white "#FFFBEF"
+
+    text_unselected {
+      base 61 72 77
+      background 248 245 228
+      emphasis_0 248 85 82
+      emphasis_1 141 161 1
+      emphasis_2 58 148 197
+      emphasis_3 223 105 186
+    }
+    text_selected {
+      base 61 72 77
+      background 240 242 212
+      emphasis_0 248 85 82
+      emphasis_1 141 161 1
+      emphasis_2 58 148 197
+      emphasis_3 223 105 186
+    }
+    ribbon_unselected {
+      base 61 72 77
+      background 232 229 213
+      emphasis_0 248 85 82
+      emphasis_1 141 161 1
+      emphasis_2 58 148 197
+      emphasis_3 223 105 186
+    }
+    ribbon_selected {
+      base 61 72 77
+      background 223 160 0
+      emphasis_0 248 85 82
+      emphasis_1 141 161 1
+      emphasis_2 58 148 197
+      emphasis_3 223 105 186
+    }
   }
 }
