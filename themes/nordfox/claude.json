@@ -1,5 +1,5 @@
 {
-  "name": "THIS FILE IS GENERATED AUTOMATICALLY IT IS COMMITED ONLY ONCE FOR DEMONSTRATION PURPOSES",
+  "name": "Nordfox",
   "base": "dark",
   "overrides": {
     "claude": "#a3be8c",
