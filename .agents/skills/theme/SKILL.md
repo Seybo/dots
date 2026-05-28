@@ -35,7 +35,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 - The switcher is `themes/theme_switcher.rb <theme>` and depends on `$STOW_DIR` (normally `~/.dots`).
 - The normal user-facing command is the zsh function `theme <name>` in `no_stow/.zsh_aliases_public`.
 - Agents should not switch the live theme themselves. Ask the user to run `theme <name>`.
-- The switcher rejects `active`, deletes `themes/active/*`, copies every file from `themes/<name>/`, then touches `~/.config/zellij/config.kdl` so running Zellij sessions notice theme changes.
+- The switcher rejects `active`, deletes `themes/active/*`, copies every file from `themes/<name>/`, then touches `~/.config/zellij/config.kdl` to notify running Zellij sessions.
 - `theme <name>` also reloads tmux if present, prints a Ghostty reload reminder when in Ghostty, and re-sources `themes/active/fzf.zsh` for the current shell.
 - Claude Code should not get switcher-specific copy/settings logic. Claude only reads custom themes from `~/.claude/themes/`, so bridge it with a symlink: `~/.claude/themes/theme.json -> ~/.dots/themes/active/claude.json`. The user selects that custom theme with `/theme`; future `theme <name>` runs update the symlink target through the existing active-theme copy flow.
 
@@ -44,7 +44,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 - `.zshrc` sets `STOW_DIR="$HOME/.dots"` and sources `themes/active/fzf.zsh`.
 - Ghostty: `.config/ghostty/config` loads `~/.dots/themes/active/ghostty` with `config-file`.
 - Starship: `.config/starship.toml` imports `~/.dots/themes/active/starship.toml`.
-- Zellij: `.config/zellij/config.kdl` uses `theme_dir "/Users/inseybo/.dots/themes/active"` and `theme "active"`.
+- Zellij: `.config/zellij/config.kdl` uses `theme_dir "/Users/inseybo/.dots/themes/active"` and `theme "active"`. If a session stays stale, run `zellij_retheme`; it detects the current active theme by comparing `themes/active/` to `themes/<name>/`, switches to another existing theme, sleeps briefly, then switches back.
 - Neovim: `.config/nvim/lua/plugins/theme.lua` defines theme plugins and an `active-theme` entry that runs `dofile(vim.env.STOW_DIR .. '/themes/active/nvim.lua')`.
 - Pi: `.pi/agent/settings.json` selects `"theme": "env-active"` and loads `~/.dots/themes/active/pi.json` via its `themes` array.
 - Claude Code: custom theme file `~/.claude/themes/theme.json` is a symlink to `~/.dots/themes/active/claude.json`; select it in Claude with `/theme`. Claude Code watches `~/.claude/themes/` and reloads custom theme files automatically.
@@ -95,7 +95,7 @@ Older themes may lack `pi.json` or `claude.json` until they are modernized. Lega
    - Ghostty usually needs manual reload (`cmd+shift+,`) or restart.
    - Neovim usually needs restart/re-source because `active/nvim.lua` runs during plugin config.
    - Starship updates on a new prompt render after active file changes.
-   - Zellij may update after config touch; otherwise reload/restart the session.
+   - Zellij updates after config touch in some sessions. If a session stays stale, run `zellij_retheme` inside that session to force a temporary theme switch and back.
 4. If editing a non-active theme, ask the user to switch to it for validation.
 
 ## File-specific rules
@@ -162,7 +162,7 @@ Older themes may lack `pi.json` or `claude.json` until they are modernized. Lega
 - fzf unchanged in an old shell: run `re_fzf` or `re_source`; new shells source active fzf automatically.
 - Ghostty unchanged: reload with `cmd+shift+,` or restart Ghostty.
 - Starship unchanged: verify `.config/starship.toml` import and the palette name in active `starship.toml`; trigger a new prompt.
-- Zellij unchanged: verify `themes/active/zellij.kdl` defines `active`, then touch/reload `.config/zellij/config.kdl` or restart the Zellij session.
+- Zellij unchanged: verify `themes/active/zellij.kdl` defines `active`, then run `zellij_retheme` inside the stale session. If still unchanged, restart the Zellij session.
 - Neovim missing colorscheme: check `.config/nvim/lua/plugins/theme.lua`, Lazy install state, and `themes/active/nvim.lua`.
 - Pi unchanged: verify `.pi/agent/settings.json` points to `~/.dots/themes/active/pi.json`, active `pi.json` has `"name": "env-active"`, and JSON is valid.
 - Claude Code unchanged: verify `~/.claude/themes/theme.json` is a symlink to `~/.dots/themes/active/claude.json`, active `claude.json` exists and is valid JSON, and Claude has selected the custom `theme` theme via `/theme`.
