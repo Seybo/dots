@@ -6,10 +6,10 @@ palette = "everforest-hard-light"
 # https://github.com/sainnhe/everforest/blob/master/palette.md
 [palettes.everforest-hard-light]
 red = '#F85552'
-green = '#8DA101'
+green = '#697801'
 yellow = '#DFA000'
 blue = '#3A94C5'
 purple = '#DF69BA'
 magenta = '#DF69BA'
-cyan = '#35A77C'
+cyan = '#267B5F'
 white = '#3D484D'
