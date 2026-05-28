@@ -1,0 +1,33 @@
+# Everforest hard light Lazygit colors.
+# Converted from canonical upstream Everforest palette:
+# https://github.com/sainnhe/everforest/blob/master/palette.md
+gui:
+  authorColors:
+    '*': '#8DA101'
+  theme:
+    activeBorderColor:
+      - '#8DA101'
+      - bold
+    inactiveBorderColor:
+      - '#E8E5D5'
+    searchingActiveBorderColor:
+      - '#35A77C'
+      - bold
+    optionsTextColor:
+      - '#3A94C5'
+    selectedLineBgColor:
+      - '#F0F2D4'
+    inactiveViewSelectedLineBgColor:
+      - '#F8F5E4'
+    cherryPickedCommitFgColor:
+      - '#3A94C5'
+    cherryPickedCommitBgColor:
+      - '#ECF5ED'
+    markedBaseCommitFgColor:
+      - '#3A94C5'
+    markedBaseCommitBgColor:
+      - '#FEF2D5'
+    unstagedChangesColor:
+      - '#F85552'
+    defaultFgColor:
+      - '#3D484D'
