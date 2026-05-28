@@ -33,6 +33,11 @@ alias zscg='zellij --new-session-with-layout gtm -s gtm'
 alias zsag='zellij attach gtm'
 alias zscr='zellij --new-session-with-layout remote_dev -s remote_dev'
 alias zsar='zellij attach remote_dev'
+# Force Zellij top bar to repaint when it stays stale after theme switching.
+retheme() {
+  "$STOW_DIR/no_stow/bin/zellij/retheme"
+  re_fzf
+}
 
 
 ### git ###

@@ -1,0 +1,26 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+stow_dir = File.expand_path(ENV.fetch('STOW_DIR', '~/.dots'))
+themes_dir = File.join(stow_dir, 'themes')
+active_dir = File.join(themes_dir, 'active')
+switcher = File.join(themes_dir, 'theme_switcher.rb')
+
+themes = Dir.children(themes_dir).sort.select do |name|
+  name != 'active' && Dir.exist?(File.join(themes_dir, name))
+end
+
+active_files = Dir.children(active_dir).select { |file| File.file?(File.join(active_dir, file)) }.sort
+current = themes.find do |theme|
+  theme_dir = File.join(themes_dir, theme)
+  files = Dir.children(theme_dir).select { |file| File.file?(File.join(theme_dir, file)) }.sort
+  files == active_files && files.all? do |file|
+    File.binread(File.join(theme_dir, file)) == File.binread(File.join(active_dir, file))
+  end
+end
+
+temp = themes.find { |theme| theme != current }
+
+system('ruby', switcher, temp)
+sleep 1
+system('ruby', switcher, current)
