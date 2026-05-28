@@ -1,0 +1,33 @@
+# Nordfox Lazygit colors.
+# Converted from upstream Nightfox nordfox palette:
+# https://github.com/EdenEast/nightfox.nvim/blob/main/lua/nightfox/palette/nordfox.lua
+gui:
+  authorColors:
+    '*': '#a3be8c'
+  theme:
+    activeBorderColor:
+      - '#a3be8c'
+      - bold
+    inactiveBorderColor:
+      - '#4c566a'
+    searchingActiveBorderColor:
+      - '#88c0d0'
+      - bold
+    optionsTextColor:
+      - '#81a1c1'
+    selectedLineBgColor:
+      - '#3e4a5b'
+    inactiveViewSelectedLineBgColor:
+      - '#3b4252'
+    cherryPickedCommitFgColor:
+      - '#81a1c1'
+    cherryPickedCommitBgColor:
+      - '#3d4c45'
+    markedBaseCommitFgColor:
+      - '#81a1c1'
+    markedBaseCommitBgColor:
+      - '#4f493c'
+    unstagedChangesColor:
+      - '#bf616a'
+    defaultFgColor:
+      - '#cdcecf'
