@@ -165,6 +165,19 @@ Older themes may lack `pi.json`, `claude.json`, or `lazygit.yml` until they are 
 - Optional `export` controls `/export` HTML colors.
 - If changing Pi theme semantics or token names, read Pi docs at `/Users/inseybo/.asdf/installs/nodejs/24.0.1/lib/node_modules/@earendil-works/pi-coding-agent/docs/themes.md`.
 
+## Visual color QA helper
+
+- For visual color comparison tasks, create or overwrite `.agents/skills/theme/colors_qa.py`.
+- Treat `colors_qa.py` as a disposable generated helper tailored to the current theme/problem, not a permanent source of truth.
+- Hardcode the exact foreground/background/sample text needed for the current investigation; do not over-generalize it into a reusable CLI unless explicitly requested.
+- After writing it, copy the run command to the clipboard:
+
+  ```sh
+  printf '%s' 'python3 .agents/skills/theme/colors_qa.py' | pbcopy
+  ```
+
+- Tell the user the command is in their clipboard and can also be run directly.
+
 ## Debugging checklist
 
 - Wrong theme active: list `themes/active/` and compare with expected `themes/<name>/`.
