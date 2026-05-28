@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.75.5",
+  "lastChangelogVersion": "0.76.0",
   "theme": "env-active",
   "themes": [
     "~/.dots/themes/active/pi.json"
