@@ -1,6 +1,6 @@
 ---
 name: theme
-description: Create, update, and debug this dotfiles repo's environment themes across Ghostty, Neovim, Starship, fzf, Zellij, Pi, and Claude Code. Use when the user asks to add a theme, modify theme colors, switch/theme behavior, or investigate theme rendering issues.
+description: Create, update, and debug this dotfiles repo's environment themes across Ghostty, Neovim, Starship, fzf, Zellij, Pi, Claude Code, and Lazygit. Use when the user asks to add a theme, modify theme colors, switch/theme behavior, or investigate theme rendering issues.
 ---
 
 # Theme Skill
@@ -19,6 +19,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
    - `.config/zellij/config.kdl`
    - `.pi/agent/settings.json` when Pi theming is involved
    - `~/.claude/themes/theme.json` symlink when Claude Code theming is involved
+   - `~/Library/Application Support/lazygit/config.yml` symlink when Lazygit theming is involved
 3. Inspect at least one nearby existing theme under `themes/<name>/`; prefer `themes/dayfox/` for a simple complete modern theme and `themes/everforest-hard-light/` or `themes/nordfox/` for Pi-aware examples.
 4. For upstream colors, use official source files whenever possible. Do not invent colors from screenshots or memory.
 
@@ -38,6 +39,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 - The switcher rejects `active`, deletes `themes/active/*`, copies every file from `themes/<name>/`, then touches `~/.config/zellij/config.kdl` to notify running Zellij sessions.
 - `theme <name>` also reloads tmux if present, prints a Ghostty reload reminder when in Ghostty, and re-sources `themes/active/fzf.zsh` for the current shell.
 - Claude Code should not get switcher-specific copy/settings logic. Claude only reads custom themes from `~/.claude/themes/`, so bridge it with a symlink: `~/.claude/themes/theme.json -> ~/.dots/themes/active/claude.json`. The user selects that custom theme with `/theme`; future `theme <name>` runs update the symlink target through the existing active-theme copy flow.
+- Lazygit should not get switcher-specific copy/settings logic. Bridge it with a symlink: `~/Library/Application Support/lazygit/config.yml -> ~/.dots/themes/active/lazygit.yml`.
 
 ## App integration map
 
@@ -48,6 +50,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 - Neovim: `.config/nvim/lua/plugins/theme.lua` defines theme plugins and an `active-theme` entry that runs `dofile(vim.env.STOW_DIR .. '/themes/active/nvim.lua')`.
 - Pi: `.pi/agent/settings.json` selects `"theme": "env-active"` and loads `~/.dots/themes/active/pi.json` via its `themes` array.
 - Claude Code: custom theme file `~/.claude/themes/theme.json` is a symlink to `~/.dots/themes/active/claude.json`; select it in Claude with `/theme`. Claude Code watches `~/.claude/themes/` and reloads custom theme files automatically.
+- Lazygit: `~/Library/Application Support/lazygit/config.yml` is a symlink to `~/.dots/themes/active/lazygit.yml`; Lazygit reads it on launch.
 - tmux is legacy only. `.tmux.conf.local` may source `themes/active/tmux.conf`, but new themes should not add tmux files unless the user explicitly asks for legacy support.
 - Alacritty is retired. Do not add Alacritty theme files.
 - Claude Code is wired through the symlink above, not by modifying the switcher or writing `~/.claude/settings.json` on every switch.
@@ -63,8 +66,9 @@ A standard modern theme should have a file for each current app integration:
 - `zellij.kdl`
 - `pi.json`
 - `claude.json`
+- `lazygit.yml`
 
-Older themes may lack `pi.json` or `claude.json` until they are modernized. Legacy Rose Pine themes may have `tmux.conf`; do not copy that pattern for new themes unless explicitly requested.
+Older themes may lack `pi.json`, `claude.json`, or `lazygit.yml` until they are modernized. Legacy Rose Pine themes may have `tmux.conf`; do not copy that pattern for new themes unless explicitly requested.
 
 ## Creating a new theme
 
@@ -139,6 +143,13 @@ Older themes may lack `pi.json` or `claude.json` until they are modernized. Lega
 - If only one theme has Claude support for now, that is acceptable. Switching to a theme without `claude.json` leaves the symlink target missing until a Claude-aware theme is active again.
 - Use Claude Code's custom theme JSON shape: `name`, `base`, and `overrides`. Prefer deriving colors from the local theme palette.
 
+### `lazygit.yml`
+
+- Lazygit loads `~/Library/Application Support/lazygit/config.yml`, which should be a symlink to `~/.dots/themes/active/lazygit.yml`.
+- Use Lazygit's `gui.theme` keys and hex colors.
+- Set `gui.authorColors.'*'` if commit author initials should avoid Lazygit's random author colors.
+- Do not add special copy/settings mutation to `themes/theme_switcher.rb` for Lazygit.
+
 ### `pi.json`
 
 - Pi loads `~/.dots/themes/active/pi.json` and selects theme name `env-active`.
@@ -166,6 +177,7 @@ Older themes may lack `pi.json` or `claude.json` until they are modernized. Lega
 - Neovim missing colorscheme: check `.config/nvim/lua/plugins/theme.lua`, Lazy install state, and `themes/active/nvim.lua`.
 - Pi unchanged: verify `.pi/agent/settings.json` points to `~/.dots/themes/active/pi.json`, active `pi.json` has `"name": "env-active"`, and JSON is valid.
 - Claude Code unchanged: verify `~/.claude/themes/theme.json` is a symlink to `~/.dots/themes/active/claude.json`, active `claude.json` exists and is valid JSON, and Claude has selected the custom `theme` theme via `/theme`.
+- Lazygit unchanged: verify `~/Library/Application Support/lazygit/config.yml` is a symlink to `~/.dots/themes/active/lazygit.yml`, active `lazygit.yml` exists and is valid YAML, then restart Lazygit.
 
 ## Validation commands
 
@@ -176,6 +188,7 @@ ls themes/<name>
 ruby -c themes/theme_switcher.rb
 ruby -rjson -e 'JSON.parse(File.read(ARGV[0])); puts "ok"' themes/<name>/pi.json
 ruby -rjson -e 'JSON.parse(File.read(ARGV[0])); puts "ok"' themes/<name>/claude.json
+ruby -ryaml -e 'YAML.load_file(ARGV[0]); puts "ok"' themes/<name>/lazygit.yml
 rg -n 'theme "active"|theme_dir' .config/zellij/config.kdl
 rg -n 'themes/active|active-theme|colorscheme' .config/nvim/lua/plugins/theme.lua themes/<name>/nvim.lua
 ```

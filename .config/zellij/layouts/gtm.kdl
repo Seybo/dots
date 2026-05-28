@@ -32,6 +32,10 @@ layout {
         }
     }
 
+    tab name="tasks" cwd="/Volumes/dev/_tasks/gtm" {
+        pane
+    }
+
     tab name="misc" {
         pane
     }
