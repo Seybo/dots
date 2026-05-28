@@ -3,15 +3,15 @@
 # https://github.com/sainnhe/everforest/blob/master/palette.md
 gui:
   authorColors:
-    '*': '#8DA101'
+    '*': '#697801'
   theme:
     activeBorderColor:
-      - '#8DA101'
+      - '#697801'
       - bold
     inactiveBorderColor:
       - '#E8E5D5'
     searchingActiveBorderColor:
-      - '#35A77C'
+      - '#267B5F'
       - bold
     optionsTextColor:
       - '#3A94C5'
