@@ -1,0 +1,49 @@
+# Everforest hard light Hermes Agent skin.
+# Customized local variant with adjusted contrast.
+# Converted from canonical upstream Everforest palette:
+# https://github.com/sainnhe/everforest/blob/master/palette.md
+name: env-active
+description: Everforest Hard Light skin for Hermes Agent. Derived from the canonical upstream Everforest palette.
+
+colors:
+  banner_border: "#E8E5D5"
+  banner_title: "#697801"
+  banner_accent: "#F57D26"
+  banner_dim: "#939F91"
+  banner_text: "#3D484D"
+  ui_primary: "#697801"
+  ui_accent: "#F57D26"
+  ui_border: "#E8E5D5"
+  ui_text: "#3D484D"
+  ui_label: "#267B5F"
+  ui_ok: "#697801"
+  ui_error: "#F85552"
+  ui_warn: "#DFA000"
+  prompt: "#3D484D"
+  input_rule: "#E8E5D5"
+  response_border: "#697801"
+  status_bar_bg: "#F8F5E4"
+  status_bar_text: "#3D484D"
+  status_bar_strong: "#697801"
+  status_bar_dim: "#939F91"
+  status_bar_good: "#697801"
+  status_bar_warn: "#DFA000"
+  status_bar_bad: "#F57D26"
+  status_bar_critical: "#F85552"
+  voice_status_bg: "#F8F5E4"
+  session_label: "#267B5F"
+  session_border: "#939F91"
+  selection_bg: "#F0F2D4"
+  completion_menu_bg: "#FFFBEF"
+  completion_menu_current_bg: "#F0F2D4"
+  completion_menu_meta_bg: "#F8F5E4"
+  completion_menu_meta_current_bg: "#F0F2D4"
+  shell_dollar: "#3A94C5"
+
+branding:
+  agent_name: "Hermes Agent"
+  response_label: " 🌿 Hermes "
+  prompt_symbol: "❯"
+  help_header: "🌿 Commands"
+
+tool_prefix: "┊"
