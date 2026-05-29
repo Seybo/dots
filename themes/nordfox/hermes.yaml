@@ -1,0 +1,48 @@
+# Nightfox colors for Hermes Agent
+# name: nordfox
+# upstream: https://github.com/EdenEast/nightfox.nvim/raw/main/extra/nordfox/nordfox.ghostty
+name: env-active
+description: Nordfox skin for Hermes Agent. Derived from upstream Nightfox nordfox colors.
+
+colors:
+  banner_border: "#4c566a"
+  banner_title: "#a3be8c"
+  banner_accent: "#88c0d0"
+  banner_dim: "#7e8188"
+  banner_text: "#cdcecf"
+  ui_primary: "#a3be8c"
+  ui_accent: "#88c0d0"
+  ui_border: "#4c566a"
+  ui_text: "#cdcecf"
+  ui_label: "#81a1c1"
+  ui_ok: "#a3be8c"
+  ui_error: "#bf616a"
+  ui_warn: "#ebcb8b"
+  prompt: "#cdcecf"
+  input_rule: "#4c566a"
+  response_border: "#a3be8c"
+  status_bar_bg: "#3b4252"
+  status_bar_text: "#cdcecf"
+  status_bar_strong: "#a3be8c"
+  status_bar_dim: "#7e8188"
+  status_bar_good: "#a3be8c"
+  status_bar_warn: "#ebcb8b"
+  status_bar_bad: "#c9826b"
+  status_bar_critical: "#bf616a"
+  voice_status_bg: "#3b4252"
+  session_label: "#81a1c1"
+  session_border: "#7e8188"
+  selection_bg: "#3e4a5b"
+  completion_menu_bg: "#3b4252"
+  completion_menu_current_bg: "#3e4a5b"
+  completion_menu_meta_bg: "#2e3440"
+  completion_menu_meta_current_bg: "#3e4a5b"
+  shell_dollar: "#81a1c1"
+
+branding:
+  agent_name: "Hermes Agent"
+  response_label: " ❄ Hermes "
+  prompt_symbol: "❯"
+  help_header: "❄ Commands"
+
+tool_prefix: "┊"
