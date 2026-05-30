@@ -7,6 +7,10 @@ return {
   },
   ft = { 'http', 'rest' },
   opts = {
+    -- New .http buffers start on the `dev` environment (env selection is
+    -- per-buffer via environment_scope = 'b'), so {{BASE_URL}} etc. resolve
+    -- without running set_selected_env('dev') each time.
+    default_env = 'dev',
     global_keymaps = true,
     global_keymaps_prefix = '<leader>r',
     kulala_keymaps_prefix = '',
