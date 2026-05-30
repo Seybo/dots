@@ -56,7 +56,7 @@ return {
     map_with_cursor_restore('n', '<leader>fc', function()
       fzf.files({ cwd = vim.fn.expand('%:p:h') })
     end, nil, '[Fzf] Search Current File Directory')
-    map_with_cursor_restore('n', '<leader>fp', fzf.files, { cwd = '../_apis' }, '[Fzf] Search in my api')
+    map_with_cursor_restore('n', '<leader>fp', fzf.files, { cwd = '/Volumes/dev/_apis' }, '[Fzf] Search in my api')
     map_with_cursor_restore('n', '<leader>fm', fzf.files, { cwd = '../_mydev' }, '[Fzf] Search in my dev')
     map_with_cursor_restore('n', '<leader>ft', fzf.files, { cwd = '/Volumes/dev/_tasks' }, '[Fzf] Search in my tasks')
     map_with_cursor_restore('n', '<leader>fgc', fzf.git_status, nil, '[Fzf] Search Git Changed Files')
