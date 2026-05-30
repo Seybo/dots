@@ -1,0 +1,79 @@
+<!-- Generated for Pi from shared rule files. Do not edit by hand; regenerate from .ai/rules/ruby-general.md and .ai/rules/placeholder-stubs.md. -->
+
+<!-- Source: .ai/rules/ruby-general.md -->
+
+# Ruby/Rails Development Rules
+
+Universal Ruby and Rails conventions. These apply to any Ruby/Rails project unless that project's `CLAUDE.md` explicitly overrides them. Stack-specific guidance (Sidekiq, GraphQL, particular UI frameworks, project mixins) lives in per-project rule files such as [popmenu.md](popmenu.md).
+
+## Services
+
+- When the project has a service-object mixin (e.g. `ServiceObject`), include it consistently across service classes.
+- Keep `call` concise — delegate to private methods.
+- Memoize lookups as private instance methods.
+
+## Specs
+
+- No `send` to call private methods. Test through the public interface; if something needs assertion, expose it.
+- No `allow_any_instance_of`. Stub on the actual instance you control.
+- No `let!` — use `before` blocks for setup with side effects.
+- Use `instance_double(ClassName)` with the actual class constant, not strings.
+- Prefer factories (FactoryBot or similar) over fixtures when the project supports them.
+
+## Performance
+
+- Watch for N+1 queries. Use eager loading (`includes`/`preload` in ActiveRecord, `.eager(...)` in Sequel, equivalent in your ORM).
+- When you check `.empty?` and then iterate the same collection, materialize once with `.to_a` to avoid re-querying.
+
+## Command efficiency
+
+- Prefer targeted, low-latency commands over broad scans or mass replacements. Scope `rg`, tests, RuboCop, and file edits to the smallest relevant paths first; run full checks only at step boundaries or when needed.
+- Avoid broad `perl -pi`, `sed -i`, or repo-wide replacements when strings overlap (for example rename/revert work). Use precise `edit` replacements or a small script with explicit file lists and post-change verification.
+- Before running a command that may take more than a few seconds, state what it will do and why. After it returns, immediately summarize the result and next action.
+
+## Security
+
+- No raw SQL interpolation. Use parameterized queries (`?` placeholders, named params, or ORM query methods).
+- API keys, tokens, and other credentials live in environment variables — never in code or committed config.
+- Sensitive data (PII, credentials, raw provider responses with secrets) must not appear in logs, error messages, or stored debug artifacts. Sanitize before logging or persisting.
+
+## GitHub PR reviews
+
+- When the user links a specific GitHub PR review URL or review ID, fetch the review directly with `gh api repos/<owner>/<repo>/pulls/<pr>/reviews/<review_id> --jq '{user: .user.login, state: .state, body: .body}'` and fetch inline comments with `gh api repos/<owner>/<repo>/pulls/<pr>/reviews/<review_id>/comments --jq '.[] | {path: .path, line: .line, body: .body}'`. Do not rely on web fetch or only `gh pr view`; those can miss inline review comments.
+
+
+<!-- Source: .ai/rules/placeholder-stubs.md -->
+
+# Temporary stubs and placeholders
+
+Temporary stubs are fine and even **encouraged** when building something across multiple
+implementation steps. Landing a working skeleton first and filling in real behavior in a later
+step — rather than building everything at once — keeps each step small, reviewable, and shippable.
+
+The one hard rule: every temporary stub, placeholder, fake value, hardcoded shortcut, or
+"fill this in later" MUST carry this exact marker, on its own comment line directly above the
+placeholder code:
+
+```text
+!!!! SHOULD BE HANDLED/REMOVED BEFORE MERGE !!!!
+```
+
+This applies to anything that must not survive into a merged change: not-yet-implemented method
+bodies, stubbed/fake return values, hardcoded data standing in for real input, skipped
+validation, a `raise 'NOT_IMPLEMENTED'`, a correctness-blocking TODO, and similar.
+
+## Why
+
+Incremental stubs keep steps small, but a placeholder that slips silently into a merge becomes a
+latent bug or a correctness/security gap. The loud, uniform marker makes every such spot
+greppable and impossible to miss in review.
+
+## How to apply
+
+- Put the marker on its own comment line immediately above the placeholder, in the file's comment
+  syntax (`#`, `//`, `<!-- -->`, etc.).
+- Follow it with a short line stating what the real implementation should be and which step adds it.
+- Before declaring work merge-ready, grep for the marker (`rg 'SHOULD BE HANDLED/REMOVED BEFORE MERGE'`)
+  and confirm none remain — or that any remaining ones are explicitly agreed to defer.
+- The marker is permission to stub *between steps*, not permission to merge a stub. Remove or
+  implement it before the change is considered done.
