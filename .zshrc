@@ -106,6 +106,9 @@ export FZF_DEFAULT_COMMAND='fd --type f --strip-cwd-prefix --hidden --follow --e
 export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 # setup key bindings and fuzzy completion
 source <(fzf --zsh)
+# Free Ctrl-T for Zellij; use Ctrl-F for fzf file search instead
+bindkey '^F' fzf-file-widget
+bindkey -r '^T'
 
 # dev
 export BROWSER_PATH="/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev"
