@@ -1,4 +1,4 @@
-<!-- Generated for Pi from shared rule files. Do not edit by hand; regenerate from .ai/rules/ruby-general.md and .ai/rules/placeholder-stubs.md. -->
+<!-- Generated for Pi from shared rule files. Do not edit by hand; regenerate from .ai/rules/ruby-general.md, .ai/rules/agent-ops.md, and .ai/rules/placeholder-stubs.md. -->
 
 <!-- Source: .ai/rules/ruby-general.md -->
 
@@ -25,12 +25,6 @@ Universal Ruby and Rails conventions. These apply to any Ruby/Rails project unle
 - Watch for N+1 queries. Use eager loading (`includes`/`preload` in ActiveRecord, `.eager(...)` in Sequel, equivalent in your ORM).
 - When you check `.empty?` and then iterate the same collection, materialize once with `.to_a` to avoid re-querying.
 
-## Command efficiency
-
-- Prefer targeted, low-latency commands over broad scans or mass replacements. Scope `rg`, tests, RuboCop, and file edits to the smallest relevant paths first; run full checks only at step boundaries or when needed.
-- Avoid broad `perl -pi`, `sed -i`, or repo-wide replacements when strings overlap (for example rename/revert work). Use precise `edit` replacements or a small script with explicit file lists and post-change verification.
-- Before running a command that may take more than a few seconds, state what it will do and why. After it returns, immediately summarize the result and next action.
-
 ## Security
 
 - No raw SQL interpolation. Use parameterized queries (`?` placeholders, named params, or ORM query methods).
@@ -40,6 +34,20 @@ Universal Ruby and Rails conventions. These apply to any Ruby/Rails project unle
 ## GitHub PR reviews
 
 - When the user links a specific GitHub PR review URL or review ID, fetch the review directly with `gh api repos/<owner>/<repo>/pulls/<pr>/reviews/<review_id> --jq '{user: .user.login, state: .state, body: .body}'` and fetch inline comments with `gh api repos/<owner>/<repo>/pulls/<pr>/reviews/<review_id>/comments --jq '.[] | {path: .path, line: .line, body: .body}'`. Do not rely on web fetch or only `gh pr view`; those can miss inline review comments.
+
+
+<!-- Source: .ai/rules/agent-ops.md -->
+
+# Agent operating rules
+
+General agent workflow and command-use rules. These are language- and project-neutral unless a project's local instructions override them.
+
+## Command efficiency
+
+- Prefer targeted, low-latency commands over broad scans or mass replacements. Scope `rg`, tests, RuboCop, and file edits to the smallest relevant paths first; run full checks only at step boundaries or when needed.
+- Avoid broad `perl -pi`, `sed -i`, or repo-wide replacements when strings overlap (for example rename/revert work). Use precise `edit` replacements or a small script with explicit file lists and post-change verification.
+- Before running a command that may take more than a few seconds, state what it will do and why. After it returns, immediately summarize the result and next action.
+- For numbered file snippets, prefer the read tool or `nl -ba <file> | sed -n '<range>p'`; avoid ad-hoc `awk` line-numbering commands when `nl -ba` does the same job.
 
 
 <!-- Source: .ai/rules/placeholder-stubs.md -->
