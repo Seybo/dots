@@ -21,12 +21,6 @@ Universal Ruby and Rails conventions. These apply to any Ruby/Rails project unle
 - Watch for N+1 queries. Use eager loading (`includes`/`preload` in ActiveRecord, `.eager(...)` in Sequel, equivalent in your ORM).
 - When you check `.empty?` and then iterate the same collection, materialize once with `.to_a` to avoid re-querying.
 
-## Command efficiency
-
-- Prefer targeted, low-latency commands over broad scans or mass replacements. Scope `rg`, tests, RuboCop, and file edits to the smallest relevant paths first; run full checks only at step boundaries or when needed.
-- Avoid broad `perl -pi`, `sed -i`, or repo-wide replacements when strings overlap (for example rename/revert work). Use precise `edit` replacements or a small script with explicit file lists and post-change verification.
-- Before running a command that may take more than a few seconds, state what it will do and why. After it returns, immediately summarize the result and next action.
-
 ## Security
 
 - No raw SQL interpolation. Use parameterized queries (`?` placeholders, named params, or ORM query methods).
