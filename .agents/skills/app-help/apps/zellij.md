@@ -15,6 +15,11 @@
 - Keybindings docs: `https://zellij.dev/documentation/keybindings`
 - Configuration docs: `https://zellij.dev/documentation/configuration.html`
 - Default keybindings reference: `https://github.com/zellij-org/zellij/blob/main/zellij-utils/assets/config/default.kdl`
+- Built-in tab-bar source: `https://github.com/zellij-org/zellij/blob/main/default-plugins/tab-bar/src/tab.rs`
+
+## Known issues
+
+- Tab label shows `[ ]` / colored block: this is the tab-bar multiplayer focused-client indicator, not the app running there. Check clients with `ZELLIJ_SESSION_NAME=<session> zellij action list-clients`; remove stale attached clients by killing the matching `zellij attach <session>` PID from `ps -axo pid,ppid,stat,command | rg 'zellij'`. Do not kill `zellij --server .../<session>` unless you want to kill the session.
 
 ## Common defaults
 
