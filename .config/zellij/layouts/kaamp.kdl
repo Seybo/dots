@@ -1,0 +1,36 @@
+layout {
+    cwd "/Volumes/dev/projects/kaamp/the_app"
+
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:compact-bar"
+        }
+        children
+    }
+
+    tab name="git" {
+        pane command="zsh" {
+            args "-lic" "lg"
+        }
+    }
+
+    tab name="vim" {
+        pane command="zsh" {
+            args "-lic" "v"
+        }
+    }
+
+    tab name="pi" {
+        pane command="zsh" {
+            args "-lic" "pi-w"
+        }
+    }
+
+    tab name="tasks" cwd="/Volumes/dev/_tasks/kaamp" {
+        pane
+    }
+
+    tab name="docs" cwd="/Volumes/dev/projects/kaamp/info" {
+        pane
+    }
+}
