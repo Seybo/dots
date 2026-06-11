@@ -101,9 +101,19 @@ The project name must match a first-level folder name under `/Volumes/dev/_tasks
    - do not modify `task.md` unless the user asks you to
 
 6. **Create or load the steps plan before implementation:**
+   - before writing or updating `steps.md`, inspect existing implementation patterns relevant to the task:
+     - for services, read nearby services with similar names, responsibilities, or folder structure
+     - for CLIs/commands, read adjacent command parsers and bin wrappers
+     - for APIs/integrations, read existing API clients, retry/error handling, request/response objects, and specs for the same or adjacent provider
+     - for schemas/migrations, read nearby migrations, schema specs, timestamp/id conventions, and application code that writes those tables
+     - for artifacts/state/docs, read existing artifact path helpers, state layout, operator-facing skill docs, and reporting templates
+   - reflect the discovered patterns in `steps.md` with concrete behavior, not vague references such as "match existing behavior" or "be consistent"; write the actual rule to follow
+   - if existing implementations disagree or contain flaws, mention the inconsistency in `steps.md` and propose whether the task should update all files sharing that pattern, defer a follow-up, or intentionally keep the local behavior different; do not silently choose a one-off pattern
    - before making production code/docs changes for the task, ensure `<task_folder>/steps.md` exists
    - if `steps.md` already exists, read it and follow it; update it only if the task needs a corrected or more incremental plan
    - if `steps.md` is missing, create it first from `task.md` before implementation
+   - after creating `steps.md`, or after making substantive updates to an existing `steps.md`, stop and ask the user to review/confirm the plan before making production code/docs changes
+   - write `steps.md` using simple, precise technical language
    - structure `steps.md` as gradual, reviewable implementation slices; each step should leave the repo in a working state
    - start with the smallest deterministic/local behavior and slowly add complexity, edge cases, persistence, integration, and docs
    - preserve existing logic/behavior as much as possible; do not add new features, new policy, theoretical fields, or imaginary scenario handling beyond the task scope
