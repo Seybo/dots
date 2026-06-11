@@ -2,6 +2,12 @@
 
 Universal Ruby and Rails conventions. These apply to any Ruby/Rails project unless that project's `CLAUDE.md` explicitly overrides them. Stack-specific guidance (Sidekiq, GraphQL, particular UI frameworks, project mixins) lives in per-project rule files such as [popmenu.md](popmenu.md).
 
+## Language and naming
+
+- Use simple words and precise technical language.
+- Boolean attributes, arguments, and variables should start with `is_`.
+- Count variables should end with a count-like suffix that matches the context, such as `_count`, `_size`, or another existing project convention.
+
 ## Services
 
 - When the project has a service-object mixin (e.g. `ServiceObject`), include it consistently across service classes.
@@ -10,6 +16,8 @@ Universal Ruby and Rails conventions. These apply to any Ruby/Rails project unle
 
 ## Specs
 
+- Always make sure specs pass.
+- Always make sure RuboCop passes.
 - No `send` to call private methods. Test through the public interface; if something needs assertion, expose it.
 - No `allow_any_instance_of`. Stub on the actual instance you control.
 - No `let!` — use `before` blocks for setup with side effects.
