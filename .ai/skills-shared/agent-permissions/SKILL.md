@@ -46,6 +46,10 @@ Memoize the scope decision before editing:
 9. QA with the exact command shape that prompted, if safe.
 10. If a new gotcha is discovered, append it to `/Users/inseybo/.dots/refs/dev-env/agent-permissions.md`.
 
+## Claude Code-specific reminder
+
+When updating Claude Code permissions from outside Claude Code, remind the user to run `/doctor` in Claude Code after changes, especially after adding or removing `Bash(...)` rules.
+
 ## Pi-specific reminder
 
 Pi permission prompts in this setup come from the `agentic-af` permission extension, not Pi core. The extension loads:
