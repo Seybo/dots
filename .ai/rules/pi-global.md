@@ -6,6 +6,12 @@
 
 Universal Ruby and Rails conventions. These apply to any Ruby/Rails project unless that project's `CLAUDE.md` explicitly overrides them. Stack-specific guidance (Sidekiq, GraphQL, particular UI frameworks, project mixins) lives in per-project rule files such as [popmenu.md](popmenu.md).
 
+## Language and naming
+
+- Use simple words and precise technical language.
+- Boolean attributes, arguments, and variables should start with `is_`.
+- Count variables should end with a count-like suffix that matches the context, such as `_count`, `_size`, or another existing project convention.
+
 ## Services
 
 - When the project has a service-object mixin (e.g. `ServiceObject`), include it consistently across service classes.
@@ -14,6 +20,8 @@ Universal Ruby and Rails conventions. These apply to any Ruby/Rails project unle
 
 ## Specs
 
+- Always make sure specs pass.
+- Always make sure RuboCop passes.
 - No `send` to call private methods. Test through the public interface; if something needs assertion, expose it.
 - No `allow_any_instance_of`. Stub on the actual instance you control.
 - No `let!` — use `before` blocks for setup with side effects.
@@ -41,6 +49,10 @@ Universal Ruby and Rails conventions. These apply to any Ruby/Rails project unle
 # Agent operating rules
 
 General agent workflow and command-use rules. These are language- and project-neutral unless a project's local instructions override them.
+
+## Pi slash commands and skills
+
+When the user asks about a Pi "skill" or `/command`, treat that as any Pi slash command, not only an Agent Skill from `<available_skills>`. Pi slash commands can come from prompt templates (`/name`), Agent Skills (`/skill:name`), extension commands, or built-in commands. If a command appears in Pi autocomplete, it exists even when it is not listed in `<available_skills>`. Do not say a `/command` is unavailable solely because it is absent from `<available_skills>`; ask the user to run it or check prompt templates/commands if needed.
 
 ## Command efficiency
 
