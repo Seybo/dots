@@ -1,11 +1,11 @@
 ---
 name: claude-super-review
-description: Multi-agent code review for PR / branch / diff in any repo. Runs 6 parallel Claude subagents (4 generic adversarial + 1 Security + 1 Deployment) + an independent Codex pass. Convergence filter (≥2 agents confirmed = valid issue; Critical/HIGH = always surfaced). Surface Critical / High / Medium with mandatory short writeup "what's wrong / code / why it matters / fix". Senior architect voice, output ready to paste into a GitHub comment. Command-only skill. Invoke only when the user explicitly writes `/claude-super-review`.
+description: Multi-agent code review for PR / branch / diff in any repo. Runs 6 parallel Claude subagents (4 generic adversarial + 1 Security + 1 Deployment) + an independent Codex pass. Convergence filter (≥2 agents confirmed = valid issue; Critical/HIGH = always surfaced). Surface Critical / High / Medium with mandatory short writeup "what's wrong / code / why it matters / fix". Senior architect voice, output ready to paste into a GitHub comment. Use this skill whenever the user writes "/claude-super-review", "review PR 247", "review my branch", "look at what X pushed", supplies a GitHub PR URL, or asks for a code review of uncommitted changes. Trigger even if "skill" isn't said explicitly - this is the default review workflow.
 ---
 
-# claude-super-review
+# code-review
 
-Multi-agent code review skill - runs 6 parallel Claude subagents and a Codex pass on the same diff, filters via convergence, returns a ranked list with verdict. Optimized for AI-generated code where single-pass review misses blind spots, and for cross-cutting issues that narrow specialists skip over.
+Multi-agent code review skill - runs 6 parallel Claude subagents (a mixed Opus+Sonnet panel, with the model set EXPLICITLY in each Task call) and a Codex pass on the same diff, filters via convergence, returns a ranked list with verdict. Optimized for AI-generated code where single-pass review misses blind spots, and for cross-cutting issues that narrow specialists skip over.
 
 ## When to trigger
 
@@ -37,9 +37,10 @@ Never trigger for plain review requests such as:
 
 PHASE 1 - Independent reviews (parallel, blind to each other):
    - 4 Generic adversarial subagents (no role bias) → broad coverage
-   - 1 Security subagent → secrets / PII / injection / regex completeness
-   - 1 Deployment subagent → migrations / env vars / PR description structure
-   - 1 Codex independent pass → cross-vendor signal
+     (2x model: "opus" + 2x model: "sonnet")
+   - 1 Security subagent → secrets / PII / injection / regex completeness (model: "opus")
+   - 1 Deployment subagent → migrations / env vars / PR description structure (model: "sonnet")
+   - 1 Codex independent pass → cross-vendor signal (gpt-5.5)
 
 PHASE 2 - Adversarial cross-review (parallel):
    - Claude reviews each codex_finding: AGREE / DISAGREE / NEEDS_CONTEXT
@@ -51,7 +52,7 @@ PHASE 3 - Synthesis (main agent):
    - 1 agent flagged Medium → drop unless interesting
    - Intent-verification findings always surface
 
-PHASE 4 - Offer to post in a GitHub PR comment via the gh CLI
+PHASE 4 - Interactive posting: ask which findings to post, leave each as a PENDING inline comment (Variant A format), never submit
 PHASE 5 - Cleanup worktree
 ```
 
@@ -99,6 +100,25 @@ If project CLAUDE.md is >300 lines, extract only the relevant sections (severity
 ## Phase 1 - Independent reviews (parallel)
 
 Launch **7 parallel** calls in a single message: 4 generic Task calls + 1 Security Task + 1 Deployment Task + Codex (via Bash background).
+
+### Model assignment (MANDATORY)
+
+Pass `model` explicitly in EVERY Task call. Without an explicit `model`, the subagent inherits the main session's model - which can be 2-3x more expensive (e.g. Fable 5 at $10/$50 per MTok vs Opus 4.8 at $5/$25 and Sonnet 4.6 at $3/$15), and the review cost becomes uncontrolled.
+
+| Role | model | Why |
+|---|---|---|
+| Generic 1, Generic 2 | `"opus"` (= Opus 4.8) | Deep cross-file reasoning; Opus 4.8 has a stated gain specifically in bug-finding |
+| Generic 3, Generic 4 | `"sonnet"` (= Sonnet 4.6) | Strong code reviewer; a second model in the panel gives cross-model diversity in convergence |
+| Security | `"opus"` | The most expensive class of misses; adversarial analysis of regex/auth/race needs maximum depth |
+| Deployment | `"sonnet"` | The most structural role (migrations / env vars / PR description) - the prompt does the heavy lifting |
+| Phase 2 Call A (Claude reviews Codex) | `"opus"` | Adjudication: the power to kill findings - a wrong DISAGREE costs more than the tokens saved |
+| Codex | `gpt-5.5` (CLI `-m`) | Cross-vendor diversity; fallback `gpt-5.4` |
+
+The layout is locked by Sasha 2026-06-09 - do not change it without his decision.
+
+Do NOT use Haiku in any role: the loss of depth on subtle bugs destroys the pipeline's value, plus the 200K context may not fit a large PR + files.
+
+Logic of the mixed panel: Opus sits where maximum depth is needed (2 generic + Security + adjudication), Sonnet where the prompt does the heavy lifting (Deployment) and where a second model adds diversity (2 generic). Two identical models share common blind spots, so Opus+Sonnet convergence is a stronger signal than two runs of one model; the same principle as the cross-vendor signal from Codex.
 
 **Hard prompt rules** (apply to ALL subagent prompts):
 
@@ -163,6 +183,32 @@ the same thing. Examples:
 - Cache key includes timestamp but lookup omits it.
 Surface these as [HIGH] - they are the kind of bug that survives review by
 single-lens specialists.
+
+PRECONDITION & SEVERITY DISCIPLINE - HARD RULE:
+For ANY finding that depends on control flow, exception handling, or a state
+machine ("the error is swallowed", "the call is left in state X", "this masks
+the real error", "X is lost"):
+1. Trace the NORMAL path first, then state the EXACT trigger in one line:
+   "Triggers only when: <condition>." If it needs a SECOND simultaneous failure
+   (a compound failure - e.g. the error-recording write ITSELF raises), say so.
+2. Severity = likelihood(precondition) x impact, NOT impact alone. A real bug
+   gated behind a rare/compound precondition is at most Medium, NOT High.
+3. Verify language semantics before naming a consequence. Do NOT write
+   "lost"/"swallowed"/"never"/"silently" unless confirmed. (Ruby: raising inside
+   a `rescue` auto-sets the new exception's `.cause` to the original - so it is
+   NOT lost, only possibly not surfaced by the error formatter. Also check
+   ensure-blocks, retry order, transaction/rollback order.) Use precise wording
+   like "not surfaced to the operator (preserved as `.cause`)".
+If you cannot state the precondition crisply in one line, you have NOT verified
+it - downgrade or move to "Verify Manually"; do not flag it High.
+
+COVERAGE OVER SELF-CENSORSHIP:
+Report every issue you find, including ones you are uncertain about - mark
+those [confidence: low]. Do NOT silently drop a finding because you doubt its
+importance: convergence and adversarial cross-review filter downstream, and a
+finding dropped at the source is unrecoverable. (The SKIP LIST below excludes
+noise classes, not uncertain bugs. PRECONDITION discipline still applies:
+state the trigger honestly and downgrade severity, but keep the finding.)
 
 SKIP LIST (do not surface these as findings):
 - Formatting, whitespace, line breaks (linter catches)
@@ -308,11 +354,20 @@ Process as in generic prompt.
 In parallel with the 6 Claude subagents, launch Codex from the worktree directory:
 
 ```bash
-cd "$WORKTREE_DIR" && codex exec -m gpt-5.5 review --base <base-branch> --title "<PR title>" \
-  2>&1 > /tmp/codex_pr<num>.txt &
+# Write the Codex prompt (below) to a file first, then run PLAIN `codex exec` with it.
+# DO NOT use `codex exec review --base <BRANCH> "<prompt>"`: the CLI rejects a custom
+# [PROMPT] together with --base ("the argument '--base <BRANCH>' cannot be used with
+# '[PROMPT]'") - confirmed on codex 0.133 AND 0.136, by-design, not a version bug.
+# Plain `codex exec` has no such restriction and preserves the skill's HARD RULES prompt.
+cd "$WORKTREE_DIR" && codex exec -m gpt-5.5 "$(cat /tmp/codex_prompt_pr<num>.txt)" \
+  > /tmp/codex_pr<num>.txt 2>&1 &
 ```
 
 `-m gpt-5.5` is the skill default - it overrides the global `~/.codex/config.toml` model setting. On truncation, retry once with `-m gpt-5.4` (see pitfall below).
+
+The prompt already tells Codex to read `/tmp/pr<num>.diff` and open files in the checked-out worktree for real line numbers, so the plain `codex exec` form has everything it needs.
+
+(Git-aware alternative WITHOUT a custom prompt: `cd "$WORKTREE_DIR" && codex exec -m gpt-5.5 review --base <base-branch> > /tmp/codex_pr<num>.txt 2>&1 &` - uses Codex's built-in review against the base, but you lose the HARD RULES / output format. Prefer the plain-exec form above. Note: `review` has no `--title` flag.)
 
 Run in the background so the main agent isn't blocked waiting on Codex.
 
@@ -350,6 +405,8 @@ Fix: <concrete change>
 - If still truncated, skip the Codex pass and note in the output "Codex unavailable - 6-Claude convergence applied".
 - Don't waste time on a third attempt; do not downgrade below 5.4 (mini truncates more often).
 
+**Pitfall `--base` + custom prompt**: `codex exec review --base <BRANCH>` does NOT accept a custom `[PROMPT]` (CLI error: "the argument '--base <BRANCH>' cannot be used with '[PROMPT]'"; true on 0.133-0.136, by-design). Always pass the skill prompt via plain `codex exec -m <model> "<prompt>"` (the prompt references `/tmp/pr<num>.diff` + the worktree). Reserve `review --base <BRANCH>` for a no-custom-prompt git-aware pass only. `review` also has no `--title` flag. If you see this arg-error in Codex output, it is NOT truncation and NOT a reason to update codex - just switch to the plain `codex exec` form.
+
 ### Phase 1 → Phase 2 handoff
 
 After Phase 1:
@@ -358,13 +415,17 @@ After Phase 1:
 
 Dedup within `claude_findings`: if 2+ agents flagged the same hole (same file, line ± 5, same conceptual issue), merge with a note "subagents: gen-1 + gen-3 + Sec". Convergence count = HIGH signal.
 
-With 4 generic agents, a reliable convergence threshold is **2 of 4 = high signal**, **3+ of 4 = almost certain**.
+With 4 generic agents, a reliable convergence threshold is **2 of 4 = high signal**, **3+ of 4 = almost certain**. Cross-model convergence (Opus+Sonnet within the panel, Claude+Codex across vendors) weighs more than agreement between two agents of the same model: different models don't share blind spots.
+
+**BUT: convergence is NOT verification for control-flow / exception-semantics / state-machine claims.** N agents (and Codex) can AGREE on a plausible-but-overstated mechanism while sharing ONE blind spot (none traced the language semantics or the trigger precondition). Before surfacing such a finding as High, independently trace the normal path and state the exact precondition (see PRECONDITION & SEVERITY DISCIPLINE). Agreement on a mechanism is not proof it fires. (Real miss: a compound-edge "error masking" was tagged HIGH + "lost" even though Ruby preserves the original in `.cause` and the case needs a second simultaneous DB failure.)
 
 ## Phase 2 - Adversarial cross-review (parallel)
 
 Launch 2 parallel Task calls:
 
 ### Call A: Claude reviews Codex findings
+
+Task call with `model: "opus"` - adjudication decides the fate of findings, don't economize here.
 
 ```
 You are doing adversarial cross-review. Codex flagged findings below. For each:
@@ -497,16 +558,87 @@ surfaced + <contested> contested + <verify> verify. False positive cut: <%>.
 - **Needs Attention** - 1-2 confirmed High, or several Medium, or 1 contested Critical, or any [INTENT-VERIFY] present.
 - **Needs Work** - any confirmed Critical, ≥3 confirmed High, a critical-path test gap, or a broken deploy procedure.
 
-## Phase 4 - Offer to post
+## Phase 4 - Interactive posting (pending review, NEVER submit)
 
-After the output:
+Do NOT change the review output (Phase 3) - Sasha likes the full ranked format. The interactivity is only at the posting stage.
+
+1. After the review output, ask which findings to leave pending comments on (by their number in the report):
+   `Which findings should I leave as pending PR comments? (e.g. "1, 4" / "all High" / "none for now")`
+2. For EACH selected finding, leave an inline **pending** comment anchored to the exact line. Not selected - don't comment.
+3. NEVER submit without an explicit "submit/send". Pending is the default: Sasha clicks Submit/Discard in GitHub himself.
+
+**STOP before posting:** run the `PRE-POST GATE` on EVERY drafted comment (defined below, right before `## Phase 5`). Do NOT assemble `payload.json` until all 4 gate items pass. This is not optional - this is exactly where comments bloat.
+
+**Pending mechanic** (NOT `gh pr review --comment` - that submits immediately): create the review via REST WITHOUT the `event` field:
+```bash
+HEAD=$(gh pr view <num> --repo <owner>/<repo> --json headRefOid -q .headRefOid)
+jq -n --arg body "$(cat /tmp/cmt.md)" --arg c "$HEAD" \
+  '{commit_id:$c, comments:[{path:"<file>", line:<N>, side:"RIGHT", body:$body}]}' > /tmp/payload.json
+gh api -X POST /repos/<owner>/<repo>/pulls/<num>/reviews --input /tmp/payload.json --jq '{id,state,html_url}'
+# state == PENDING is required. Multiple findings -> multiple objects in comments[] in ONE POST (one pending review, don't multiply).
 ```
-Post as a PR comment via `gh pr review --comment <num> -F -`? (y/n)
-```
+- A single line is more reliable: send only `line` + `side:"RIGHT"`. `start_line`+`line` via this endpoint often loses the range (the anchor collapses onto the end line).
+- You can only anchor to lines inside the diff hunk. Write the comment body to a file (`jq --arg`) - less escaping pain.
+- **Body-level / top-level comment** (not anchored to a line: about the PR description, a general point): GitHub's Submit-review dialog opens the summary box EMPTY and does NOT load the API-set `body` → the summary is DROPPED on submit (confirmed on PR#39). So for ANY non-inline comment, ALWAYS hand Sasha the ready-to-paste text and explicitly say "add this as a top-level comment by hand". Never rely on the review `body` reaching the PR via the UI.
 
-If "y" - save to `/tmp/review_pr<num>.md` and run `gh pr review --comment <num> --repo <owner>/<repo> -F /tmp/review_pr<num>.md`. If "n" - leave the output in chat.
+**Comment format (LOCKED - "Variant A", Sasha's senior style. Standard approved on PR#40):**
 
-Do not post automatically without an explicit y/yes.
+**TOP PRINCIPLE: as short as possible.** Write the minimum a senior needs to grasp it and act without opening the file. Cut every word that isn't load-bearing. Length is dictated ONLY by the finding's genuine complexity, never by a target number. There is NO fixed limit (the ~56 words on PR#40 was an observation, NOT a bar): don't pad to look thorough, and don't mechanically trim to hit some number. A simple finding is two lines; a complex mechanism that can't be explained shorter is exactly as long as each clause genuinely needs.
+
+Default structure = **THREE short blocks, separated by a BLANK LINE.** Goal: the comment scans at a glance instead of reading like a wall of text.
+
+1. **Bold takeaway in one sentence: WHAT breaks** (impact, not mechanism).
+2. One line, `problem -> consequence`, with `file:line` and identifiers in backticks. One link, not a list.
+3. A short, direct ask/question.
+
+Hard rules (a violation means rewrite):
+- **Blank lines between blocks are MANDATORY, each block = 1 line.** A dense 3-5 sentence paragraph with no breaks is WRONG, even if correct on substance. If you catch yourself writing a wall of text, split into 3 blocks and drop the filler. (This is the new rule: the skill used to say cram into 1-2 lines as one paragraph - that produced an unreadable block, so we do NOT do that anymore.)
+- **Simple English, like a Senior Tech Engineer.** Short words, active voice. NOT academic vocab: "comes back empty" not "resolves to missing"; "stored as if verified" not "stored as first-class"; "response shape" not "envelope"; "won't be retried" not "suppressed from re-selection"; "stuck" not "wedged".
+- NO severity tags (`[HIGH]`, `[category]`) and NO `What/Why/Fix` headers.
+- **Length is dictated by complexity, not a target number (see TOP PRINCIPLE). Default to the shortest version that's still clear.** The block structure never changes:
+  - simple finding → 2 blocks (bold takeaway + question), middle can be dropped.
+  - normal → 3 blocks as above.
+  - genuinely complex mechanism → add ONLY the detail you can't omit (an extra fact in the middle block, an important caveat in the question's parenthetical) - that is the only thing that justifies length. Every clause earns its place; the block stays 1-2 lines, not a paragraph.
+  - do NOT trim a needed explanation to hit a number, and do NOT pad to look thorough - both are wrong.
+- For a concrete fix, put a GitHub suggestion block as a separate block AFTER the question. English (GitHub-visible). Don't add AI attribution.
+
+Examples = **THE FORMAT STANDARD. Copy the STRUCTURE (3 blocks, blank lines, plain words), not the text.** All three approved by Sasha on PR#40:
+
+Normal finding (3 blocks):
+> **A People Search rerun overwrites the enriched `full_name` with the old search value.**
+>
+> `last_name` is protected by `preserved_last_name`, `full_name` is not -> after Enrich sets `"Eric Example"`, a rerun drops it back to `"Eric"` while `last_name` stays `"Example"`.
+>
+> Add a `preserved_full_name` the same way?
+
+With a suggestion block (the fix goes AFTER the question, as its own block):
+> **Passing `api:` skips the approval gate, so a live run can spend credits with no `--approve-live-call`.**
+>
+> The gate checks `api.nil?` instead of `live`. The CLI is safe (never passes `api:`), but a direct `Run.call(api: ...)` reserves and calls `bulk_match` ungated.
+>
+> Gate on `live` and pass `approve_first_live_call: true` in the specs?
+>
+> ` ``suggestion ` (GitHub suggestion block with the ready replacement line)
+
+Complex mechanism (middle block a bit denser, but the structure and blank lines hold):
+> **If the live response does not echo our `id`, the whole batch comes back as `missing` after a paid call.**
+>
+> Apollo prospects only match by `id` here, no fallback by design. A wrong response shape means `credits_consumed > 0` but every row gets `email_status: 'missing'` and an `enrichment_date` - so no error, and no retry for 30 days.
+>
+> Raise when `credits_consumed > 0` but `matched == 0`, so a shape mismatch fails loud?
+
+---
+
+**PRE-POST GATE (run before EVERY `gh api POST`, binary: failing ANY item = rewrite BEFORE posting).**
+
+This fixes the recurring "comments bloat" drift - Sasha caught it 3 times in a row because the advisory "shorter" rule above does NOT fire. This is a hard checklist, not advice. Run every drafted comment through the 4 items:
+
+1. **Middle block = EXACTLY one sentence** (one `problem -> consequence` link). Two sentences = cut to one. Keep a second fact ONLY when the finding can't be understood without it (the "complex mechanism" class), and then it lives in a parenthetical, not a separate sentence.
+2. **EXACTLY one question/ask in the final block.** Constructions like "X, or Y?", "confirm X and decide Y", "..., not Z?" are a double ask: collapse to one.
+3. **Zero meta-explanations of "how it reads".** Delete perception phrases: "reads as cleanup", "so it looks like", "feels like", "comes across as", "looks like". A comment says WHAT breaks and what it threatens, not how the reader sees it. This is my main source of extra weight - cut it first.
+4. **Literal size-diff against the standard.** Put your comment mentally next to the matching PR#40 example (normal / suggestion / complex mechanism). Visibly longer than the standard for its class = cut to its size. The standard is the CEILING for the finding's class, not the floor.
+
+Only after all 4 pass on ALL comments - assemble `payload.json` and post. If you catch yourself thinking "but this needs context" - that's almost always item 3 (explaining framing). Context goes in the Phase 3 ranked output, not the inline comment.
 
 ## Phase 5 - Cleanup
 
@@ -523,6 +655,7 @@ If the worktree is busy (subagent still holds an fd), use `git worktree remove -
 
 - **Phase 1 reviewers (6 Claude + Codex) are blind to each other.** Otherwise anchoring bias.
 - **7 parallel Task/Bash calls in a single message.** Sequential = 7x slower.
+- **`model` explicit in EVERY Task call** (gen-1/gen-2 + Security = `"opus"`, gen-3/gen-4 + Deployment = `"sonnet"`, Phase 2 Call A = `"opus"`). Inheriting the session model is forbidden - the session may be running on an expensive model, and the review silently costs 2-3x more.
 - **CLAUDE.md + AGENTS.md in EVERY prompt.** Without them agents flag violations of conventions that don't exist.
 - **HARD RULES BLOCK pasted into EVERY prompt** (location citations / finding format / intent verification / domain knowledge / cross-field consistency / skip list).
 - **`git worktree add` before launching subagents** - so they can open files and use real line numbers, not diff positions. Worktree, not `gh pr checkout` - so parallel reviews of other PRs in the main working dir are not blocked.
@@ -575,12 +708,12 @@ If the worktree is busy (subagent still holds an fd), use `git worktree remove -
 2. `gh pr diff 247 > /tmp/pr247.diff`
 3. `BRANCH=$(gh pr view 247 --json headRefName -q .headRefName); git fetch origin "$BRANCH"; git worktree add /tmp/pr247_worktree "origin/$BRANCH"` (CRITICAL - isolated worktree preserves parallelism)
 4. Read `CLAUDE.md` + `AGENTS.md` in the worktree root.
-5. **Phase 1**: spawn 6 subagents (4 generic + Security + Deployment) + Codex in parallel - all blind to each other. Each prompt includes HARD RULES BLOCK, project conventions, PR context, and worktree path.
+5. **Phase 1**: spawn 6 subagents (4 generic + Security + Deployment) + Codex in parallel - all blind to each other. Models: gen-1/gen-2 + Security `model: "opus"`, gen-3/gen-4 + Deployment `model: "sonnet"`. Each prompt includes HARD RULES BLOCK, project conventions, PR context, and worktree path.
 6. Wait for all 6 + Codex (background notifications). Dedup intra-Claude (4 generic agents give a good convergence signal).
 7. **Phase 2**: parallel calls - Claude reviews Codex findings, Codex reviews Claude findings.
 8. **Phase 3**: synthesize per the decision tree → final markdown with detailed findings.
-9. **Phase 4**: ask "Post as a PR comment? (y/n)".
-10. If "y" - `gh pr review --comment 247 --repo <owner>/<repo> -F /tmp/review_pr247.md`.
+9. **Phase 4**: ask "which findings to leave as pending PR comments?" (by their number in the report).
+10. For the selected ones - inline pending comments ("Variant A": takeaway in bold on the first line, no `[HIGH]` tags) via `gh api -X POST .../pulls/247/reviews` WITHOUT `event`; never submit (Sasha clicks Submit/Discard).
 11. **Phase 5**: `git worktree remove /tmp/pr247_worktree`.
 
 ## Postmortem hook (after each review)
@@ -596,3 +729,4 @@ Currently known gaps (encoded in HARD RULES BLOCK):
 - Domain API limits (Apollo 50k cap) - solved by the DOMAIN KNOWLEDGE block.
 - Diff line vs file line - solved by the LOCATION CITATIONS block + worktree.
 - Block-list regex with holes (refresh_token / bearer / private_key not covered) - solved by the Sensitivity-of-redaction analysis in the Security subagent prompt.
+- Severity inflation / overstated exception-flow claims (a compound-edge tagged HIGH + "lost" without verifying the precondition or language semantics) - solved by the PRECONDITION & SEVERITY DISCIPLINE rule + the "convergence is not verification" note in synthesis.
