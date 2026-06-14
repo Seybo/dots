@@ -60,6 +60,9 @@ Examples:
 
 - project `foo` → `/Volumes/dev/_tasks/foo/`
 - project `bar` → `/Volumes/dev/_tasks/bar/`
+- personal project `my_finance` → `/Volumes/dev/_tasks/my_finance/`
+
+Personal project names should use the `my_` prefix and underscores, matching the corresponding code checkout under `/Volumes/dev/mydev/<project>/`. `taskit` still only creates task folders under `/Volumes/dev/_tasks/<project>/`; it does not create project roots or code checkouts.
 
 ## Instructions
 

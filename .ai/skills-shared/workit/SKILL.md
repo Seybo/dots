@@ -47,9 +47,16 @@ Companion to `/taskit` (which creates the folder). `/workit` consumes folders th
 The `<project>` argument resolves to two locations:
 
 - **Task folder root:** `/Volumes/dev/_tasks/<project>/` — where the task definition (`task.md`) lives.
-- **Code working directory:** `/Volumes/dev/shaka/<project>/` — the codebase to operate on when the task does not name its own working directory.
+- **Code working directory:**
+  - for personal projects whose name starts with `my_`: `/Volumes/dev/mydev/<project>/`
+  - for all other projects: `/Volumes/dev/shaka/<project>/`
 
-The project name must match a first-level folder name under `/Volumes/dev/_tasks/`. The matching folder under `/Volumes/dev/shaka/` is the default working directory for any work the task describes.
+The project name must match a first-level folder name under `/Volumes/dev/_tasks/`. For normal Shaka projects, the matching folder under `/Volumes/dev/shaka/` is the default working directory. For personal `my_` projects, the matching folder under `/Volumes/dev/mydev/` is the default working directory.
+
+Examples:
+
+- project `gtm` → tasks `/Volumes/dev/_tasks/gtm/`, code `/Volumes/dev/shaka/gtm/`
+- project `my_finance` → tasks `/Volumes/dev/_tasks/my_finance/`, code `/Volumes/dev/mydev/my_finance/`
 
 ## Instructions
 
@@ -72,7 +79,8 @@ The project name must match a first-level folder name under `/Volumes/dev/_tasks
    - do not create project folders automatically
    - also note the default code working directory:
      ```text
-     /Volumes/dev/shaka/<project>/
+     /Volumes/dev/mydev/<project>/     # when <project> starts with my_
+     /Volumes/dev/shaka/<project>/     # otherwise
      ```
      This is where the task's work should happen unless `task.md` names a different directory. Do not fail if it does not exist — just do not assume it.
 
@@ -128,7 +136,7 @@ The project name must match a first-level folder name under `/Volumes/dev/_tasks
    - after completing each numbered step/slice from `steps.md`, stop and report the changes made, checks run, open questions, and any deviations or findings; ask the user to confirm before starting the next step
    - do not continue into the next `steps.md` step without explicit user confirmation, even if the next step seems obvious or mechanical
    - if the user has questions, requests changes, or wants to adjust scope at a step boundary, handle that before proceeding
-   - if `task.md` does not name a working directory, default to `/Volumes/dev/shaka/<project>/`
+   - if `task.md` does not name a working directory, default to `/Volumes/dev/mydev/<project>/` when `<project>` starts with `my_`; otherwise default to `/Volumes/dev/shaka/<project>/`
    - only `task.md` and `steps.md` define the work — do not read other files in the task folder (e.g. `next.md`, notes, drafts) as instructions unless `task.md` explicitly references them
    - if the body is just `# Context` (or otherwise empty of instructions), ask the user what they want done before proceeding
 
