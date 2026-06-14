@@ -32,11 +32,10 @@ layout {
         }
     }
 
-    tab name="tasks" cwd="/Volumes/dev/_tasks/gtm" {
-        pane
-    }
-
-    tab name="misc" {
-        pane
+    tab name="misc" split_direction="horizontal" {
+        pane size="80%" cwd="/Volumes/dev/_tasks/gtm" command="zsh" {
+            args "-lic" "lg"
+        }
+        pane name="misc"
     }
 }
