@@ -15,14 +15,16 @@ This is a command-only skill.
 Use only:
 
 ```text
+/draftit help
 /draftit <project> <context-reference-or-text>
 ```
 
 Examples:
 
 ```text
+/draftit help
 /draftit gtm the above plan
-/draftit gtm the implementation plan you just wrote
+/draftit gtm Name: Add CSV export Epic: 33001 Context: the implementation plan you just wrote
 /draftit foo Create a story for adding CSV export support
 ```
 
@@ -46,12 +48,21 @@ The result is intended to be used later with:
 ## Instructions
 
 1. **Parse command arguments:**
+   - if the only argument is `help`, show this help text and stop:
+     ```text
+     Draft-to-story flow:
+     1. Run /draftit <project> <context> to create /Volumes/dev/_tasks/<project>/draftNN/task.md.
+     2. Edit task.md and fill in # Story details with Name and Epic, OR include them in the /draftit call itself, e.g. /draftit gtm Name: Add CSV export Epic: 33001 Context: the plan above.
+     3. Run /taskit <project> draftNN to create the Shortcut story.
+     4. /taskit renames draftNN to <story_id>-<slug> after Shortcut returns the story ID.
+     ```
    - extract `<project>` as the first token after `/draftit`
    - take all remaining text after the project name as the draft request
    - if the project or draft request is missing, ask the user to provide both, e.g.:
      ```text
      /draftit gtm the above plan
      ```
+   - if the draft request includes explicit `Name:` and `Epic:` fields before optional `Context:`, use those values in `# Story details`; otherwise leave them blank
 
 2. **Resolve and validate project:**
    - project root:
@@ -68,18 +79,19 @@ The result is intended to be used later with:
 
 4. **Ensure draft has Shortcut-ready structure:**
    - The draft should be usable by `/taskit <project> draftNN` later.
-   - Every draft must start exactly with this scaffold for the user to fill in:
+   - Every draft must start exactly with this scaffold:
      ```md
      # Story details
 
-     Name: 
-     Epic: 
+     Name: {explicit name, if provided}
+     Epic: {explicit epic, if provided}
 
      # Context
 
      {draft content}
      ```
-   - Always leave `Name` and `Epic` blank. Do not infer, fill, or invent them.
+   - Leave `Name` and `Epic` blank unless the user explicitly included `Name:` and `Epic:` in the `/draftit` call. Do not infer, fill, or invent them.
+   - If the request includes `Context:`, use the text after `Context:` as the draft content request and do not duplicate `Name:` / `Epic:` under `# Context`.
    - If the source content already includes a `# Story details` section, do not preserve it as the first section; place the source content under `# Context` instead unless doing so would duplicate irrelevant metadata.
 
 5. **Find next draft folder name:**
