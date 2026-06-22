@@ -1,4 +1,4 @@
-<!-- Generated for Pi from shared rule files. Do not edit by hand; regenerate from .ai/rules/ruby-general.md, .ai/rules/agent-ops.md, and .ai/rules/placeholder-stubs.md. -->
+<!-- Generated for Pi from shared rule files. Do not edit by hand; regenerate from .ai/rules/ruby-general.md, .ai/rules/agent-ops.md, .ai/rules/abbreviations.md, .ai/rules/placeholder-stubs.md. -->
 
 <!-- Source: .ai/rules/ruby-general.md -->
 
@@ -62,6 +62,22 @@ When the user asks about a Pi "skill" or `/command`, treat that as any Pi slash 
 - For numbered file snippets, prefer the read tool or `nl -ba <file> | sed -n '<range>p'`; avoid ad-hoc `awk` line-numbering commands when `nl -ba` does the same job.
 
 
+<!-- Source: .ai/rules/abbreviations.md -->
+
+# Agent abbreviations
+
+These abbreviations are shorthand instructions. They may appear alone or after quoted text.
+When the meaning is clear, act on them without asking for clarification.
+
+## Abbreviations
+
+- `00ex` — Explain the referenced text using simple, precise technical terms.
+  Prefer a clear paraphrase, then any necessary context.
+
+- `00gf` — Give feedback on the referenced idea or text.
+  Say whether you agree, disagree, or partially agree, and explain why.
+
+
 <!-- Source: .ai/rules/placeholder-stubs.md -->
 
 # Temporary stubs and placeholders
@@ -97,3 +113,4 @@ greppable and impossible to miss in review.
   and confirm none remain — or that any remaining ones are explicitly agreed to defer.
 - The marker is permission to stub *between steps*, not permission to merge a stub. Remove or
   implement it before the change is considered done.
+
