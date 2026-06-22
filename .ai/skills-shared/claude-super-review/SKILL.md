@@ -52,6 +52,7 @@ PHASE 3 - Synthesis (main agent):
    - 1 agent flagged Medium → drop unless interesting
    - Intent-verification findings always surface
 
+PHASE 3.5 - Save report: ALWAYS write the full Phase 3 markdown to a `super-review.md` file (task folder if known, else fallback). Print the path.
 PHASE 4 - Interactive posting: ask which findings to post, leave each as a PENDING inline comment (Variant A format), never submit
 PHASE 5 - Cleanup worktree
 ```
@@ -558,6 +559,22 @@ surfaced + <contested> contested + <verify> verify. False positive cut: <%>.
 - **Needs Attention** - 1-2 confirmed High, or several Medium, or 1 contested Critical, or any [INTENT-VERIFY] present.
 - **Needs Work** - any confirmed Critical, ≥3 confirmed High, a critical-path test gap, or a broken deploy procedure.
 
+## Phase 3.5 - Save the report to a file (ALWAYS, automatic)
+
+After printing the Phase 3 markdown, ALWAYS persist the SAME markdown verbatim to a `super-review.md` file. This is not optional and needs no user prompt - the file is the durable artifact; the chat output scrolls away. Write it BEFORE Phase 4 (posting), so the report survives even if the user skips posting.
+
+**Where to write it** (first match wins):
+
+1. **Task folder known** - the invocation references a task under `/Volumes/dev/_tasks/<project>/<id>/` (the user passed a `task.md` path, a task folder path, or you derived one from the branch's Shortcut id). Write to `<task-folder>/super-review.md`.
+2. **PR review, no task folder** - write to `<repo-root>/super-review.md` in the user's main working dir (NOT the throwaway worktree - it gets removed in Phase 5). If that would clobber an existing unrelated file, use `super-review-pr<num>.md`.
+3. **Branch / staged / last-commit review, no task folder** - write to `<repo-root>/super-review.md`.
+
+If a `super-review.md` already exists at the target from a previous run on the SAME scope, overwrite it (the latest review wins). If it exists but covers a DIFFERENT scope, suffix the new one (`super-review-<branch-or-pr>.md`) rather than clobbering.
+
+Use the Write tool, not a shell heredoc. After writing, print one line: `Report saved: <absolute path>`.
+
+The on-disk file is the EXACT Phase 3 output (same headline, ranked findings, Clean section, Stats) - do not summarize or trim it for the file. The interactive shortening rules in Phase 4 apply ONLY to posted PR comments, never to this file.
+
 ## Phase 4 - Interactive posting (pending review, NEVER submit)
 
 Do NOT change the review output (Phase 3) - Sasha likes the full ranked format. The interactivity is only at the posting stage.
@@ -662,6 +679,7 @@ If the worktree is busy (subagent still holds an fd), use `git worktree remove -
 - **Diff > 2000 lines** - warn the user and offer a split. The skill will still run but fidelity drops.
 - **[INTENT-VERIFY] is never dropped at synthesis.**
 - **Contested Criticals are never dropped at synthesis.**
+- **Always save the Phase 3 report to `super-review.md` (Phase 3.5)** before posting - task folder if known, else repo root. Write it verbatim, no prompt, print the path.
 - **Senior architect voice in output:** direct, no hedging ("might", "could potentially"), no preambles ("Great PR, just a few notes"), no emoji, no exclamation marks.
 - **Do not post to GitHub without an explicit y/yes.**
 - **Verdict strictly by the rules.** No sycophantic "looks great" if there is a confirmed Critical.
@@ -712,6 +730,7 @@ If the worktree is busy (subagent still holds an fd), use `git worktree remove -
 6. Wait for all 6 + Codex (background notifications). Dedup intra-Claude (4 generic agents give a good convergence signal).
 7. **Phase 2**: parallel calls - Claude reviews Codex findings, Codex reviews Claude findings.
 8. **Phase 3**: synthesize per the decision tree → final markdown with detailed findings.
+8.5. **Phase 3.5**: write the same markdown verbatim to `super-review.md` (task folder if known, else repo root). Print `Report saved: <path>`.
 9. **Phase 4**: ask "which findings to leave as pending PR comments?" (by their number in the report).
 10. For the selected ones - inline pending comments ("Variant A": takeaway in bold on the first line, no `[HIGH]` tags) via `gh api -X POST .../pulls/247/reviews` WITHOUT `event`; never submit (Sasha clicks Submit/Discard).
 11. **Phase 5**: `git worktree remove /tmp/pr247_worktree`.
