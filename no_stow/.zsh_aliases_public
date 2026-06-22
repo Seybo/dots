@@ -5,14 +5,11 @@ alias brew_update_all='brew update && brew upgrade && brew upgrade --cask && bre
 alias re_source='source ~/.zshrc'
 alias re_fzf='source $STOW_DIR/themes/active/fzf.zsh'
 alias re_tmux='tmux source-file $STOW_DIR/.tmux.conf'
-pwd() {
-  local current_path copy_answer
+pwdc() {
+  local current_path
   current_path="$(builtin pwd "$@")" || return
   print -r -- "$current_path"
-  read "copy_answer?Copy to clipboard? [Y/n] "
-  if [[ -z "$copy_answer" || "$copy_answer" == [Yy]* ]]; then
-    print -rn -- "$current_path" | pbcopy
-  fi
+  print -rn -- "$current_path" | pbcopy
 }
 theme() {
   ruby ~/.dots/themes/theme_switcher.rb "$@"
