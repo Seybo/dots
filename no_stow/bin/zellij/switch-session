@@ -32,6 +32,28 @@ tab_state_file() {
   printf '%s/%s\n' "$TAB_STATE_DIR" "${session//\//_}"
 }
 
+normalize_session_name() {
+  local session="$1"
+
+  case "$session" in
+    system)
+      printf '%s\n' "shaka1"
+      ;;
+    gtm)
+      printf '%s\n' "shaka2"
+      ;;
+    *)
+      printf '%s\n' "$session"
+      ;;
+  esac
+}
+
+active_session_exists() {
+  local session="$1"
+
+  zellij list-sessions --short --no-formatting 2>/dev/null | grep -Fx -- "$session" >/dev/null
+}
+
 remember_current_tab() {
   local current="$1"
   local position
@@ -90,9 +112,14 @@ case "$cmd" in
       exit 1
     fi
 
-    last="$(<"$STATE_FILE")"
+    last="$(normalize_session_name "$(<"$STATE_FILE")")"
     if [[ -z "$last" ]]; then
       echo "No last session recorded" >&2
+      exit 1
+    fi
+
+    if ! active_session_exists "$last"; then
+      echo "Last session is not active: $last" >&2
       exit 1
     fi
 
