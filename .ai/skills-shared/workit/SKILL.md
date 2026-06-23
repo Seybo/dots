@@ -48,14 +48,15 @@ The `<project>` argument resolves to two locations:
 
 - **Task folder root:** `/Volumes/dev/_tasks/<project>/` — where the task definition (`task.md`) lives.
 - **Code working directory:**
+  - for GTM: one of `/Volumes/dev/shaka/gtm/1st/`, `/Volumes/dev/shaka/gtm/2nd/`, or `/Volumes/dev/shaka/gtm/3rd/`
   - for personal projects whose name starts with `my_`: `/Volumes/dev/mydev/<project>/`
   - for all other projects: `/Volumes/dev/shaka/<project>/`
 
-The project name must match a first-level folder name under `/Volumes/dev/_tasks/`. For normal Shaka projects, the matching folder under `/Volumes/dev/shaka/` is the default working directory. For personal `my_` projects, the matching folder under `/Volumes/dev/mydev/` is the default working directory.
+The project name must match a first-level folder name under `/Volumes/dev/_tasks/`. For normal Shaka projects, the matching folder under `/Volumes/dev/shaka/` is the default working directory. For personal `my_` projects, the matching folder under `/Volumes/dev/mydev/` is the default working directory. GTM is special because it has three equal full-clone checkouts under `/Volumes/dev/shaka/gtm/`.
 
 Examples:
 
-- project `gtm` → tasks `/Volumes/dev/_tasks/gtm/`, code `/Volumes/dev/shaka/gtm/`
+- project `gtm` → tasks `/Volumes/dev/_tasks/gtm/`, code is one selected checkout under `/Volumes/dev/shaka/gtm/{1st,2nd,3rd}/`
 - project `my_finance` → tasks `/Volumes/dev/_tasks/my_finance/`, code `/Volumes/dev/mydev/my_finance/`
 
 ## Instructions
@@ -79,9 +80,13 @@ Examples:
    - do not create project folders automatically
    - also note the default code working directory:
      ```text
-     /Volumes/dev/mydev/<project>/     # when <project> starts with my_
-     /Volumes/dev/shaka/<project>/     # otherwise
+     /Volumes/dev/shaka/gtm/<checkout>/ # when <project> is gtm; checkout is 1st, 2nd, or 3rd
+     /Volumes/dev/mydev/<project>/      # when <project> starts with my_
+     /Volumes/dev/shaka/<project>/      # otherwise
      ```
+   - For GTM, choose the checkout this way:
+     - if the agent's current working directory is inside `/Volumes/dev/shaka/gtm/1st/`, `/Volumes/dev/shaka/gtm/2nd/`, or `/Volumes/dev/shaka/gtm/3rd/`, use that checkout
+     - otherwise ask the user which checkout to use: `1st`, `2nd`, or `3rd`
      This is where the task's work should happen unless `task.md` names a different directory. Do not fail if it does not exist — just do not assume it.
 
 3. **If no task identifier was provided, offer recent tasks:**
@@ -136,7 +141,7 @@ Examples:
    - after completing each numbered step/slice from `steps.md`, stop and report the changes made, checks run, open questions, and any deviations or findings; ask the user to confirm before starting the next step
    - do not continue into the next `steps.md` step without explicit user confirmation, even if the next step seems obvious or mechanical
    - if the user has questions, requests changes, or wants to adjust scope at a step boundary, handle that before proceeding
-   - if `task.md` does not name a working directory, default to `/Volumes/dev/mydev/<project>/` when `<project>` starts with `my_`; otherwise default to `/Volumes/dev/shaka/<project>/`
+   - if `task.md` does not name a working directory, default to the selected `/Volumes/dev/shaka/gtm/<checkout>/` when `<project>` is `gtm`; default to `/Volumes/dev/mydev/<project>/` when `<project>` starts with `my_`; otherwise default to `/Volumes/dev/shaka/<project>/`
    - only `task.md` and `steps.md` define the work — do not read other files in the task folder (e.g. `next.md`, notes, drafts) as instructions unless `task.md` explicitly references them
    - if the body is just `# Context` (or otherwise empty of instructions), ask the user what they want done before proceeding
 

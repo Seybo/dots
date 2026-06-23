@@ -147,22 +147,31 @@ Personal project names should use the `my_` prefix and underscores, matching the
 
 8. **Set up the development branch (GTM project, Shortcut mode only):**
    - This step runs only when `<project>` is `gtm` AND the mode is Shortcut. Skip for other projects or Manual mode.
+   - GTM has multiple full-clone checkouts under:
+     ```text
+     /Volumes/dev/shaka/gtm/1st/
+     /Volumes/dev/shaka/gtm/2nd/
+     /Volumes/dev/shaka/gtm/3rd/
+     ```
+   - Choose the checkout this way:
+     - if the agent's current working directory is inside one of those three checkouts, use that checkout
+     - otherwise stop and ask the user which checkout to use: `1st`, `2nd`, or `3rd`
    - Generate the branch name manually:
      ```text
      mikhail/sc-{story_id}/{slug}
      ```
      - Always use `mikhail` as the branch prefix, regardless of story owner.
      - Do NOT call `mcp__shortcut__stories-get-branch-name` — the MCP returns incorrect names (triple dashes, truncation).
-   - Verify the branch does not already exist:
+   - Verify the branch does not already exist in the selected checkout:
      ```bash
-     git -C /Volumes/dev/shaka/gtm rev-parse --verify --quiet <branch-name>
+     git -C /Volumes/dev/shaka/gtm/<checkout> rev-parse --verify --quiet <branch-name>
      ```
    - If it exists (exit 0), stop and ask the user how to proceed.
    - Otherwise (exit 1), create and check out the branch with exactly this form — `-C` flag required, no `cd`, no bare `git`:
      ```bash
-     git -C /Volumes/dev/shaka/gtm checkout -b <branch-name>
+     git -C /Volumes/dev/shaka/gtm/<checkout> checkout -b <branch-name>
      ```
-   - Report the branch name alongside the created paths from step 7.
+   - Report the selected checkout and branch name alongside the created paths from step 7.
 
 ## Task markdown path mode
 
