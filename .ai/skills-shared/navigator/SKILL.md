@@ -31,7 +31,7 @@ For update mode:
 1. Run the update script from this skill directory:
 
    ```bash
-   cd /Users/inseybo/.dots/.agents/skills/navigator && ruby scripts/update_inventory.rb
+   cd /Users/inseybo/.dots/.ai/skills-shared/navigator && ruby scripts/update_inventory.rb
    ```
 
 2. Read `references/uncategorized.generated.md`.
