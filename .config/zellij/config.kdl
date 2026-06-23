@@ -10,7 +10,7 @@ keybinds clear-defaults=true {
         bind "" { MoveFocus "Up"; } // Cmd K
         bind "" { MoveFocus "Right"; } // Cmd L
         bind "󰎤" {
-            Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "to" "system" {
+            Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "to" "shaka1" {
                 floating true;
                 close_on_exit true;
                 borderless true;
@@ -20,9 +20,9 @@ keybinds clear-defaults=true {
                 height 1;
                 name "switch-session";
             }
-        } // Cmd 1
+        } // Cmd 1 => switch to session 1
         bind "󰎧" {
-            Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "to" "gtm" {
+            Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "to" "shaka2" {
                 floating true;
                 close_on_exit true;
                 borderless true;
@@ -32,7 +32,31 @@ keybinds clear-defaults=true {
                 height 1;
                 name "switch-session";
             }
-        } // Cmd 2
+        } // Cmd 2 => switch to session 2
+        bind "󰎪" {
+            Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "to" "shaka3" {
+                floating true;
+                close_on_exit true;
+                borderless true;
+                x "98%";
+                y "1%";
+                width 1;
+                height 1;
+                name "switch-session";
+            }
+        } // Cmd 3 => switch to session 3
+        bind "󰎮" {
+            Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "to" "base" {
+                floating true;
+                close_on_exit true;
+                borderless true;
+                x "98%";
+                y "1%";
+                width 1;
+                height 1;
+                name "switch-session";
+            }
+        } // Cmd 7 => switch to session 7
         bind "󰎠" {
             Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "last" {
                 floating true;
@@ -44,7 +68,19 @@ keybinds clear-defaults=true {
                 height 1;
                 name "switch-session";
             }
-        } // Cmd 0
+        } // Cmd 0 => switch to last session
+        bind "󰎰" {
+            Run "/Users/inseybo/.dots/no_stow/bin/zellij/switch-session" "to" "myf" {
+                floating true;
+                close_on_exit true;
+                borderless true;
+                x "98%";
+                y "1%";
+                width 1;
+                height 1;
+                name "switch-session";
+            }
+        } // Cmd 9 => switch to session 9
         bind "Super u" { GoToPreviousTab; } // Cmd U
         bind "Super m" { GoToNextTab; } // Cmd M
 

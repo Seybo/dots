@@ -35,16 +35,24 @@ RUBY
 ```
 
 If the command needs project boot, use the repo's known boot command when obvious from context.
-For the GTM repo, use:
+For the GTM repo, use the current checkout when already inside one of these repo roots:
+
+```text
+/Volumes/dev/shaka/gtm/1st/
+/Volumes/dev/shaka/gtm/2nd/
+/Volumes/dev/shaka/gtm/3rd/
+```
+
+If the user asks for GTM Pry while outside those checkouts, ask which checkout to use. Then boot GTM with:
 
 ```ruby
 require './config/boot'
 ```
 
-Example for GTM:
+Example for GTM from the first checkout:
 
 ```bash
-cd /Volumes/dev/shaka/gtm && set -a && source hermes-skills/.env && set +a && pry <<'RUBY'
+cd /Volumes/dev/shaka/gtm/1st && set -a && source hermes-skills/.env && set +a && pry <<'RUBY'
 require './config/boot'
 response = Instantly::Leads::Api.new.get_campaign(campaign_id: '...', api_key: ENV.fetch('INSTANTLY_API_KEY'))
 puts({ id: response['id'], status: response['status'], keys: response.keys.sort }.inspect)
