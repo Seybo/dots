@@ -1,6 +1,9 @@
 set hidden
 map D delete
 map <enter> open
+map Y copy-path
+
+cmd copy-path $printf '%s\n' "$fx" | pbcopy
 
 cmd open ${{
     mime="$(file --mime-type -Lb "$f")"
