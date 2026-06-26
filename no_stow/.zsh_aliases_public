@@ -48,6 +48,8 @@ alias zscp='zellij --new-session-with-layout peter -s peter'
 alias zsap='zellij attach peter'
 alias zscr='zellij --new-session-with-layout remote_dev -s remote_dev'
 alias zsar='zellij attach remote_dev'
+alias zsci='zellij --new-session-with-layout insta360 -s insta360'
+alias zsai='zellij attach insta360'
 # Force Zellij top bar to repaint when it stays stale after theme switching.
 retheme() {
   "$STOW_DIR/no_stow/bin/zellij/retheme"
