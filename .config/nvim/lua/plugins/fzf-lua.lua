@@ -66,7 +66,7 @@ return {
     map_with_cursor_restore('n', '<leader>fhf', function() fzf.oldfiles({ cwd_only = true }) end, nil, '[Fzf] Files History (within repo)')
     map_with_cursor_restore('n', '<leader>fhc', fzf.command_history, nil, '[Fzf] Commands History')
     map_with_cursor_restore('n', '<leader>fhs', fzf.search_history, nil, '[Fzf] Search History')
-    map_with_cursor_restore('n', '<leader>fk', fzf.keymaps, nil, '[Fzf] Search keymaps')
+    map_with_cursor_restore('n', '<leader><leader>', fzf.keymaps, nil, '[Fzf] Search keymaps')
     map_with_cursor_restore('n', '<leader>fv', function() fzf.files({ cwd = vim.fn.stdpath('config') }) end, nil, '[Fzf] Browse vim config')
     map_with_cursor_restore('n', '<leader>gm', fzf.live_grep, nil, '[Fzf] Grep manual')
     map_with_cursor_restore('v', '<leader>gs', fzf.grep_visual, nil, '[Fzf] Grep selection')
