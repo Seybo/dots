@@ -134,6 +134,8 @@ For exactly one selected comment at a time:
 
 2. **Give your opinion:**
    - Say whether the comment is valid, partially valid, not valid, or needs clarification.
+   - Evaluate whether the scenario described by the reviewer is actually possible/reachable in the current code path before proposing a fix.
+   - If the scenario is impossible or unreachable, explain why and recommend skipping or replying instead of changing code.
    - Explain briefly using the current code context.
    - If uncertain, say what file/code you need to inspect before deciding, then inspect it.
 
