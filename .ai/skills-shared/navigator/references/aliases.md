@@ -14,6 +14,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 - `create task`, `task folder`, `task.md`, `shortcut story from task` → `/skill:taskit`
 - `draft task`, `save this for later`, `capture context` → `/skill:draftit`
 - `start task`, `work on task` → `/skill:workit`
+- `summarize task`, `task summary`, `PR text from task`, `PR description from task` → `/skill:sumit`
 
 ## Local dev environment / dotfiles
 
@@ -45,7 +46,9 @@ Use this file to map vague user wording to likely capabilities. The exact source
 
 ## Planning / communication
 
-- `grill me`, `stress-test`, `challenge this plan` → `/skill:grillme`
+- `grill me`, `stress-test`, `challenge this plan`, `grilling` → `/skill:grilling` or `/skill:grillme`
+- `grill with docs`, `grill and document`, `grillme-docs` → `/skill:grillme-docs`
+- `domain model`, `ubiquitous language`, `glossary`, `ADR`, `architecture decision` → `/skill:domain-modeling`
 - `caveman`, `be brief`, `less tokens`, `compressed` → `/skill:caveman`
 
 ## Abbreviations
