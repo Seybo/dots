@@ -64,6 +64,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 
 - `00ex` — explain referenced text in simple, precise terms.
 - `00gf` — give feedback on referenced idea or text.
+- `00rar` — read the other agent's latest task-folder review file (`claude_review*.md` in Pi, `pi_review*.md` in Claude).
 - `00rvu` — review unstaged changes only; do not run specs or RuboCop.
 
 ## Pi system docs

@@ -47,6 +47,7 @@ No prompt template commands found in scanned locations.
 |---|---|---|
 | `00ex` | `~/.pi/agent/AGENTS.md` | Explain the referenced text using simple, precise technical terms. |
 | `00gf` | `~/.pi/agent/AGENTS.md` | Give feedback on the referenced idea or text. |
+| `00rar` | `~/.pi/agent/AGENTS.md` | Read the new/other agent's latest review file in the task folder. |
 | `00rvu` | `~/.pi/agent/AGENTS.md` | Review unstaged changes only. |
 
 ## Notes

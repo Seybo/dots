@@ -11,5 +11,8 @@ When the meaning is clear, act on them without asking for clarification.
 - `00gf` — Give feedback on the referenced idea or text.
   Say whether you agree, disagree, or partially agree, and explain why.
 
+- `00rar` — Read the new/other agent's latest review file in the task folder.
+  Locate the current task folder if needed. In Pi, prefer `claude_review*.md`; in Claude, prefer `pi_review*.md`. Use the newest matching review file unless the user names one, and summarize actionable findings before changing code.
+
 - `00rvu` — Review unstaged changes only.
   Do not run specs or RuboCop. Only review the logic, looking for bugs, unhandled edge cases, and similar correctness issues.
