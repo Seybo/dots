@@ -55,4 +55,5 @@ Use this file to map vague user wording to likely capabilities. The exact source
 
 - `00ex` → explain referenced text.
 - `00gf` → give feedback on referenced text or idea.
+- `00rar` → read the other agent's latest task-folder review file (`claude_review*.md` in Pi, `pi_review*.md` in Claude).
 - `00rvu` → review unstaged changes only; no specs or RuboCop.
