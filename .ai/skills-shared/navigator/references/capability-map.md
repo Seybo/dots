@@ -21,6 +21,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `/skill:taskit` — create task folders under `/Volumes/dev/_tasks`, or create a Shortcut story from `task.md`.
 - `/skill:draftit` — save selected conversation context into a draft task folder.
 - `/skill:workit` — start work from an existing task folder.
+- `/skill:sumit` — summarize a task file into PR-description text with reviewer gotchas and copy it to the clipboard.
 
 ## Local dev environment / dotfiles
 
@@ -53,7 +54,10 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 
 ## Planning / communication modes
 
-- `/skill:grillme` — stress-test a plan or design with relentless questions.
+- `/skill:grilling` — stress-test a plan or design with relentless one-question-at-a-time interviewing.
+- `/skill:grillme` — legacy/direct plan-grilling command.
+- `/skill:grillme-docs` — plan-grilling variant that also maintains domain docs.
+- `/skill:domain-modeling` — sharpen domain terminology, ubiquitous language, glossary entries, and ADRs.
 - `/skill:caveman` — compressed communication mode for lower token usage.
 
 ## Abbreviations
