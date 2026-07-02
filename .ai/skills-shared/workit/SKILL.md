@@ -3,6 +3,7 @@ name: workit
 description: >-
   Start work on an existing task folder under /Volumes/dev/_tasks.
   Reads the task's task.md and proceeds with the work it describes.
+  Can infer the project and task/story ID from the current git branch.
   Command-only skill. Invoke only via /workit.
 ---
 
@@ -15,11 +16,13 @@ This is a command-only skill.
 Use only:
 
 ```text
+/workit
 /workit <project> [task_id]
 ```
 
-Treat the first token after `/workit` as the project name.
-Treat the optional second token as the task identifier — must be **digits only**, matching either:
+With no arguments, infer both the project and Shortcut story ID from the current git checkout and branch.
+With only `<project>`, infer the Shortcut story ID from the current branch when possible; otherwise list recent tasks as before.
+With `<project> <task_id>`, treat the first token after `/workit` as the project name and the second token as the task identifier — must be **digits only**, matching either:
 
 - a **Shortcut story ID** (e.g. `147831`)
 - a **timestamp** prefix from a manually-created folder (e.g. `202605051437`)
@@ -29,6 +32,7 @@ The identifier is matched as a prefix of the task folder name. Passing `147831` 
 Examples:
 
 ```text
+/workit
 /workit foo
 /workit foo 147831
 /workit bar 202605051437
@@ -59,13 +63,32 @@ Examples:
 - project `gtm` → tasks `/Volumes/dev/_tasks/gtm/`, code is one selected checkout under `/Volumes/dev/shaka/gtm/{1st,2nd,3rd}/`
 - project `my_finance` → tasks `/Volumes/dev/_tasks/my_finance/`, code `/Volumes/dev/mydev/my_finance/`
 
+## Branch inference
+
+When `/workit` is invoked with no arguments, infer the project and task/story ID from the agent's current working directory and current git branch. When `/workit <project>` is invoked, infer only the task/story ID from the current git branch when possible.
+
+- Infer the project from the current working directory:
+  - inside `/Volumes/dev/shaka/gtm/1st/`, `/Volumes/dev/shaka/gtm/2nd/`, or `/Volumes/dev/shaka/gtm/3rd/` → project `gtm`; also remember that checkout as the selected GTM checkout
+  - inside `/Volumes/dev/mydev/<project>/` → that `<project>`
+  - inside `/Volumes/dev/shaka/<project>/` → that `<project>`
+- Infer the Shortcut story ID from the current branch by running `git -C <code-working-directory> branch --show-current` and extracting digits from the first segment matching `sc-<digits>`.
+  - Match branch names with `(?:^|/)sc-(\d+)(?:/|$)`.
+  - Example: cwd `/Volumes/dev/shaka/gtm/2nd/` plus branch `mikhail/sc-33498/remove-company-data-from-prospects` → project `gtm`, selected checkout `2nd`, task/story ID `33498`.
+- If `/workit` has no arguments and the project or story ID cannot be inferred, ask the user to pass it explicitly.
+- If `/workit <project>` cannot infer a story ID, keep the normal recent-task picker behavior.
+- The inferred story ID is used as the same prefix-matched task identifier as an explicit `<task_id>`.
+
 ## Instructions
 
 1. **Parse command arguments:**
-   - extract `<project>` as the first token after `/workit`
-   - extract optional `<task_id>` as the second token
+   - if there are no tokens after `/workit`, infer `<project>` and `<task_id>` from the current checkout and branch
+   - if there is exactly one token after `/workit`, treat it as `<project>` and try to infer `<task_id>` from the current branch; if no story ID can be inferred, leave `<task_id>` missing
+   - if there are two tokens after `/workit`:
+     - extract `<project>` as the first token after `/workit`
+     - extract `<task_id>` as the second token
    - if `<project>` is missing, ask the user to use:
      ```text
+     /workit
      /workit <project> [task_id]
      ```
    - if `<task_id>` is present, validate that it matches `^\d+$` (digits only); otherwise ask the user to pass a story ID or a timestamp
@@ -85,7 +108,8 @@ Examples:
      /Volumes/dev/shaka/<project>/      # otherwise
      ```
    - For GTM, choose the checkout this way:
-     - if the agent's current working directory is inside `/Volumes/dev/shaka/gtm/1st/`, `/Volumes/dev/shaka/gtm/2nd/`, or `/Volumes/dev/shaka/gtm/3rd/`, use that checkout
+     - if branch inference already selected a GTM checkout, use that checkout
+     - else if the agent's current working directory is inside `/Volumes/dev/shaka/gtm/1st/`, `/Volumes/dev/shaka/gtm/2nd/`, or `/Volumes/dev/shaka/gtm/3rd/`, use that checkout
      - otherwise ask the user which checkout to use: `1st`, `2nd`, or `3rd`
      This is where the task's work should happen unless `task.md` names a different directory. Do not fail if it does not exist — just do not assume it.
 

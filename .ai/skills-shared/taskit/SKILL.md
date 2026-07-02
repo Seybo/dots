@@ -3,7 +3,8 @@ name: taskit
 description: >-
   Create a new task folder and task.md file for a project under /Volumes/dev/_tasks,
   or create a Shortcut story from an existing task.md file.
-  Supports a manual task name, a Shortcut story ID, a task.md path, or a draftNN reference.
+  Supports a manual task name, a Shortcut story ID, a task.md path, a draftNN reference,
+  or inferring the project and Shortcut story ID from the current git branch.
   Command-only skill. Invoke only via /taskit.
 ---
 
@@ -16,14 +17,17 @@ This is a command-only skill.
 Use only:
 
 ```text
+/taskit
+/taskit <project>
 /taskit <project> <task name>
 /taskit <project> <story_id>
 /taskit <project> <path-to-task.md>
 /taskit <project> draftNN
 ```
 
-Treat the first token after `/taskit` as the project name.
-Treat the rest as either:
+With no arguments, infer both the project and Shortcut story ID from the current git checkout and branch.
+With only `<project>`, infer the Shortcut story ID from the current git branch.
+With `<project>` plus more text, treat the first token after `/taskit` as the project name and treat the rest as either:
 
 - a **Shortcut story ID** if it is a single token of digits only (e.g. `12345`)
 - a **draft reference** if it is a single token matching `^draft\d{2}$`, resolved to `/Volumes/dev/_tasks/<project>/draftNN/task.md`
@@ -33,6 +37,8 @@ Treat the rest as either:
 Examples:
 
 ```text
+/taskit
+/taskit gtm
 /taskit foo Create budget tracking app
 /taskit bar Set up analytics events
 /taskit ppm 147831
@@ -64,23 +70,42 @@ Examples:
 
 Personal project names should use the `my_` prefix and underscores, matching the corresponding code checkout under `/Volumes/dev/mydev/<project>/`. `taskit` still only creates task folders under `/Volumes/dev/_tasks/<project>/`; it does not create project roots or code checkouts.
 
+## Branch inference
+
+When `/taskit` needs to infer the project or story ID, use the agent's current working directory and current git branch:
+
+- Infer the project from the current working directory:
+  - inside `/Volumes/dev/shaka/gtm/1st/`, `/Volumes/dev/shaka/gtm/2nd/`, or `/Volumes/dev/shaka/gtm/3rd/` → project `gtm`; also remember that checkout as the selected GTM checkout
+  - inside `/Volumes/dev/mydev/<project>/` → that `<project>`
+  - inside `/Volumes/dev/shaka/<project>/` → that `<project>`
+- Infer the Shortcut story ID from the current branch by running `git -C <code-working-directory> branch --show-current` and extracting digits from the first segment matching `sc-<digits>`.
+  - Match branch names with `(?:^|/)sc-(\d+)(?:/|$)`.
+  - Example: cwd `/Volumes/dev/shaka/gtm/2nd/` plus branch `mikhail/sc-33498/remove-company-data-from-prospects` → project `gtm`, selected checkout `2nd`, story ID `33498`.
+- If the needed project or story ID cannot be inferred, ask the user to pass it explicitly.
+- An inferred story ID is handled exactly like Shortcut mode.
+
 ## Instructions
 
 1. **Parse command arguments:**
-   - extract `<project>` as the first token after `/taskit`
-   - take all remaining text after the project name and trim leading/trailing whitespace
-   - if the project or the remainder is missing, ask the user to use:
+   - if there are no tokens after `/taskit`, infer `<project>` and `<story_id>` from the current checkout and branch; if successful, use Shortcut mode
+   - if there is exactly one token after `/taskit`, treat it as `<project>` and infer `<story_id>` from the current branch; if successful, use Shortcut mode
+   - if there are two or more tokens after `/taskit`:
+     - extract `<project>` as the first token after `/taskit`
+     - take all remaining text after the project name and trim leading/trailing whitespace
+     - decide the mode in this order:
+       - **Shortcut mode** if the remainder is a single token matching `^\d+$`
+       - **Draft reference mode** if the remainder is a single token matching `^draft\d{2}$`; resolve it to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then handle it exactly like Task markdown path mode
+       - **Task markdown path mode** if the remainder is a single existing path ending in `.md` or `.markdown`
+       - **Manual mode** otherwise
+   - if the project or required inferred story ID is missing, ask the user to use:
      ```text
+     /taskit
+     /taskit <project>
      /taskit <project> <task name>
      /taskit <project> <story_id>
      /taskit <project> <path-to-task.md>
      /taskit <project> draftNN
      ```
-   - decide the mode in this order:
-     - **Shortcut mode** if the remainder is a single token matching `^\d+$`
-     - **Draft reference mode** if the remainder is a single token matching `^draft\d{2}$`; resolve it to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then handle it exactly like Task markdown path mode
-     - **Task markdown path mode** if the remainder is a single existing path ending in `.md` or `.markdown`
-     - **Manual mode** otherwise
 
 2. **Resolve and validate project:**
    - resolve the project root as:
@@ -154,7 +179,8 @@ Personal project names should use the `my_` prefix and underscores, matching the
      /Volumes/dev/shaka/gtm/3rd/
      ```
    - Choose the checkout this way:
-     - if the agent's current working directory is inside one of those three checkouts, use that checkout
+     - if branch inference already selected a GTM checkout, use that checkout
+     - else if the agent's current working directory is inside one of those three checkouts, use that checkout
      - otherwise stop and ask the user which checkout to use: `1st`, `2nd`, or `3rd`
    - Generate the branch name manually:
      ```text
@@ -162,7 +188,10 @@ Personal project names should use the `my_` prefix and underscores, matching the
      ```
      - Always use `mikhail` as the branch prefix, regardless of story owner.
      - Do NOT call `mcp__shortcut__stories-get-branch-name` — the MCP returns incorrect names (triple dashes, truncation).
-   - Verify the branch does not already exist in the selected checkout:
+   - Check the current branch in the selected checkout with `git -C /Volumes/dev/shaka/gtm/<checkout> branch --show-current`.
+     - If the current branch contains `sc-{story_id}` as a path segment, treat branch setup as already done and do not create or switch branches.
+     - If the current branch differs from the generated branch name, report both the current branch and generated branch name.
+   - Otherwise, verify the generated branch does not already exist in the selected checkout:
      ```bash
      git -C /Volumes/dev/shaka/gtm/<checkout> rev-parse --verify --quiet <branch-name>
      ```
