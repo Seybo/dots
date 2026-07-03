@@ -185,6 +185,59 @@ the same thing. Examples:
 Surface these as [HIGH] - they are the kind of bug that survives review by
 single-lens specialists.
 
+SELF-CORROBORATING DIFF - HARD RULE (the oracle moved with the code):
+A diff can be internally consistent and still wrong. When the SAME change edits
+both a behavior AND the thing that would otherwise prove it wrong, that thing
+stops being evidence. Passing specs, a matching comment, a green fixture prove
+NOTHING when they were rewritten in the same diff to agree with the new code.
+Watch for these paired edits and treat the "confirming" side as suspect, not
+as proof:
+- Code changed AND its test/fixture/expected-output/snapshot changed together
+  -> a green suite only proves the test now matches the code, not that either
+  is correct. The specs were moved to bless the behavior.
+- Code changed AND the comment / docstring / doc that describes it changed
+  together -> the comment corroborates the code because the same author wrote
+  both from the same assumption; it is not independent confirmation.
+- A constant / threshold / enum changed AND the assertion checking it changed.
+- A parser/validator NARROWED (fields dropped, a branch removed, a nil
+  hardcoded) AND the sample input it reads edited to no longer contain the
+  dropped data.
+The rule: when behavior and its oracle move in the same direction in one diff,
+you MUST find an oracle OUTSIDE the diff before trusting it. Options, best
+first:
+0. THE TASK / PR DESCRIPTION + AC YOU WERE ALREADY GIVEN. Check this FIRST -
+   it is free and already in your prompt (Step 2 passes it to every reviewer).
+   Does the change contradict a stated design decision, requirement, or
+   acceptance criterion? Silent removal of an AC-required behavior, or code
+   that does the OPPOSITE of what the description says, is a finding on its own
+   - you do not need any external system to confirm it. Also surface it as
+   [INTENT-VERIFY]. Most self-corroborating diffs are caught here, without ever
+   leaving the prompt.
+1. The vendor's real API output / official docs (never a fixture as proof of an
+   external shape - a fixture is an assumption, and a sanitized/redacted sample
+   is NEVER the real shape).
+2. An independent existing caller / consumer that the diff did NOT touch.
+3. The pre-diff version in git history - does the change DELETE data or a code
+   path the rest of the system still relies on?
+If the only thing vouching for a change is something the same change edited,
+flag it:
+  [HIGH][unverified-by-construction] file:line - behavior X and its <test/
+  fixture/comment> were changed together; correctness is unconfirmed because
+  nothing outside this diff vouches for it. Verify <field/value> against
+  <AC item / external source>.
+This is the class that defeats convergence AND a green suite: every automated
+signal comes back green because the check was edited to pass. (Real miss: a
+People Search parser was rewritten to hardcode company identity to nil on the
+premise "the API returns no org id/domain," and the SAME diff edited the
+fixture to strip `organization.id`/`primary_domain` - so specs passed, lint
+passed, comment agreed, and every prospect silently landed unrouted. TWO
+oracles would have caught it: (0) the task said People Search store is "the
+only place campaign_organization_id gets set" and the AC required a G3 counter
+- the diff removed BOTH, contradicting the description already in the prompt;
+(1) the real Apollo API does return those org fields - the sample the author
+trusted was a sanitized probe. The cheap catch was (0), and it needed nothing
+but reading the AC.)
+
 PRECONDITION & SEVERITY DISCIPLINE - HARD RULE:
 For ANY finding that depends on control flow, exception handling, or a state
 machine ("the error is swallowed", "the call is left in state X", "this masks
