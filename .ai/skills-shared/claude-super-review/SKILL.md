@@ -211,8 +211,11 @@ first:
    acceptance criterion? Silent removal of an AC-required behavior, or code
    that does the OPPOSITE of what the description says, is a finding on its own
    - you do not need any external system to confirm it. Also surface it as
-   [INTENT-VERIFY]. Most self-corroborating diffs are caught here, without ever
-   leaving the prompt.
+   [INTENT-VERIFY]. CAVEAT: the AC/description can SHARE the author's false
+   premise and argue FOR the bug (e.g. an AC that says "delete X, it's
+   redundant" when X was load-bearing) - so oracle-0 is necessary, NOT
+   sufficient. When the change touches an external-API shape or deletes code,
+   always also run oracles 1-3.
 1. The vendor's real API output / official docs (never a fixture as proof of an
    external shape - a fixture is an assumption, and a sanitized/redacted sample
    is NEVER the real shape).
@@ -226,17 +229,31 @@ flag it:
   nothing outside this diff vouches for it. Verify <field/value> against
   <AC item / external source>.
 This is the class that defeats convergence AND a green suite: every automated
-signal comes back green because the check was edited to pass. (Real miss: a
-People Search parser was rewritten to hardcode company identity to nil on the
-premise "the API returns no org id/domain," and the SAME diff edited the
-fixture to strip `organization.id`/`primary_domain` - so specs passed, lint
-passed, comment agreed, and every prospect silently landed unrouted. TWO
-oracles would have caught it: (0) the task said People Search store is "the
-only place campaign_organization_id gets set" and the AC required a G3 counter
-- the diff removed BOTH, contradicting the description already in the prompt;
-(1) the real Apollo API does return those org fields - the sample the author
-trusted was a sanitized probe. The cheap catch was (0), and it needed nothing
-but reading the AC.)
+signal comes back green because the check was edited to pass. Typical shape: a
+parser is narrowed on a premise about the payload, and the SAME diff rewrites
+the fixture to match the premise - so specs, lint, and comment all agree while
+production breaks on the real payload.
+
+IN-CODE TELLS the premise is unverified (spot these, then verify via oracle 1 -
+the vendor output, NOT the fixture):
+- Multi-fallback access on a provider payload for ONE value
+  (resp['a'] || resp['b'] || resp['c']) = the author doesn't know the real
+  field. Confirm the field EXISTS in vendor output before trusting any read of
+  it; a passing fixture only proves the fixture was written to match.
+- A fallback sourced from somewhere OTHER than that response (a second lookup, a
+  source table) = the code admitting the payload is too thin to rely on.
+
+DELETED CODE IS EVIDENCE - HARD RULE:
+When a diff DELETES a file/service/branch citing "redundant / superseded /
+dead", read the deleted code's OWN comments/docstring FIRST and test the removal
+rationale against what it says it did - especially whether it ran at a DIFFERENT
+pipeline stage or on DIFFERENT data than the thing claimed to subsume it (same
+algorithm != same effect). Reviewing a deletion ONLY for dangling references
+(callers/requires) misses this. The removal rationale - even when it lives in
+the AC/PR description - is the CLAIM UNDER TEST, not an oracle. Watch for a
+deletion whose own docstring describes a purpose the surviving code does NOT
+cover: after the delete every remaining file agrees, because the one file that
+dissented is gone.
 
 PRECONDITION & SEVERITY DISCIPLINE - HARD RULE:
 For ANY finding that depends on control flow, exception handling, or a state
@@ -802,3 +819,6 @@ Currently known gaps (encoded in HARD RULES BLOCK):
 - Diff line vs file line - solved by the LOCATION CITATIONS block + worktree.
 - Block-list regex with holes (refresh_token / bearer / private_key not covered) - solved by the Sensitivity-of-redaction analysis in the Security subagent prompt.
 - Severity inflation / overstated exception-flow claims (a compound-edge tagged HIGH + "lost" without verifying the precondition or language semantics) - solved by the PRECONDITION & SEVERITY DISCIPLINE rule + the "convergence is not verification" note in synthesis.
+- Self-corroborating diff (behavior AND its test/fixture/comment edited together, so a green suite proves only that the check was moved to match) - solved by the SELF-CORROBORATING DIFF block. Oracle-0 (task/AC) catches many, but the AC can share the false premise and argue FOR the bug, so it is necessary not sufficient.
+- False external-API-shape premise every in-repo artifact shares (fixture, spec, comment, AC) - solved by the IN-CODE TELLS note: multi-fallback payload access (a || b || c for one value) flags an unconfirmed shape; verify the field in vendor output, never trust the fixture as the shape.
+- Unsafe deletion justified by a claim the deleted code's own docstring refutes (removed as "redundant" though it ran at a different stage / on different data) - solved by the DELETED CODE IS EVIDENCE rule: check rationale-vs-docstring, not only dangling references.
