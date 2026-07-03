@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: misc-helper <helper>
+
+Helpers:
+  davinci-kill   Force-quit DaVinci Resolve app processes if they are stuck.
+USAGE
+}
+
+helper="${1:-}"
+
+case "$helper" in
+  davinci-kill)
+    readonly resolve_app_path="/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/MacOS/Resolve"
+    readonly ioxpc_app_path="/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/XPCServices/IOXPC.xpc/Contents/MacOS/IOXPC"
+
+    collect_pids() {
+      pgrep -f "^(${resolve_app_path}|${ioxpc_app_path})([[:space:]]|$)" || true
+    }
+
+    print_processes() {
+      local pid
+      for pid in "$@"; do
+        ps -p "$pid" -o pid= -o command= || true
+      done
+    }
+
+    pids=()
+    while IFS= read -r pid; do
+      [[ -n "$pid" ]] && pids+=("$pid")
+    done < <(collect_pids)
+
+    if (( ${#pids[@]} == 0 )); then
+      echo "No DaVinci Resolve processes found."
+      exit 0
+    fi
+
+    echo "Found processes:"
+    print_processes "${pids[@]}"
+
+    # Try graceful termination first.
+    kill "${pids[@]}" 2>/dev/null || true
+    sleep 2
+
+    survivor_pids=()
+    while IFS= read -r pid; do
+      [[ -n "$pid" ]] && survivor_pids+=("$pid")
+    done < <(collect_pids)
+
+    if (( ${#survivor_pids[@]} > 0 )); then
+      echo "Still running after SIGTERM; force-killing:"
+      print_processes "${survivor_pids[@]}"
+      kill -9 "${survivor_pids[@]}" 2>/dev/null || true
+      sleep 1
+    fi
+
+    remaining_pids=()
+    while IFS= read -r pid; do
+      [[ -n "$pid" ]] && remaining_pids+=("$pid")
+    done < <(collect_pids)
+
+    if (( ${#remaining_pids[@]} > 0 )); then
+      echo "Some matching processes remain:"
+      print_processes "${remaining_pids[@]}"
+      exit 1
+    fi
+
+    echo "No matching DaVinci Resolve processes remain."
+    ;;
+  ""|-h|--help|help)
+    usage
+    ;;
+  *)
+    echo "Unknown misc helper: $helper" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
