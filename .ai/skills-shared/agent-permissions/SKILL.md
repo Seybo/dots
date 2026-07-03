@@ -41,10 +41,15 @@ Memoize the scope decision before editing:
 4. Prefer narrow, read-only command shapes.
 5. Avoid broad executor allow rules unless explicitly approved (`python*`, `pytest*`, `xargs*`, `sh -c*`, arbitrary `bash(*)`).
 6. Preserve existing `deny` / `ask` safety rules.
-7. Edit JSON carefully.
-8. Validate JSON with `python3 -m json.tool <file> >/dev/null`.
-9. QA with the exact command shape that prompted, if safe.
-10. If a new gotcha is discovered, append it to `/Users/inseybo/.dots/refs/dev-env/agent-permissions.md`.
+7. On every update, perform a redundancy check before and after editing:
+   - Remove exact duplicate rules in the edited files.
+   - Do not add a repo-local rule that is already covered by a global rule unless the local rule intentionally narrows or documents repo-specific behavior.
+   - Do not add a narrower rule when an existing same-scope broader rule already safely covers the command shape.
+   - Keep intentional overlap when `ask` / `deny` rules override broad `allow` rules for safety.
+8. Edit JSON carefully.
+9. Validate JSON with `python3 -m json.tool <file> >/dev/null`.
+10. QA with the exact command shape that prompted, if safe.
+11. If a new gotcha is discovered, append it to `/Users/inseybo/.dots/refs/dev-env/agent-permissions.md`.
 
 ## Claude Code-specific reminder
 
