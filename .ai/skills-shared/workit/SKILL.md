@@ -152,6 +152,8 @@ When `/workit` is invoked with no arguments, infer the project and task/story ID
    - after creating `steps.md`, or after making substantive updates to an existing `steps.md`, stop and ask the user to review/confirm the plan before making production code/docs changes
    - write `steps.md` using simple, precise technical language
    - structure `steps.md` as gradual, reviewable implementation slices; each step should leave the repo in a working state
+   - when the task has testable behavior, use TDD where it makes sense: write or update failing specs for each implementation slice before changing production code, then implement until they pass
+   - focus specs on edge cases, boundaries, regressions, and acceptance criteria rather than only happy paths
    - start with the smallest deterministic/local behavior and slowly add complexity, edge cases, persistence, integration, and docs
    - preserve existing logic/behavior as much as possible; do not add new features, new policy, theoretical fields, or imaginary scenario handling beyond the task scope
    - when adding schema, commands, config, APIs, artifacts, or persisted fields, include only what is grounded in `task.md`, current docs, or existing implementation behavior; do not add speculative/provenance/convenience fields unless the task explicitly asks for them or existing runtime behavior requires them

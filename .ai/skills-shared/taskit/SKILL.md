@@ -318,5 +318,6 @@ Do not update `task.md` contents in this mode unless the user explicitly asks fo
 - Do not create project folders automatically; only create task folders inside an existing project folder
 - Do not add extra files
 - Do not add extra sections to `task.md`
+- For implementation-oriented tasks, later planning should use TDD where it makes sense, with specs focused on edge cases, boundaries, regressions, and acceptance criteria rather than only happy paths
 - Do not auto-use this skill without the explicit `/taskit` command
 - Step 8 (branch setup) is GTM-specific and Shortcut-mode-only. For Manual mode in GTM, or any non-GTM project, do not touch git.

@@ -75,9 +75,19 @@ The result is intended to be used later with:
 3. **Resolve draft content from the request:**
    - If the request references prior conversation context, such as `the above plan`, `that plan`, `the previous answer`, or `the implementation plan`, use the relevant prior assistant/user content from the conversation.
    - If the request contains literal text, use that literal text.
+   - If the request points to a commit, PR, review comment, chat thread, or similar external context, inspect what is needed to understand the task, then rewrite it as a self-contained story. The main task body must make sense without opening the references.
    - Preserve useful markdown structure from the source content.
 
-4. **Ensure draft has Shortcut-ready structure:**
+4. **Shape the story content:**
+   - Lead with the user/product problem in plain English. The first section under `# Context` should explain what is wrong and why it matters without technical implementation details.
+   - Keep code paths, service names, schema details, and suggested implementation approaches out of the main problem statement.
+   - Include expected behavior and acceptance criteria when the context supports them.
+   - If the change affects docs or operator-facing behavior, include a docs update in acceptance criteria.
+   - Do not add an `Implementation notes`, `Technical notes`, `Suggested shape`, or similar implementation-planning section to `task.md`. `/workit` creates `steps.md` later for implementation planning.
+   - Only include implementation details in `task.md` when they are essential domain facts that a future session is likely to miss and that affect the acceptance criteria; otherwise omit them.
+   - Put PRs, commits, review comments, chat links, and similar source material in a final `## References` section. Do not quote long review comments or chat logs in the main body; summarize the decision or context instead.
+
+5. **Ensure draft has Shortcut-ready structure:**
    - The draft should be usable by `/taskit <project> draftNN` later.
    - Every draft must start exactly with this scaffold:
      ```md
@@ -94,7 +104,7 @@ The result is intended to be used later with:
    - If the request includes `Context:`, use the text after `Context:` as the draft content request and do not duplicate `Name:` / `Epic:` under `# Context`.
    - If the source content already includes a `# Story details` section, do not preserve it as the first section; place the source content under `# Context` instead unless doing so would duplicate irrelevant metadata.
 
-5. **Find next draft folder name:**
+6. **Find next draft folder name:**
    - list first-level folders under `/Volumes/dev/_tasks/<project>/` matching exactly `draftNN`, where `NN` is a two-digit positive integer
    - choose the smallest positive integer not already used, starting at `01`
    - format the folder with two digits: `draft01`, `draft02`, ... `draft99`
@@ -104,7 +114,7 @@ The result is intended to be used later with:
      - `draft01` exists → `draft02`
      - `draft01` and `draft03` exist → `draft02`
 
-6. **Create folder and file:**
+7. **Create folder and file:**
    - create directory:
      ```text
      /Volumes/dev/_tasks/<project>/draftNN
@@ -115,11 +125,11 @@ The result is intended to be used later with:
      ```
    - if the target folder or file already exists unexpectedly, stop and ask the user how to proceed
 
-7. **Write `task.md`:**
+8. **Write `task.md`:**
    - write the resolved/scaffolded markdown
    - if content does not end with a newline, add exactly one trailing newline
 
-8. **Return paths clearly:**
+9. **Return paths clearly:**
    - show the draft name, e.g. `draft01`
    - show the full draft folder path
    - show the full `task.md` path
