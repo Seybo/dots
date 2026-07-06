@@ -54,35 +54,21 @@ In manual or Shortcut mode, create a task folder inside the selected project and
 
 In task markdown path mode, including draft references, create a Shortcut story from an existing `task.md`, then rename the existing task folder to match the created Shortcut story using the same folder naming logic as Shortcut-origin tasks.
 
-## Project resolution
+## Project and branch resolution
 
-Projects live under:
+Resolve `<project>`, the Shortcut story ID, the code working directory, and the
+GTM checkout using the shared rules in
+[`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
+Read that file whenever any of these must be inferred. In short:
 
-- `/Volumes/dev/_tasks/`
-
-The project name passed to the command must match a first-level folder name under `/Volumes/dev/_tasks/`.
-
-Examples:
-
-- project `foo` → `/Volumes/dev/_tasks/foo/`
-- project `bar` → `/Volumes/dev/_tasks/bar/`
-- personal project `my_finance` → `/Volumes/dev/_tasks/my_finance/`
-
-Personal project names should use the `my_` prefix and underscores, matching the corresponding code checkout under `/Volumes/dev/mydev/<project>/`. `taskit` still only creates task folders under `/Volumes/dev/_tasks/<project>/`; it does not create project roots or code checkouts.
-
-## Branch inference
-
-When `/taskit` needs to infer the project or story ID, use the agent's current working directory and current git branch:
-
-- Infer the project from the current working directory:
-  - inside `/Volumes/dev/shaka/gtm/1st/`, `/Volumes/dev/shaka/gtm/2nd/`, or `/Volumes/dev/shaka/gtm/3rd/` → project `gtm`; also remember that checkout as the selected GTM checkout
-  - inside `/Volumes/dev/mydev/<project>/` → that `<project>`
-  - inside `/Volumes/dev/shaka/<project>/` → that `<project>`
-- Infer the Shortcut story ID from the current branch by running `git -C <code-working-directory> branch --show-current` and extracting digits from the first segment matching `sc-<digits>`.
-  - Match branch names with `(?:^|/)sc-(\d+)(?:/|$)`.
-  - Example: cwd `/Volumes/dev/shaka/gtm/2nd/` plus branch `mikhail/sc-33498/remove-company-data-from-prospects` → project `gtm`, selected checkout `2nd`, story ID `33498`.
-- If the needed project or story ID cannot be inferred, ask the user to pass it explicitly.
+- `<project>` must match a first-level folder under `/Volumes/dev/_tasks/`.
+- When `<project>` is not given, infer it from the current working directory.
+- Infer the Shortcut story ID from the current branch's `sc-<digits>` segment.
 - An inferred story ID is handled exactly like Shortcut mode.
+- If a needed project or story ID cannot be inferred, ask the user to pass it explicitly.
+
+`taskit` only creates task folders under `/Volumes/dev/_tasks/<project>/`; it never
+creates project roots or code checkouts.
 
 ## Instructions
 
@@ -178,10 +164,8 @@ When `/taskit` needs to infer the project or story ID, use the agent's current w
      /Volumes/dev/shaka/gtm/2nd/
      /Volumes/dev/shaka/gtm/3rd/
      ```
-   - Choose the checkout this way:
-     - if branch inference already selected a GTM checkout, use that checkout
-     - else if the agent's current working directory is inside one of those three checkouts, use that checkout
-     - otherwise stop and ask the user which checkout to use: `1st`, `2nd`, or `3rd`
+   - Choose the checkout using the "Selecting the GTM checkout" rules in
+     [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
    - Generate the branch name manually:
      ```text
      mikhail/sc-{story_id}/{slug}

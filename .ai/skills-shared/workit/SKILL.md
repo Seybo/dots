@@ -46,37 +46,24 @@ Locate an existing task folder under the selected project, read its `task.md`, c
 
 Companion to `/taskit` (which creates the folder). `/workit` consumes folders that `/taskit` produced.
 
-## Project resolution
+## Project and branch resolution
 
-The `<project>` argument resolves to two locations:
+Resolve `<project>`, the task/story ID, the code working directory, and the GTM
+checkout using the shared rules in
+[`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
+Read that file whenever any of these must be inferred. `<project>` resolves to two
+locations: the task folder root `/Volumes/dev/_tasks/<project>/` (where `task.md`
+lives) and the code working directory (see the shared doc's mapping). Applied to
+`/workit`:
 
-- **Task folder root:** `/Volumes/dev/_tasks/<project>/` — where the task definition (`task.md`) lives.
-- **Code working directory:**
-  - for GTM: one of `/Volumes/dev/shaka/gtm/1st/`, `/Volumes/dev/shaka/gtm/2nd/`, or `/Volumes/dev/shaka/gtm/3rd/`
-  - for personal projects whose name starts with `my_`: `/Volumes/dev/mydev/<project>/`
-  - for all other projects: `/Volumes/dev/shaka/<project>/`
-
-The project name must match a first-level folder name under `/Volumes/dev/_tasks/`. For normal Shaka projects, the matching folder under `/Volumes/dev/shaka/` is the default working directory. For personal `my_` projects, the matching folder under `/Volumes/dev/mydev/` is the default working directory. GTM is special because it has three equal full-clone checkouts under `/Volumes/dev/shaka/gtm/`.
-
-Examples:
-
-- project `gtm` → tasks `/Volumes/dev/_tasks/gtm/`, code is one selected checkout under `/Volumes/dev/shaka/gtm/{1st,2nd,3rd}/`
-- project `my_finance` → tasks `/Volumes/dev/_tasks/my_finance/`, code `/Volumes/dev/mydev/my_finance/`
-
-## Branch inference
-
-When `/workit` is invoked with no arguments, infer the project and task/story ID from the agent's current working directory and current git branch. When `/workit <project>` is invoked, infer only the task/story ID from the current git branch when possible.
-
-- Infer the project from the current working directory:
-  - inside `/Volumes/dev/shaka/gtm/1st/`, `/Volumes/dev/shaka/gtm/2nd/`, or `/Volumes/dev/shaka/gtm/3rd/` → project `gtm`; also remember that checkout as the selected GTM checkout
-  - inside `/Volumes/dev/mydev/<project>/` → that `<project>`
-  - inside `/Volumes/dev/shaka/<project>/` → that `<project>`
-- Infer the Shortcut story ID from the current branch by running `git -C <code-working-directory> branch --show-current` and extracting digits from the first segment matching `sc-<digits>`.
-  - Match branch names with `(?:^|/)sc-(\d+)(?:/|$)`.
-  - Example: cwd `/Volumes/dev/shaka/gtm/2nd/` plus branch `mikhail/sc-33498/remove-company-data-from-prospects` → project `gtm`, selected checkout `2nd`, task/story ID `33498`.
-- If `/workit` has no arguments and the project or story ID cannot be inferred, ask the user to pass it explicitly.
-- If `/workit <project>` cannot infer a story ID, keep the normal recent-task picker behavior.
-- The inferred story ID is used as the same prefix-matched task identifier as an explicit `<task_id>`.
+- With no arguments, infer both `<project>` and the task/story ID from the current
+  working directory and branch.
+- With `/workit <project>`, infer only the task/story ID from the current branch
+  when possible; if none can be inferred, keep the normal recent-task picker.
+- An inferred story ID is used as the same prefix-matched task identifier as an
+  explicit `<task_id>`.
+- If `/workit` has no arguments and the project or story ID cannot be inferred,
+  ask the user to pass it explicitly.
 
 ## Instructions
 
@@ -107,10 +94,8 @@ When `/workit` is invoked with no arguments, infer the project and task/story ID
      /Volumes/dev/mydev/<project>/      # when <project> starts with my_
      /Volumes/dev/shaka/<project>/      # otherwise
      ```
-   - For GTM, choose the checkout this way:
-     - if branch inference already selected a GTM checkout, use that checkout
-     - else if the agent's current working directory is inside `/Volumes/dev/shaka/gtm/1st/`, `/Volumes/dev/shaka/gtm/2nd/`, or `/Volumes/dev/shaka/gtm/3rd/`, use that checkout
-     - otherwise ask the user which checkout to use: `1st`, `2nd`, or `3rd`
+   - For GTM, choose the checkout using the "Selecting the GTM checkout" rules in
+     [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
      This is where the task's work should happen unless `task.md` names a different directory. Do not fail if it does not exist — just do not assume it.
 
 3. **If no task identifier was provided, offer recent tasks:**

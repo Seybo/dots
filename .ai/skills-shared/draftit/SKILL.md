@@ -3,6 +3,7 @@ name: draftit
 description: >-
   Create the next draftNN folder under /Volumes/dev/_tasks/<project> and write selected
   conversation context/text into task.md for later conversion via /taskit <project> draftNN.
+  Can infer the project from the current checkout when it is not passed.
   Command-only skill. Invoke only via /draftit.
 ---
 
@@ -17,7 +18,13 @@ Use only:
 ```text
 /draftit help
 /draftit <project> <context-reference-or-text>
+/draftit <context-reference-or-text>
 ```
+
+When the first token is the name of an existing project folder under
+`/Volumes/dev/_tasks/`, treat it as `<project>` and the rest as the draft request.
+Otherwise infer `<project>` from the current working directory and treat the whole
+input as the draft request. Drafts have no story ID, so only the project is inferred.
 
 Examples:
 
@@ -26,6 +33,7 @@ Examples:
 /draftit gtm the above plan
 /draftit gtm Name: Add CSV export Epic: 33001 Context: the implementation plan you just wrote
 /draftit foo Create a story for adding CSV export support
+/draftit the above plan   # project inferred from the current checkout
 ```
 
 Do not auto-use this skill from a general drafting request. Wait for the explicit slash command.
@@ -56,9 +64,10 @@ The result is intended to be used later with:
      3. Run /taskit <project> draftNN to create the Shortcut story.
      4. /taskit renames draftNN to <story_id>-<slug> after Shortcut returns the story ID.
      ```
-   - extract `<project>` as the first token after `/draftit`
-   - take all remaining text after the project name as the draft request
-   - if the project or draft request is missing, ask the user to provide both, e.g.:
+   - determine `<project>` and the draft request:
+     - if the first token after `/draftit` matches an existing folder under `/Volumes/dev/_tasks/`, treat it as `<project>` and take all remaining text as the draft request
+     - otherwise infer `<project>` from the current working directory using [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md), and take the whole input after `/draftit` as the draft request
+   - if the project cannot be resolved or inferred, or the draft request is missing, ask the user to provide them, e.g.:
      ```text
      /draftit gtm the above plan
      ```
@@ -140,7 +149,7 @@ The result is intended to be used later with:
 
 ## Important Notes
 
-- The first argument is always the project name
+- The first token is the project name only when it matches an existing project folder; otherwise the project is inferred from the current checkout and the whole input is the draft request
 - Create only; do not modify existing drafts
 - Do not create project folders automatically
 - Do not add extra files

@@ -4,7 +4,8 @@ description: >-
   Summarize an existing task.md into PR-description text with Summary, AC,
   Deployment, and Gotchas sections, then copy it to the clipboard. Include
   implementation/review nuances that help AI reviewer agents avoid false
-  positives and missed issues. Command-only skill. Invoke only via /sumit.
+  positives and missed issues. Can infer the project and story ID from the
+  current checkout and git branch. Command-only skill. Invoke only via /sumit.
 ---
 
 # Sumit
@@ -16,13 +17,24 @@ This is a command-only skill.
 Use only:
 
 ```text
+/sumit
+/sumit <project>
 /sumit <project> <task_id>
 /sumit <project> <path-to-task.md>
 /sumit <project> draftNN
 ```
 
-Treat the first token after `/sumit` as the project name.
-Treat the second argument as one of:
+With no arguments, infer both `<project>` and the story ID from the current
+checkout and branch. With only `<project>`, infer the story ID from the current
+branch. When arguments are given, the first token is `<project>` only if it
+matches an existing folder under `/Volumes/dev/_tasks/`; otherwise infer
+`<project>` from the current working directory and treat the token as the selector.
+
+Resolve `<project>` and the story ID with
+[`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
+An inferred story ID is treated as a task identifier (see below).
+
+Treat the selector as one of:
 
 - a **task identifier** if it is digits only, matched as a prefix of a task folder under `/Volumes/dev/_tasks/<project>/`
 - a **draft reference** if it matches `^draft\d{2}$`, resolved to `/Volumes/dev/_tasks/<project>/draftNN/task.md`
@@ -31,6 +43,8 @@ Treat the second argument as one of:
 Examples:
 
 ```text
+/sumit
+/sumit gtm
 /sumit gtm 33557
 /sumit gtm /Volumes/dev/_tasks/foo/bar.md
 /sumit gtm draft01
@@ -56,23 +70,23 @@ Use the task text as the source of truth. The output is meant to be pasted into 
 
 ## Project resolution
 
-Projects live under:
-
-```text
-/Volumes/dev/_tasks/<project>/
-```
-
-The project name passed to the command must match a first-level folder name under `/Volumes/dev/_tasks/`.
+Resolve `<project>` and the story ID (explicit or inferred) using the shared rules in
+[`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
+`<project>` must match a first-level folder under `/Volumes/dev/_tasks/`.
 
 Do not create project folders, task folders, or files.
 
 ## Instructions
 
 1. **Parse command arguments:**
-   - extract `<project>` as the first token after `/sumit`
-   - extract the remaining text as the task selector
-   - if either is missing, ask the user to use:
+   - if there are no tokens after `/sumit`, infer both `<project>` and the story ID from the current checkout and branch; the inferred story ID is the selector
+   - if there is exactly one token, and it matches an existing folder under `/Volumes/dev/_tasks/`, treat it as `<project>` and infer the story ID from the current branch as the selector; otherwise infer `<project>` from the current working directory and treat the token as the selector
+   - if there are two or more tokens, extract `<project>` as the first token and the remaining text as the selector
+   - resolve inference with [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md)
+   - if the project or selector is still missing, ask the user to use:
      ```text
+     /sumit
+     /sumit <project>
      /sumit <project> <task_id>
      /sumit <project> <path-to-task.md>
      /sumit <project> draftNN
