@@ -22,7 +22,7 @@ remove_conflicting_git_completions
 # https://github.com/orgs/Homebrew/discussions/2797
 # https://github.com/ohmyzsh/ohmyzsh/issues/8037
 # https://github.com/ohmyzsh/ohmyzsh/issues/7062
-fpath=($HOMEBREW_PREFIX/share/zsh/site-functions $fpath)
+fpath=($HOME/.local/share/zsh/site-functions $HOMEBREW_PREFIX/share/zsh/site-functions $fpath)
 
 # Include hidden files in autocompletion
 setopt globdots

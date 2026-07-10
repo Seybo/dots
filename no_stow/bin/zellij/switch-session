@@ -69,10 +69,16 @@ remember_current_tab() {
 }
 
 switch_to() {
-  local target="$1"
+  local target
   local current="${2:-}"
   local target_tab_file
   local target_tab_position=""
+
+  target="$(normalize_session_name "$1")"
+  if ! active_session_exists "$target"; then
+    echo "Target session is not active: $target" >&2
+    exit 1
+  fi
 
   if [[ -n "$current" && "$current" != "$target" ]]; then
     printf '%s\n' "$current" > "$STATE_FILE"
