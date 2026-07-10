@@ -11,6 +11,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 ## Shortcut / tasks
 
 - `shortcut`, `story`, `stories`, `clubhouse` → `/skill:shortcut`
+- `create project`, `project setup`, `new project workspace`, `project task root` → `/skill:projectit`
 - `create task`, `task folder`, `task.md`, `shortcut story from task` → `/skill:taskit`
 - `draft task`, `save this for later`, `capture context` → `/skill:draftit`
 - `start task`, `work on task` → `/skill:workit`
@@ -21,6 +22,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 - `local dev environment`, `dev env`, `dev-env refs`, `refs/dev-env` → read `/Users/inseybo/.dots/refs/dev-env`
 - `permission`, `allowlist`, `approval prompt`, `agent permissions`, `pi permissions`, `claude permissions` → `/skill:agent-permissions`
 - `publish dots`, `secret scan`, `sensitive data`, `dotfiles check` → `/skill:dots-check`
+- `davinci`, `resolve stuck`, `kill resolve`, `stuck app process` → `/skill:misc-helper` or `/misc-helper davinci-kill`
 
 ## Themes / UI
 

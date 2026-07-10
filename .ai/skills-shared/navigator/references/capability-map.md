@@ -18,6 +18,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 ## Shortcut / task workflow
 
 - `/skill:shortcut` — read Shortcut stories, create minimal Shortcut stories, and update story descriptions.
+- `/skill:projectit` — create a project task root, expected code directory, and git repo for the task workflow.
 - `/skill:taskit` — create task folders under `/Volumes/dev/_tasks`, or create a Shortcut story from `task.md`.
 - `/skill:draftit` — save selected conversation context into a draft task folder.
 - `/skill:workit` — start work from an existing task folder.
@@ -27,6 +28,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 
 - `/skill:agent-permissions` — explain or update Claude Code and Pi command permissions/allowlists.
 - `/skill:dots-check` — scan dotfiles changes for secrets or sensitive data before publishing.
+- `/skill:misc-helper` / `/misc-helper` — run small personal helper utilities, currently DaVinci Resolve process cleanup.
 - Dev-env refs — source: `/Users/inseybo/.dots/refs/dev-env`.
 - Dots repo rules — source: `/Users/inseybo/.dots/AGENTS.md` and `/Users/inseybo/.pi/agent/AGENTS.md`.
 

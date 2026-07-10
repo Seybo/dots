@@ -4,9 +4,9 @@ Single source of truth for how the task-workflow skills resolve a **project**, a
 **Shortcut story / task ID**, and a **code working directory** — from explicit
 arguments, from the current working directory, and from the current git branch.
 
-Used by `draftit`, `taskit`, `workit`, `sumit`, `revit`, and `pr-description-from-task`.
-Those skills link here instead of restating this logic. When the rules change,
-change them here only.
+Used by `projectit`, `draftit`, `taskit`, `workit`, `sumit`, `revit`, and
+`pr-description-from-task`. Those skills link here instead of restating this
+logic. When the rules change, change them here only.
 
 Runtime path (both Pi and Claude): `~/.ai/skills-shared/components/task-resolution.md`.
 
@@ -20,9 +20,10 @@ Runtime path (both Pi and Claude): `~/.ai/skills-shared/components/task-resoluti
   - personal projects whose name starts with `my_`: `/Volumes/dev/mydev/<project>/`.
   - all other projects: `/Volumes/dev/shaka/<project>/`.
 
-The `<project>` name must match a first-level folder under `/Volumes/dev/_tasks/`.
-Never create project roots or code checkouts automatically; only create task
-folders inside an existing project folder.
+For task-consuming skills, the `<project>` name must match a first-level folder
+under `/Volumes/dev/_tasks/`. Those skills must never create project roots or code
+checkouts automatically; only `projectit` creates project roots and code working
+directories.
 
 ## Resolving `<project>` from an explicit argument
 
