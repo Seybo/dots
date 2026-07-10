@@ -1,0 +1,12 @@
+# High-CPU process checks live here.
+#
+# Add checks with:
+#   ~/.dots/no_stow/bin/monit-cpu-alerts add <name> <regex> [cpu_percent] [seconds] [cpu|total_cpu]
+#
+# Example:
+#   ~/.dots/no_stow/bin/monit-cpu-alerts add foo 'foo' 30 60 total_cpu
+#
+# That creates a runtime check like:
+#   check process foo matching "foo"
+#     mode passive
+#     if total cpu > 30% for 12 cycles then exec "__NOTIFY_SCRIPT__"

@@ -1,0 +1,18 @@
+# Installed by: ~/.dots/no_stow/bin/monit-cpu-alerts install
+# Runtime target: ~/Library/Application Support/monit/monitrc
+# Monit requires this runtime file to be chmod 600/700.
+
+set daemon 5
+set log "__HOME__/Library/Logs/monit.log"
+set pidfile "__RUNTIME_DIR__/monit.pid"
+set statefile "__RUNTIME_DIR__/monit.state"
+set idfile "__RUNTIME_DIR__/monit.id"
+set eventqueue basedir "__RUNTIME_DIR__/events" slots 100
+
+# Enables `monit status` locally without exposing Monit on the network.
+set httpd
+  port 2812
+  use address 127.0.0.1
+  allow localhost
+
+include "__CONF_DIR__/*.monit"

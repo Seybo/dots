@@ -1,0 +1,92 @@
+#!/bin/zsh
+set -u
+
+PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+name=${1:?usage: monit-cpu-scan <name> <process-regex> [cpu_percent] [seconds] [cooldown_seconds]}
+regex=${2:?usage: monit-cpu-scan <name> <process-regex> [cpu_percent] [seconds] [cooldown_seconds]}
+threshold=${3:-30}
+seconds=${4:-60}
+cooldown_seconds=${5:-300}
+
+state_dir="$HOME/Library/Application Support/monit/cpu-scan-state/$name"
+log_file="$HOME/Library/Logs/monit-cpu-scan.log"
+notify_script="${STOW_DIR:-$HOME/.dots}/no_stow/bin/monit-notify"
+
+mkdir -p "$state_dir" "${log_file:h}"
+
+now=$(date +%s)
+results_file=$(mktemp)
+hot_pids_file=$(mktemp)
+
+cleanup() {
+  rm -f "$results_file" "$hot_pids_file"
+}
+trap cleanup EXIT
+
+if ! ps -axo pid=,ppid=,pcpu=,comm=,args= | awk \
+  -v regex="$regex" \
+  -v threshold="$threshold" \
+  -v self="$$" '
+    {
+      pid = $1
+      ppid = $2
+      cpu = $3
+      comm = $4
+      args = ""
+      for (i = 5; i <= NF; i++) {
+        args = args (i == 5 ? "" : " ") $i
+      }
+
+      if (pid == self) next
+      if (args ~ /monit-cpu-scan/ || args ~ /monit-cpu-alerts/) next
+
+      if ((comm ~ regex || args ~ regex) && (cpu + 0) > (threshold + 0)) {
+        printf "%s\t%s\t%.1f\t%s\n", pid, ppid, cpu, comm
+      }
+    }
+  ' > "$results_file"; then
+  printf '%s\t%s\tawk/ps scan failed for regex: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$name" "$regex" >> "$log_file"
+  exit 0
+fi
+
+while IFS=$'\t' read -r pid ppid cpu comm; do
+  [[ -n "${pid:-}" ]] || continue
+  print -r -- "$pid" >> "$hot_pids_file"
+
+  state_file="$state_dir/$pid.state"
+  first_seen=$now
+  notified_at=0
+
+  if [[ -f "$state_file" ]]; then
+    first_seen=$(sed -n '1p' "$state_file")
+    notified_at=$(sed -n '2p' "$state_file")
+  fi
+
+  [[ "$first_seen" =~ '^[0-9]+$' ]] || first_seen=$now
+  [[ "$notified_at" =~ '^[0-9]+$' ]] || notified_at=0
+
+  duration=$(( now - first_seen ))
+  since_notification=$(( now - notified_at ))
+
+  if (( duration >= seconds && since_notification >= cooldown_seconds )); then
+    MONIT_SERVICE="$name" \
+    MONIT_PROCESS_PID="$pid" \
+    MONIT_PROCESS_CPU_PERCENT="$cpu" \
+    MONIT_DESCRIPTION="Process matched '$regex' exceeded ${threshold}% CPU for ${duration}s" \
+    "$notify_script"
+    notified_at=$now
+    printf '%s\t%s\tpid=%s\tcpu=%s\tduration=%ss\tcomm=%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$name" "$pid" "$cpu" "$duration" "$comm" >> "$log_file"
+  fi
+
+  printf '%s\n%s\n' "$first_seen" "$notified_at" > "$state_file"
+done < "$results_file"
+
+for state_file in "$state_dir"/*.state(N); do
+  pid=${state_file:t:r}
+  if ! grep -Fxq "$pid" "$hot_pids_file" 2>/dev/null; then
+    rm -f "$state_file"
+  fi
+done
+
+exit 0
