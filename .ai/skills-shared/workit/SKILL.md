@@ -20,8 +20,8 @@ Use only:
 /workit <project-or-gtm-session> [task_id]
 ```
 
-With no arguments, infer both the project and Shortcut story ID from the current git checkout and branch.
-With only `<project-or-gtm-session>`, infer the Shortcut story ID from the current branch when possible; otherwise list recent tasks as before.
+With no arguments, infer the project from the current git checkout; if a Shortcut story ID can also be inferred from the branch, use it, otherwise list recent tasks for the inferred project.
+With one token, treat it as `<project-or-gtm-session>` only when it matches an existing task project or GTM session alias; otherwise infer `<project>` from the current working directory and treat the token as the task identifier.
 With `<project-or-gtm-session> <task_id>`, treat the first token after `/workit` as the project name or GTM session alias and the second token as the task identifier — must be **digits only**, matching either:
 
 - a **Shortcut story ID** (e.g. `147831`)
@@ -37,6 +37,7 @@ Examples:
 /workit shaka_gtm1 147831
 /workit shaka_gtm 147831
 /workit my_health 0003
+/workit 0003      # project inferred from cwd when possible
 ```
 
 Do not auto-use this skill from a general "work on this task" request. Wait for the explicit slash command.
@@ -58,20 +59,21 @@ lives) and the code working directory (see the shared doc's mapping). GTM sessio
 `shaka_gtm1`, `shaka_gtm2`, and `shaka_gtm3` normalize to task project `shaka_gtm`
 and select checkout `1st`, `2nd`, or `3rd`. Applied to `/workit`:
 
-- With no arguments, infer both `<project>` and the task/story ID from the current
-  working directory and branch.
+- With no arguments, infer `<project>` from the current working directory and infer the task/story ID from the current branch when possible; if the project is inferred but no task/story ID is found, keep the normal recent-task picker.
 - With `/workit <project-or-gtm-session>`, infer only the task/story ID from the current branch
   when possible; if none can be inferred, keep the normal recent-task picker.
+- With `/workit <task_id>`, when the token is not an existing task project or GTM session alias, infer `<project>` from the current working directory and use the token as the task/story ID.
 - An inferred story ID is used as the same prefix-matched task identifier as an
   explicit `<task_id>`.
-- If `/workit` has no arguments and the project or story ID cannot be inferred,
-  ask the user to pass it explicitly.
+- If `/workit` has no arguments and the project cannot be inferred, ask the user to pass it explicitly.
 
 ## Instructions
 
 1. **Parse command arguments:**
-   - if there are no tokens after `/workit`, infer `<project>` and `<task_id>` from the current checkout and branch
-   - if there is exactly one token after `/workit`, treat it as `<project>` or a GTM session alias and try to infer `<task_id>` from the current branch; if no story ID can be inferred, leave `<task_id>` missing
+   - if there are no tokens after `/workit`, infer `<project>` from the current checkout and infer `<task_id>` from the current branch when possible; if no story ID can be inferred, leave `<task_id>` missing
+   - if there is exactly one token after `/workit`:
+     - if the token matches an existing task project or GTM session alias, treat it as `<project>` or a GTM session alias and try to infer `<task_id>` from the current branch; if no story ID can be inferred, leave `<task_id>` missing
+     - otherwise infer `<project>` from the current working directory and use the token as `<task_id>`
    - if there are two tokens after `/workit`:
      - extract `<project>` or a GTM session alias as the first token after `/workit`
      - extract `<task_id>` as the second token

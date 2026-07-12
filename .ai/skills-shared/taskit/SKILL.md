@@ -26,8 +26,9 @@ Use only:
 ```
 
 With no arguments, infer both the project and Shortcut story ID from the current git checkout and branch.
-With only `<project>`, infer the Shortcut story ID from the current git branch.
-With `<project>` plus more text, treat the first token after `/taskit` as the project name and treat the rest as either:
+With one token, treat it as `<project>` only when it matches an existing task project; otherwise infer `<project>` from the current working directory and treat the token as the selector/task name.
+With two or more tokens, treat the first token as `<project>` only when it matches an existing task project; otherwise infer `<project>` from the current working directory and treat all tokens as the selector/task name.
+The selector/task name is interpreted as either:
 
 - a **Shortcut story ID** if it is a single token of digits only (e.g. `12345`)
 - a **draft reference** if it is a single token matching `^draft\d{2}$`, resolved to `/Volumes/dev/_tasks/<project>/draftNN/task.md`; Shortcut is used only if the file has complete `# Story details`
@@ -45,6 +46,8 @@ Examples:
 /taskit shaka_gtm /Volumes/dev/_tasks/shaka_gtm/123-foo/task.md
 /taskit shaka_gtm draft01
 /taskit my_budget_app draft01   # local conversion if task.md has no complete Story details
+/taskit draft01                 # project inferred from cwd when possible
+/taskit Switch to tmuxinator    # project inferred from cwd when possible
 ```
 
 Do not auto-use this skill from a general task-management request. Wait for the explicit slash command.
@@ -65,7 +68,7 @@ GTM checkout using the shared rules in
 Read that file whenever any of these must be inferred. In short:
 
 - `<project>` must match a first-level folder under `/Volumes/dev/_tasks/`.
-- When `<project>` is not given, infer it from the current working directory.
+- When the first token is not an existing task project, infer `<project>` from the current working directory and treat the whole input as the selector/task name.
 - Infer the Shortcut story ID from the current branch's `sc-<digits>` segment.
 - An inferred story ID is handled exactly like Shortcut mode.
 - If a needed project cannot be inferred, ask the user to pass it explicitly. A story ID is needed only for no-argument or one-project Shortcut inference.
@@ -77,15 +80,17 @@ creates project roots or code checkouts.
 
 1. **Parse command arguments:**
    - if there are no tokens after `/taskit`, infer `<project>` and `<story_id>` from the current checkout and branch; if successful, use Shortcut mode
-   - if there is exactly one token after `/taskit`, treat it as `<project>` and infer `<story_id>` from the current branch; if successful, use Shortcut mode; if no story ID can be inferred, ask the user for a task name, story ID, `draftNN`, or task markdown path
+   - if there is exactly one token after `/taskit`:
+     - if the token matches an existing task project, treat it as `<project>` and infer `<story_id>` from the current branch; if successful, use Shortcut mode; if no story ID can be inferred, ask the user for a task name, story ID, `draftNN`, or task markdown path
+     - otherwise infer `<project>` from the current working directory and use the token as the selector/task name
    - if there are two or more tokens after `/taskit`:
-     - extract `<project>` as the first token after `/taskit`
-     - take all remaining text after the project name and trim leading/trailing whitespace
-     - decide the mode in this order:
-       - **Shortcut mode** if the remainder is a single token matching `^\d+$`
-       - **Draft reference mode** if the remainder is a single token matching `^draft\d{2}$`; resolve it to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then handle it exactly like Task markdown path mode
-       - **Task markdown path mode** if the remainder is a single existing path ending in `.md` or `.markdown`
-       - **Manual mode** otherwise
+     - if the first token matches an existing task project, extract it as `<project>` and use all remaining text as the selector/task name
+     - otherwise infer `<project>` from the current working directory and use the full argument string as the selector/task name
+   - decide the mode for the selector/task name in this order:
+     - **Shortcut mode** if it is a single token matching `^\d+$`
+     - **Draft reference mode** if it is a single token matching `^draft\d{2}$`; resolve it to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then handle it exactly like Task markdown path mode
+     - **Task markdown path mode** if it is a single existing path ending in `.md` or `.markdown`
+     - **Manual mode** otherwise
    - if the project or required selector is missing, ask the user to use:
      ```text
      /taskit

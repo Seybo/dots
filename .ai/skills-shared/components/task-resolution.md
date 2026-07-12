@@ -19,6 +19,7 @@ Runtime path (both Pi and Claude): `~/.ai/skills-shared/components/task-resoluti
   - `my_` — personal projects
   - `shaka_` — Shaka projects
   - `misc_` — miscellaneous projects
+- **Special local projects:** `env` is the task project for this dotfiles/dev-env repo.
 - **GTM session aliases:** `shaka_gtm1`, `shaka_gtm2`, and `shaka_gtm3` are Zellij/session aliases, not task project roots. When accepted by a task-workflow skill, normalize them to project `shaka_gtm` and select checkout `1st`, `2nd`, or `3rd` respectively.
 - **Code working directory** (where the actual repo checkout lives):
   - `shaka_gtm`: one of `/Volumes/dev/projects/shaka/gtm/1st/`,
@@ -27,6 +28,7 @@ Runtime path (both Pi and Claude): `~/.ai/skills-shared/components/task-resoluti
   - `my_*`: `/Volumes/dev/projects/mydev/<project>/`.
   - `shaka_*`: `/Volumes/dev/projects/shaka/<project>/`.
   - `misc_*`: `/Volumes/dev/projects/misc/<project>/`.
+  - `env`: `/Users/inseybo/.dots/`.
 
 For task-consuming skills, the normalized `<project>` name must match a first-level folder
 under `/Volumes/dev/_tasks/`. Those skills must never create project roots or code
@@ -45,6 +47,7 @@ Then resolve:
 
 - task root → `/Volumes/dev/_tasks/<normalized-project>/`
 - code working directory → the mapping above, using the selected checkout when the normalized project is `shaka_gtm`.
+- `env` is a valid explicit project when `/Volumes/dev/_tasks/env/` exists; its code working directory is `/Users/inseybo/.dots/`.
 
 If the task root does not exist, stop and tell the user the project was not found. Do not look for `/Volumes/dev/_tasks/shaka_gtm1`, `/Volumes/dev/_tasks/shaka_gtm2`, or `/Volumes/dev/_tasks/shaka_gtm3`; those names are session aliases only.
 
@@ -61,6 +64,7 @@ When `<project>` is not given, infer it from the agent's current working directo
   `shaka_`.
 - inside `/Volumes/dev/projects/misc/<project>/` → that `<project>` when it starts with
   `misc_`.
+- inside `/Users/inseybo/.dots/` → project `env`.
 
 If the directory is inside one of the base roots but the inferred folder name does
 not use the required prefix, ask the user to pass `<project>` explicitly rather
