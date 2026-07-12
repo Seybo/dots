@@ -36,7 +36,7 @@ An inferred story ID is treated as a task identifier (see below).
 
 Treat the selector as one of:
 
-- a **task identifier** if it is digits only, matched as a prefix of a task folder under `/Volumes/dev/_tasks/<project>/`
+- a **task identifier** if it is digits only, matched as a prefix of a task folder under `/Volumes/dev/_tasks/<project>/`; this can be a Shortcut story ID like `33557` or a local sequential task ID like `0003`
 - a **draft reference** if it matches `^draft\d{2}$`, resolved to `/Volumes/dev/_tasks/<project>/draftNN/task.md`
 - a **task markdown path** if it is an existing path ending in `.md` or `.markdown`
 
@@ -44,10 +44,11 @@ Examples:
 
 ```text
 /sumit
-/sumit gtm
-/sumit gtm 33557
-/sumit gtm /Volumes/dev/_tasks/foo/bar.md
-/sumit gtm draft01
+/sumit shaka_gtm
+/sumit shaka_gtm 33557
+/sumit my_health 0003
+/sumit shaka_gtm /Volumes/dev/_tasks/shaka_gtm/33557-foo/task.md
+/sumit shaka_gtm draft01
 ```
 
 Do not auto-use this skill from a general PR-description or task-summary request. Wait for the explicit slash command.

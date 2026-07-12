@@ -20,7 +20,7 @@ Typical input:
 - Include local config files in the context when they exist
 - Keep a small app registry in `apps/`
 - Keep a small Neovim plugin registry in `nvim/plugins/`
-- Use registry files only as source registries, not as replacement manuals
+- Use registry files primarily as source registries, with short high-signal local gotchas when discovered during work
 - If an app is unknown, discover sources and add `apps/<app>.md` before answering
 - If a Neovim plugin is unknown, discover sources and add `nvim/plugins/<plugin>.md` before answering
 - Always cite the source actually used
@@ -61,6 +61,7 @@ If the input is ambiguous or missing the app name, ask one short clarifying ques
    - then consult the actual docs/configs and answer
 7. Answer in a short form.
 8. Include the source used.
+9. Before finishing, consider whether the current task revealed a useful gotcha, local convention, non-obvious interaction, or repeated pitfall for this app/plugin. If yes, add a concise note to the related registry file under an appropriate section such as `## Known issues`, `## Local keybinding bridge`, or `## Local gotchas`.
 
 ## Source priority
 
@@ -137,7 +138,7 @@ If discovery is too weak, do not create a low-quality registry file. Answer from
 
 Keep each app or plugin registry file concise and structured. Follow `apps/_template.md` for app files, and use the same structure for plugin files under `nvim/plugins/`.
 
-Registry files are only source registries. They should point to the real manuals and docs, not summarize them.
+Registry files are primarily source registries. They should point to the real manuals and docs, not summarize them. They may also include short local gotchas discovered during app-help work when those notes are specific and likely to save time later.
 
 Expected sections:
 
@@ -153,7 +154,8 @@ When creating or updating a registry file:
 - avoid speculative claims
 - only list local config files that actually exist
 - do not copy factual answers from the docs into the app file
-- do not add tips, summaries, keybindings, config explanations, or mini-manual content unless they are needed to locate the real docs or real config files
+- do not add generic tips, summaries, keybindings, config explanations, or mini-manual content
+- do add short local gotchas when the current task revealed a non-obvious behavior that is likely to save time later; keep these notes specific, source-backed, and tied to local config or workflow
 
 ## Answer format
 
@@ -190,6 +192,7 @@ For online sources, include a short label and URL:
 ## When updating registry files
 
 Update an existing app or plugin registry file when discovery reveals a clearly better official source, local doc path, `:help` entry, plugin repo, or real local config path.
+Also consider updating it at the end of each app-help run when the work uncovered a high-signal local gotcha, convention, or non-obvious interaction that would have shortened the investigation.
 Keep edits small and maintain the existing structure.
 
 ## Constraints

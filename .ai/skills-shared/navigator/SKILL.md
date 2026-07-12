@@ -41,6 +41,25 @@ For update mode:
 
 Never rewrite `SKILL.md` during update mode unless the user explicitly asks to change Navigator behavior.
 
+## Active projects mode
+
+Source of truth:
+
+```text
+/Users/inseybo/.dots/refs/dev-env/active-projects.md
+```
+
+When the user explicitly invokes Navigator to list, explain, add, or remove active projects, read and update only this file.
+
+For requests like `/skill:navigator add this project to active`:
+
+1. Resolve the current git repo root from the same agent session, using `git rev-parse --show-toplevel` or an explicit user-provided path.
+2. If no repo root can be resolved, ask the user for the path.
+3. Verify the resolved path is an actual repo root.
+4. Add the repo root under `## Projects` if absent.
+5. Keep project paths sorted.
+6. Do not scan `/Volumes/dev/projects` or infer additional projects unless the user explicitly asks to refresh the list.
+
 ## Question-answering mode
 
 For any other `/skill:navigator ...` invocation:

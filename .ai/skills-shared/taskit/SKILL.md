@@ -1,8 +1,8 @@
 ---
 name: taskit
 description: >-
-  Create a new task folder and task.md file for a project under /Volumes/dev/_tasks,
-  or create a Shortcut story from an existing task.md file.
+  Create a new local task folder and task.md file under /Volumes/dev/_tasks,
+  or create a Shortcut story only when given a story ID or a task.md with complete Story details.
   Supports a manual task name, a Shortcut story ID, a task.md path, a draftNN reference,
   or inferring the project and Shortcut story ID from the current git branch.
   Command-only skill. Invoke only via /taskit.
@@ -30,29 +30,32 @@ With only `<project>`, infer the Shortcut story ID from the current git branch.
 With `<project>` plus more text, treat the first token after `/taskit` as the project name and treat the rest as either:
 
 - a **Shortcut story ID** if it is a single token of digits only (e.g. `12345`)
-- a **draft reference** if it is a single token matching `^draft\d{2}$`, resolved to `/Volumes/dev/_tasks/<project>/draftNN/task.md`
-- a **task markdown path** if it is a single existing path ending in `.md` or `.markdown`
+- a **draft reference** if it is a single token matching `^draft\d{2}$`, resolved to `/Volumes/dev/_tasks/<project>/draftNN/task.md`; Shortcut is used only if the file has complete `# Story details`
+- a **task markdown path** if it is a single existing path ending in `.md` or `.markdown`; Shortcut is used only if the file has complete `# Story details`
 - a **manual task name** otherwise (preserve spaces)
 
 Examples:
 
 ```text
 /taskit
-/taskit gtm
-/taskit foo Create budget tracking app
-/taskit bar Set up analytics events
-/taskit ppm 147831
-/taskit gtm /Volumes/dev/_tasks/gtm/123-foo/task.md
-/taskit gtm draft01
+/taskit shaka_gtm
+/taskit my_budget_app Create budget tracking app
+/taskit misc_notes Set up notes sync
+/taskit shaka_gtm 147831
+/taskit shaka_gtm /Volumes/dev/_tasks/shaka_gtm/123-foo/task.md
+/taskit shaka_gtm draft01
+/taskit my_budget_app draft01   # local conversion if task.md has no complete Story details
 ```
 
 Do not auto-use this skill from a general task-management request. Wait for the explicit slash command.
 
 ## What it does
 
-In manual or Shortcut mode, create a task folder inside the selected project and create a `task.md` file inside it. Folder naming and `task.md` body depend on the input mode.
+In manual mode, create a local task folder inside the selected project and create a `task.md` file inside it.
 
-In task markdown path mode, including draft references, create a Shortcut story from an existing `task.md`, then rename the existing task folder to match the created Shortcut story using the same folder naming logic as Shortcut-origin tasks.
+Shortcut is used only in explicit Shortcut mode: a numeric story ID, an inferred branch story ID, or an existing `task.md` whose first `# Story details` section has both `Name:` and `Epic:`.
+
+For `draftNN` and task markdown path mode, inspect the existing file. If it has complete `# Story details`, create a Shortcut story and rename the folder to `<story_id>-<slug>`. Otherwise, treat it as a local-only draft/task and rename the folder to a sequential local task folder such as `0004-<slug>`.
 
 ## Project and branch resolution
 
@@ -65,7 +68,7 @@ Read that file whenever any of these must be inferred. In short:
 - When `<project>` is not given, infer it from the current working directory.
 - Infer the Shortcut story ID from the current branch's `sc-<digits>` segment.
 - An inferred story ID is handled exactly like Shortcut mode.
-- If a needed project or story ID cannot be inferred, ask the user to pass it explicitly.
+- If a needed project cannot be inferred, ask the user to pass it explicitly. A story ID is needed only for no-argument or one-project Shortcut inference.
 
 `taskit` only creates task folders under `/Volumes/dev/_tasks/<project>/`; it never
 creates project roots or code checkouts.
@@ -74,7 +77,7 @@ creates project roots or code checkouts.
 
 1. **Parse command arguments:**
    - if there are no tokens after `/taskit`, infer `<project>` and `<story_id>` from the current checkout and branch; if successful, use Shortcut mode
-   - if there is exactly one token after `/taskit`, treat it as `<project>` and infer `<story_id>` from the current branch; if successful, use Shortcut mode
+   - if there is exactly one token after `/taskit`, treat it as `<project>` and infer `<story_id>` from the current branch; if successful, use Shortcut mode; if no story ID can be inferred, ask the user for a task name, story ID, `draftNN`, or task markdown path
    - if there are two or more tokens after `/taskit`:
      - extract `<project>` as the first token after `/taskit`
      - take all remaining text after the project name and trim leading/trailing whitespace
@@ -83,7 +86,7 @@ creates project roots or code checkouts.
        - **Draft reference mode** if the remainder is a single token matching `^draft\d{2}$`; resolve it to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then handle it exactly like Task markdown path mode
        - **Task markdown path mode** if the remainder is a single existing path ending in `.md` or `.markdown`
        - **Manual mode** otherwise
-   - if the project or required inferred story ID is missing, ask the user to use:
+   - if the project or required selector is missing, ask the user to use:
      ```text
      /taskit
      /taskit <project>
@@ -105,7 +108,7 @@ creates project roots or code checkouts.
    - **Manual mode:** use the remainder as the task name
    - **Shortcut mode:** call `mcp__shortcut__stories-get-by-id` with the story ID; use the story's `name` as the task name and the story's `description` as the body. If the call fails or the story is missing, stop and report the error.
    - **Draft reference mode:** resolve `draftNN` to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then follow Task markdown path mode.
-   - **Task markdown path mode:** read the existing task file and parse the first section named exactly `# Story details`; see [Task markdown path mode](#task-markdown-path-mode). Use the parsed `Name` as the task name.
+   - **Task markdown path mode:** read the existing task file. If the first section named exactly `# Story details` has both `Name:` and `Epic:`, use Shortcut conversion and use the parsed `Name` as the task name. Otherwise use Local task-file conversion and derive the task name from the first meaningful heading or first non-empty content line; if no useful name can be derived, ask the user for a task name.
    - slugify the task name:
      - lowercase everything
      - replace spaces with `-`
@@ -117,12 +120,15 @@ creates project roots or code checkouts.
        - `Create budget: tracking app!` → `create-budget-tracking-app`
 
 4. **Build the task folder name:**
-   - **Manual mode:** `{timestamp}-{slug}` where timestamp is local-machine time formatted as `YYYYMMDDHHMM` (e.g. `date +%Y%m%d%H%M`)
-     - example: `202605051437-create-budget-tracking-app`
+   - **Manual mode:** `{local_id}-{slug}` where `local_id` is the next zero-padded 4-digit local task ID for this project
+     - choose `local_id` by scanning first-level folders under `/Volumes/dev/_tasks/<project>/` matching `^\d{4}-`, then using one greater than the highest existing local ID; if none exist, start at `0001`
+     - ignore `draftNN` folders and Shortcut story ID folders when assigning local IDs
+     - example: `0004-create-budget-tracking-app`
    - **Shortcut mode:** `{story_id}-{slug}`
      - example: `147831-toast-prepare-by-time-kitchen-ticket-time`
-   - **Task markdown path mode:** after creating the Shortcut story, use `{created_story_id}-{slug}` using the created story's returned `id` and `name`
+   - **Task markdown path mode with complete Story details:** after creating the Shortcut story, use `{created_story_id}-{slug}` using the created story's returned `id` and `name`
      - example: `147831-toast-prepare-by-time-kitchen-ticket-time`
+   - **Task markdown path mode without complete Story details:** use Manual-mode local sequential naming `{local_id}-{slug}`
 
 5. **Create or update the folder and file:**
    - **Manual and Shortcut modes:** create directory:
@@ -133,9 +139,9 @@ creates project roots or code checkouts.
      ```text
      /Volumes/dev/_tasks/<project>/<folder-name>/task.md
      ```
-   - **Task markdown path mode:** do not create a new task file. After creating the Shortcut story, rename the existing task folder to:
+   - **Task markdown path mode:** do not create a new task file. Rename the existing task folder to the resolved folder name:
      ```text
-     /Volumes/dev/_tasks/<project>/<created_story_id>-<slug>
+     /Volumes/dev/_tasks/<project>/<story_id-or-local-id>-<slug>
      ```
 
 6. **Write the initial file contents:**
@@ -154,15 +160,15 @@ creates project roots or code checkouts.
 7. **Return the created or updated path clearly:**
    - show the full task folder path
    - show the full `task.md` path
-   - in Task markdown path mode, also show the created Shortcut story ID and URL, plus the old and new task folder paths
+   - in Task markdown path mode, show the old and new task folder paths; if Shortcut conversion happened, also show the created Shortcut story ID and URL
 
 8. **Set up the development branch (GTM project, Shortcut mode only):**
-   - This step runs only when `<project>` is `gtm` AND the mode is Shortcut. Skip for other projects or Manual mode.
+   - This step runs only when `<project>` is `shaka_gtm` AND the mode is Shortcut. Skip for other projects or Manual mode.
    - GTM has multiple full-clone checkouts under:
      ```text
-     /Volumes/dev/shaka/gtm/1st/
-     /Volumes/dev/shaka/gtm/2nd/
-     /Volumes/dev/shaka/gtm/3rd/
+     /Volumes/dev/projects/shaka/gtm/1st/
+     /Volumes/dev/projects/shaka/gtm/2nd/
+     /Volumes/dev/projects/shaka/gtm/3rd/
      ```
    - Choose the checkout using the "Selecting the GTM checkout" rules in
      [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
@@ -172,33 +178,33 @@ creates project roots or code checkouts.
      ```
      - Always use `mikhail` as the branch prefix, regardless of story owner.
      - Do NOT call `mcp__shortcut__stories-get-branch-name` — the MCP returns incorrect names (triple dashes, truncation).
-   - Check the current branch in the selected checkout with `git -C /Volumes/dev/shaka/gtm/<checkout> branch --show-current`.
+   - Check the current branch in the selected checkout with `git -C /Volumes/dev/projects/shaka/gtm/<checkout> branch --show-current`.
      - If the current branch contains `sc-{story_id}` as a path segment, treat branch setup as already done and do not create or switch branches.
      - If the current branch differs from the generated branch name, report both the current branch and generated branch name.
    - Otherwise, verify the generated branch does not already exist in the selected checkout:
      ```bash
-     git -C /Volumes/dev/shaka/gtm/<checkout> rev-parse --verify --quiet <branch-name>
+     git -C /Volumes/dev/projects/shaka/gtm/<checkout> rev-parse --verify --quiet <branch-name>
      ```
    - If it exists (exit 0), stop and ask the user how to proceed.
    - Otherwise (exit 1), create and check out the branch with exactly this form — `-C` flag required, no `cd`, no bare `git`:
      ```bash
-     git -C /Volumes/dev/shaka/gtm/<checkout> checkout -b <branch-name>
+     git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout -b <branch-name>
      ```
    - Report the selected checkout and branch name alongside the created paths from step 7.
 
 ## Task markdown path mode
 
-This mode creates a Shortcut story from an existing task file.
+This mode converts an existing task file into either a local task folder or a Shortcut story, depending only on the file contents.
 
-### Required `task.md` format
+### Shortcut conversion format
 
-The file must include a first-level section named exactly:
+Shortcut conversion runs only when the file includes a first-level section named exactly:
 
 ```md
 # Story details
 ```
 
-Inside that section, before the next first-level heading, require these key/value lines:
+Inside that section, before the next first-level heading, it must have these key/value lines:
 
 ```md
 Name: My Shortcut story title
@@ -225,7 +231,9 @@ Build polling for enriched Clay data.
 - Errors are surfaced clearly
 ```
 
-### Description extraction
+If this section is absent or missing either `Name:` or `Epic:`, do not call Shortcut. Use Local task-file conversion instead.
+
+### Description extraction for Shortcut conversion
 
 Do not send the `# Story details` section to Shortcut.
 
@@ -246,7 +254,7 @@ Build polling for enriched Clay data.
 
 ### Create Shortcut story
 
-Use the shared Shortcut Ruby CLI, not MCP, to create the story:
+Only for Shortcut conversion, use the shared Shortcut Ruby CLI, not MCP, to create the story:
 
 ```bash
 ruby ~/.pi/agent/extensions/shortcut/scripts/shortcut.rb create-story '<json>'
@@ -266,12 +274,32 @@ The JSON must contain only:
 
 The Shortcut CLI adds the default team/workflow/state.
 
+### Local task-file conversion
+
+When `# Story details` is absent or incomplete, do not call Shortcut. Convert the existing folder into a local task folder:
+
+- derive the task name from the first meaningful heading or first non-empty content line in `task.md`
+- if the only useful text is `# Context` or the file is otherwise empty, ask the user for a task name
+- rename the existing task folder to local sequential naming:
+
+```text
+<NNNN>-<slugified-derived-task-name>
+```
+
+Do not modify `task.md` contents during local conversion unless the user explicitly asks.
+
 ### Rename task folder
 
-After the story is created, rename the existing task folder to use Shortcut-origin naming:
+For Shortcut conversion, after the story is created, rename the existing task folder to use Shortcut-origin naming:
 
 ```text
 <created_story_id>-<slugified_created_story_name>
+```
+
+For Local task-file conversion, rename the existing task folder to use local sequential naming:
+
+```text
+<NNNN>-<slugified-derived-task-name>
 ```
 
 Safety rules before renaming:
@@ -283,11 +311,12 @@ Safety rules before renaming:
 - the parent task folder must be directly under `/Volumes/dev/_tasks/<project>/`
 - the target folder must not already exist
 - do not overwrite anything
+- use a no-clobber rename shape for local draft conversion, e.g. `test ! -e /Volumes/dev/_tasks/<project>/<target> && mv -n /Volumes/dev/_tasks/<project>/draftNN /Volumes/dev/_tasks/<project>/<target>`
 
 After successful rename, the task file path becomes:
 
 ```text
-/Volumes/dev/_tasks/<project>/<created_story_id>-<slug>/task.md
+/Volumes/dev/_tasks/<project>/<story_id-or-local-id>-<slug>/task.md
 ```
 
 Do not update `task.md` contents in this mode unless the user explicitly asks for that in a later request.
@@ -295,13 +324,13 @@ Do not update `task.md` contents in this mode unless the user explicitly asks fo
 ## Important Notes
 
 - Manual and Shortcut modes are create-only; do not modify existing task folders or files in those modes
-- Task markdown path mode may rename the existing task folder after creating the Shortcut story, but must not otherwise modify `task.md` contents unless explicitly requested
+- Task markdown path mode may rename the existing task folder after Shortcut or local conversion, but must not otherwise modify `task.md` contents unless explicitly requested
 - Preserve the original task name text only for slugification input; folder name uses the slugified form
-- Use the local timezone of the current machine for the timestamp (manual mode only)
+- Local task IDs use zero-padded 4-digit IDs (`0001`, `0002`, ...). To choose the next local ID, scan first-level task folders under `/Volumes/dev/_tasks/<project>/` matching `^\d{4}-`, then use one greater than the highest existing local ID; if none exist, start at `0001`. Ignore `draftNN` folders and Shortcut story ID folders when assigning local IDs.
 - If the generated folder already exists, stop and ask the user how to proceed rather than overwriting anything
 - Do not create project folders automatically; only create task folders inside an existing project folder
 - Do not add extra files
 - Do not add extra sections to `task.md`
 - For implementation-oriented tasks, later planning should use TDD where it makes sense, with specs focused on edge cases, boundaries, regressions, and acceptance criteria rather than only happy paths
 - Do not auto-use this skill without the explicit `/taskit` command
-- Step 8 (branch setup) is GTM-specific and Shortcut-mode-only. For Manual mode in GTM, or any non-GTM project, do not touch git.
+- Step 8 (branch setup) is GTM-specific and Shortcut-mode-only. For Manual mode in `shaka_gtm`, or any non-GTM project, do not touch git.

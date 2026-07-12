@@ -34,7 +34,12 @@
 - Add multi-process CPU scan: `~/.dots/no_stow/bin/monit-cpu-alerts add-scan <name> <regex> [pct] [sec] [cooldown_sec]`
 - Validate/reload/status: `~/.dots/no_stow/bin/monit-cpu-alerts test|reload|status|paths|edit`
 - Start/stop LaunchAgent: `~/.dots/no_stow/bin/monit-cpu-alerts load|unload`
-- Current Zellij monitor is a scan rule: `zellij`, regex `(^|/)zellij( |$)`, threshold `30%`, duration `60s`, cooldown `300s`.
+- Current Zellij monitor is a scan rule: `zellij`, regex `(^|/)zellij( |$)`, threshold `30%`, duration `30s`, cooldown `300s`.
+- Current Pi monitor is a scan rule: `pi`, regex `(^|/)pi( |$)`, threshold `15%`, duration `10s`, cooldown `300s`.
+
+## Local gotchas
+
+- `terminal-notifier` can log/list notifications as delivered without showing visible banners in this environment. `osascript display notification` produced visible non-modal banners, so `monit-notify` uses that path.
 
 ## Official sources
 

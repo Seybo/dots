@@ -137,11 +137,7 @@ lf() {
 # SSH → attach-to/create a zellij session, exit shell on detach
 # locally zellij is started manually (or by the terminal emulator)
 if [ -n "$SSH_CONNECTION" ] && [ -z "$ZELLIJ" ]; then
-  if zellij list-sessions --short 2>/dev/null | grep -Fxq remote_dev; then
-    zsar
-  else
-    zscr
-  fi
+  zj remote_dev
   exit
 fi
 export PATH="$HOME/.local/bin:$PATH"

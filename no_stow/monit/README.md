@@ -1,10 +1,10 @@
 # Monit CPU alerts
 
-Free macOS high-CPU notifications using Monit plus `terminal-notifier`.
+Free macOS high-CPU notifications using Monit plus `osascript` notification banners.
 
 ## Why this setup
 
-Monit is a good fit for rules such as "process matching this regex uses more than 30% CPU for 60 seconds". `terminal-notifier` gives native macOS notifications; the notifier script falls back to `osascript` if it is missing.
+Monit is a good fit for rules such as "process matching this regex uses more than 30% CPU for 60 seconds". The notifier script uses non-modal macOS notification banners via `osascript display notification`.
 
 This setup differs slightly from generic snippets:
 
@@ -17,7 +17,7 @@ This setup differs slightly from generic snippets:
 ## Install
 
 ```sh
-brew install monit terminal-notifier
+brew install monit
 ~/.dots/no_stow/bin/monit-cpu-alerts install
 ```
 
@@ -50,7 +50,7 @@ Check the regex before relying on it:
 For apps that spawn multiple processes with the same name, use `add-scan`. This scans all matching processes and notifies when any one PID stays above the threshold long enough.
 
 ```sh
-~/.dots/no_stow/bin/monit-cpu-alerts add-scan zellij '(^|/)zellij( |$)' 30 60 300
+~/.dots/no_stow/bin/monit-cpu-alerts add-scan zellij '(^|/)zellij( |$)' 30 30 300
 ```
 
 Arguments:
@@ -90,7 +90,8 @@ After editing or adding rules while Monit is running:
 
 Current local monitor:
 
-- `zellij`: scan all matching `zellij` PIDs with regex `(^|/)zellij( |$)`; notify above `30%` CPU for `60s`, with `300s` per-PID cooldown.
+- `zellij`: scan all matching `zellij` PIDs with regex `(^|/)zellij( |$)`; notify above `30%` CPU for `30s`, with `300s` per-PID cooldown.
+- `pi`: scan all matching `pi` PIDs with regex `(^|/)pi( |$)`; notify above `15%` CPU for `10s`, with `300s` per-PID cooldown.
 
 Logs:
 

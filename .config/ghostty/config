@@ -39,6 +39,8 @@ keybind = cmd+t=text:
 # Zellij sessions
 # cmd+s => enter session mode
 keybind = cmd+s=text:
+# cmd+d => detach session
+keybind = cmd+d=text:
 
 # Zellij panes
 # cmd+p => enter pane mode

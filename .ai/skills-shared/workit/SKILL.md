@@ -17,25 +17,26 @@ Use only:
 
 ```text
 /workit
-/workit <project> [task_id]
+/workit <project-or-gtm-session> [task_id]
 ```
 
 With no arguments, infer both the project and Shortcut story ID from the current git checkout and branch.
-With only `<project>`, infer the Shortcut story ID from the current branch when possible; otherwise list recent tasks as before.
-With `<project> <task_id>`, treat the first token after `/workit` as the project name and the second token as the task identifier — must be **digits only**, matching either:
+With only `<project-or-gtm-session>`, infer the Shortcut story ID from the current branch when possible; otherwise list recent tasks as before.
+With `<project-or-gtm-session> <task_id>`, treat the first token after `/workit` as the project name or GTM session alias and the second token as the task identifier — must be **digits only**, matching either:
 
 - a **Shortcut story ID** (e.g. `147831`)
-- a **timestamp** prefix from a manually-created folder (e.g. `202605051437`)
+- a **local sequential task ID** (e.g. `0003`)
 
-The identifier is matched as a prefix of the task folder name. Passing `147831` finds a folder like `147831-toast-prepare-by-time`. Passing `202605051437` finds `202605051437-create-budget-tracking-app`.
+The identifier is matched as a prefix of the task folder name. Passing `147831` finds a folder like `147831-toast-prepare-by-time`. Passing `0003` finds `0003-bootstrap-ruby-sqlite-app`.
 
 Examples:
 
 ```text
 /workit
-/workit foo
-/workit foo 147831
-/workit bar 202605051437
+/workit shaka_gtm
+/workit shaka_gtm1 147831
+/workit shaka_gtm 147831
+/workit my_health 0003
 ```
 
 Do not auto-use this skill from a general "work on this task" request. Wait for the explicit slash command.
@@ -51,14 +52,15 @@ Companion to `/taskit` (which creates the folder). `/workit` consumes folders th
 Resolve `<project>`, the task/story ID, the code working directory, and the GTM
 checkout using the shared rules in
 [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
-Read that file whenever any of these must be inferred. `<project>` resolves to two
+Read that file whenever any of these must be inferred or normalized. `<project>` resolves to two
 locations: the task folder root `/Volumes/dev/_tasks/<project>/` (where `task.md`
-lives) and the code working directory (see the shared doc's mapping). Applied to
-`/workit`:
+lives) and the code working directory (see the shared doc's mapping). GTM session aliases
+`shaka_gtm1`, `shaka_gtm2`, and `shaka_gtm3` normalize to task project `shaka_gtm`
+and select checkout `1st`, `2nd`, or `3rd`. Applied to `/workit`:
 
 - With no arguments, infer both `<project>` and the task/story ID from the current
   working directory and branch.
-- With `/workit <project>`, infer only the task/story ID from the current branch
+- With `/workit <project-or-gtm-session>`, infer only the task/story ID from the current branch
   when possible; if none can be inferred, keep the normal recent-task picker.
 - An inferred story ID is used as the same prefix-matched task identifier as an
   explicit `<task_id>`.
@@ -69,34 +71,40 @@ lives) and the code working directory (see the shared doc's mapping). Applied to
 
 1. **Parse command arguments:**
    - if there are no tokens after `/workit`, infer `<project>` and `<task_id>` from the current checkout and branch
-   - if there is exactly one token after `/workit`, treat it as `<project>` and try to infer `<task_id>` from the current branch; if no story ID can be inferred, leave `<task_id>` missing
+   - if there is exactly one token after `/workit`, treat it as `<project>` or a GTM session alias and try to infer `<task_id>` from the current branch; if no story ID can be inferred, leave `<task_id>` missing
    - if there are two tokens after `/workit`:
-     - extract `<project>` as the first token after `/workit`
+     - extract `<project>` or a GTM session alias as the first token after `/workit`
      - extract `<task_id>` as the second token
    - if `<project>` is missing, ask the user to use:
      ```text
      /workit
-     /workit <project> [task_id]
+     /workit <project-or-gtm-session> [task_id]
      ```
-   - if `<task_id>` is present, validate that it matches `^\d+$` (digits only); otherwise ask the user to pass a story ID or a timestamp
+   - if `<task_id>` is present, validate that it matches `^\d+$` (digits only); otherwise ask the user to pass a Shortcut story ID or local sequential task ID such as `0003`
    - if `<task_id>` is missing, continue through project validation, then list recent tasks as described below
 
 2. **Resolve and validate project:**
-   - resolve the task root as:
+   - first normalize any GTM session alias using the shared task-resolution rules:
+     - `shaka_gtm1` → project `shaka_gtm`, checkout `1st`
+     - `shaka_gtm2` → project `shaka_gtm`, checkout `2nd`
+     - `shaka_gtm3` → project `shaka_gtm`, checkout `3rd`
+   - resolve the task root from the normalized project as:
      ```text
      /Volumes/dev/_tasks/<project>/
      ```
+   - never look for `/Volumes/dev/_tasks/shaka_gtm1`, `/Volumes/dev/_tasks/shaka_gtm2`, or `/Volumes/dev/_tasks/shaka_gtm3`; those are session aliases, not task roots
    - if that folder does not exist, tell the user the project was not found
    - do not create project folders automatically
-   - also note the default code working directory:
+   - resolve the code working directory from the shared project mapping; this is the only place where implementation work should happen:
      ```text
-     /Volumes/dev/shaka/gtm/<checkout>/ # when <project> is gtm; checkout is 1st, 2nd, or 3rd
-     /Volumes/dev/mydev/<project>/      # when <project> starts with my_
-     /Volumes/dev/shaka/<project>/      # otherwise
+     /Volumes/dev/projects/shaka/gtm/<checkout>/ # when <project> is shaka_gtm; checkout is 1st, 2nd, or 3rd
+     /Volumes/dev/projects/mydev/<project>/      # when <project> starts with my_
+     /Volumes/dev/projects/shaka/<project>/      # when <project> starts with shaka_
+     /Volumes/dev/projects/misc/<project>/       # when <project> starts with misc_
      ```
    - For GTM, choose the checkout using the "Selecting the GTM checkout" rules in
      [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
-     This is where the task's work should happen unless `task.md` names a different directory. Do not fail if it does not exist — just do not assume it.
+     Do not fail if the resolved code working directory does not exist — just do not assume it.
 
 3. **If no task identifier was provided, offer recent tasks:**
    - list the 10 most recently created task folders under `<project_root>`
@@ -148,11 +156,11 @@ lives) and the code working directory (see the shared doc's mapping). Applied to
    - keep the plan aligned with the task's acceptance criteria and non-goals
 
 7. **Proceed with the task:**
+   - work in the resolved code working directory
    - work on what `task.md` describes, following `steps.md` incrementally
    - after completing each numbered step/slice from `steps.md`, stop and report the changes made, checks run, open questions, and any deviations or findings; ask the user to confirm before starting the next step
    - do not continue into the next `steps.md` step without explicit user confirmation, even if the next step seems obvious or mechanical
    - if the user has questions, requests changes, or wants to adjust scope at a step boundary, handle that before proceeding
-   - if `task.md` does not name a working directory, default to the selected `/Volumes/dev/shaka/gtm/<checkout>/` when `<project>` is `gtm`; default to `/Volumes/dev/mydev/<project>/` when `<project>` starts with `my_`; otherwise default to `/Volumes/dev/shaka/<project>/`
    - only `task.md` and `steps.md` define the work — do not read other files in the task folder (e.g. `next.md`, notes, drafts) as instructions unless `task.md` explicitly references them
    - if the body is just `# Context` (or otherwise empty of instructions), ask the user what they want done before proceeding
 

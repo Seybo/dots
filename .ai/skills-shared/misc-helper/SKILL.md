@@ -1,6 +1,6 @@
 ---
 name: misc-helper
-description: Run small personal helper utilities from one command namespace. Command-only skill. Invoke via /misc-helper <helper>, currently supports davinci-kill for terminating stuck DaVinci Resolve app processes.
+description: Run small personal helper utilities from one command namespace. Command-only skill. Invoke via /misc-helper <helper>, currently supports davinci-kill for terminating stuck DaVinci Resolve app processes and cache-clean for removing known-safe local cache/generated-data folders.
 allowed-tools:
   - "bash(/Users/inseybo/.ai/skills-shared/misc-helper/scripts/misc-helper *)"
 ---
@@ -21,6 +21,7 @@ Currently supported:
 
 ```text
 /misc-helper davinci-kill
+/misc-helper cache-clean
 ```
 
 ## Behavior
@@ -31,6 +32,50 @@ Currently supported:
 4. Do not invent ad-hoc helpers. Add new helpers by updating this skill and `scripts/misc-helper`.
 
 ## Helpers
+
+### cache-clean
+
+Remove known-safe local cache/generated-data folders from this Mac.
+
+Run:
+
+```bash
+/Users/inseybo/.ai/skills-shared/misc-helper/scripts/misc-helper cache-clean
+```
+
+The script first asks the user to type `CLOSED` to confirm affected apps are closed.
+
+The script removes only these paths:
+
+- `~/Library/Application Support/Insta360/Insta360 Studio/previewer_cache`
+- `~/Library/Application Support/Insta360/Insta360 Studio/log`
+- `~/Library/Application Support/com.apple.wallpaper/aerials`
+- `~/Library/Application Support/Claude/vm_bundles`
+- `~/Library/Application Support/Claude/Cache`
+- `~/Library/Caches/Homebrew/downloads`
+- `~/Library/Caches/Google`
+- `~/Library/Caches/BraveSoftware`
+- `~/Library/Caches/com.brave.Browser`
+- `~/Library/Caches/camoufox`
+- `~/Library/Caches/Vivaldi`
+- `~/Library/Caches/Cypress`
+- `~/Library/Caches/ms-playwright`
+- `~/Library/Caches/typescript`
+- `~/Library/Caches/com.tinyspeck.slackmacgap.ShipIt`
+- `~/.cache/solargraph`
+- `~/.npm/_cacache`
+- `~/.yarn/berry/cache`
+- `~/.cache/uv`
+
+Then it runs `HOMEBREW_NO_AUTO_UPDATE=1 brew cleanup -s` when Homebrew is installed.
+
+At the end, it prints what was removed, approximate disk space freed, and manual follow-ups:
+
+- Codex runtime cache skipped while Codex may be running: `~/.cache/codex-runtimes`
+- Telegram local media/cache should be cleaned from Telegram settings.
+- Old asdf runtimes should be reviewed with `asdf list` and removed with `asdf uninstall <plugin> <version>`.
+
+It intentionally does **not** remove Android emulators/SDKs, browser profiles, Slack data, Telegram data, Codex runtime cache, asdf runtimes, or whole app support folders.
 
 ### davinci-kill
 

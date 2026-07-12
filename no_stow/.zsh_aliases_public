@@ -29,27 +29,20 @@ alias tkss='tmux kill-session -t'
 alias mux='tmuxinator'
 
 ### zellij ###
-alias zscb='zellij --new-session-with-layout base -s base'
-alias zsab='zellij attach base'
-alias zsch='zellij --new-session-with-layout help -s help'
-alias zsah='zellij attach help'
-alias zsct='zellij -c temp'
-alias zsct='zellij --new-session-with-layout default -s temp'
-alias zsat='zellij attach temp'
-alias zsc1='zellij --new-session-with-layout shaka1 -s shaka1'
-alias zsa1='zellij attach shaka1'
-alias zsc2='zellij --new-session-with-layout shaka2 -s shaka2'
-alias zsa2='zellij attach shaka2'
-alias zsc3='zellij --new-session-with-layout shaka3 -s shaka3'
-alias zsa3='zellij attach shaka3'
-alias zscmf='zellij --new-session-with-layout myf -s myf'
-alias zsamf='zellij attach myf'
-alias zscp='zellij --new-session-with-layout peter -s peter'
-alias zsap='zellij attach peter'
-alias zscr='zellij --new-session-with-layout remote_dev -s remote_dev'
-alias zsar='zellij attach remote_dev'
-alias zsci='zellij --new-session-with-layout insta360 -s insta360'
-alias zsai='zellij attach insta360'
+zj() {
+  local name="$1"
+
+  if [ -z "$name" ]; then
+    echo "usage: zj <session/layout>"
+    return 1
+  fi
+
+  if zellij list-sessions --short --no-formatting 2>/dev/null | grep -Fxq "$name"; then
+    zellij attach "$name"
+  else
+    zellij --new-session-with-layout "$name" -s "$name"
+  fi
+}
 # Force Zellij top bar to repaint when it stays stale after theme switching.
 retheme() {
   "$STOW_DIR/no_stow/bin/zellij/retheme"

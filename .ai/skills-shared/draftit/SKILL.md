@@ -3,6 +3,7 @@ name: draftit
 description: >-
   Create the next draftNN folder under /Volumes/dev/_tasks/<project> and write selected
   conversation context/text into task.md for later conversion via /taskit <project> draftNN.
+  Local-only drafts are the default; include epic: <id> to make a Shortcut-ready draft.
   Can infer the project from the current checkout when it is not passed.
   Command-only skill. Invoke only via /draftit.
 ---
@@ -17,8 +18,8 @@ Use only:
 
 ```text
 /draftit help
-/draftit <project> <context-reference-or-text>
-/draftit <context-reference-or-text>
+/draftit <project> [epic: <id>] [name: <title>] [context-reference-or-text]
+/draftit [epic: <id>] [name: <title>] [context-reference-or-text]
 ```
 
 When the first token is the name of an existing project folder under
@@ -26,13 +27,17 @@ When the first token is the name of an existing project folder under
 Otherwise infer `<project>` from the current working directory and treat the whole
 input as the draft request. Drafts have no story ID, so only the project is inferred.
 
+Local-only drafts are the default. Including `epic: <id>` in the invocation makes
+the draft Shortcut-ready. `name: <title>` is optional; if it is omitted for a
+Shortcut-ready draft, infer a concise title from the conversation context.
+
 Examples:
 
 ```text
 /draftit help
-/draftit gtm the above plan
-/draftit gtm Name: Add CSV export Epic: 33001 Context: the implementation plan you just wrote
-/draftit foo Create a story for adding CSV export support
+/draftit shaka_gtm the above plan
+/draftit shaka_gtm epic: 33001 name: Add CSV export
+/draftit my_budget_app the above plan
 /draftit the above plan   # project inferred from the current checkout
 ```
 
@@ -58,20 +63,23 @@ The result is intended to be used later with:
 1. **Parse command arguments:**
    - if the only argument is `help`, show this help text and stop:
      ```text
-     Draft-to-story flow:
-     1. Run /draftit <project> <context> to create /Volumes/dev/_tasks/<project>/draftNN/task.md.
-     2. Edit task.md and fill in # Story details with Name and Epic, OR include them in the /draftit call itself, e.g. /draftit gtm Name: Add CSV export Epic: 33001 Context: the plan above.
-     3. Run /taskit <project> draftNN to create the Shortcut story.
-     4. /taskit renames draftNN to <story_id>-<slug> after Shortcut returns the story ID.
+     Draft flow:
+     1. Run /draftit <project> to create a local-only /Volumes/dev/_tasks/<project>/draftNN/task.md from the current conversation context.
+     2. Add epic: <id> only when you want the draft to become a Shortcut story later, e.g. /draftit shaka_gtm epic: 33001 name: Add CSV export.
+     3. Run /taskit <project> draftNN later.
+     4. /taskit converts local-only drafts to timestamp task folders and Shortcut-ready drafts to Shortcut stories.
      ```
    - determine `<project>` and the draft request:
      - if the first token after `/draftit` matches an existing folder under `/Volumes/dev/_tasks/`, treat it as `<project>` and take all remaining text as the draft request
      - otherwise infer `<project>` from the current working directory using [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md), and take the whole input after `/draftit` as the draft request
-   - if the project cannot be resolved or inferred, or the draft request is missing, ask the user to provide them, e.g.:
+   - extract `epic: <id>` from the draft request when present; this is the only trigger for a Shortcut-ready draft
+   - extract optional `name: <title>` from the draft request when present
+   - do not expect or ask for a `Context:` field; the context should come from the conversation or any literal remaining request text
+   - if the project cannot be resolved or inferred, ask the user to provide it, e.g.:
      ```text
-     /draftit gtm the above plan
+     /draftit shaka_gtm
      ```
-   - if the draft request includes explicit `Name:` and `Epic:` fields before optional `Context:`, use those values in `# Story details`; otherwise leave them blank
+   - if there is no literal draft text after removing `epic:` / `name:`, use the current conversation context; if there is no usable conversation context, ask the user what the draft should cover
 
 2. **Resolve and validate project:**
    - project root:
@@ -87,8 +95,9 @@ The result is intended to be used later with:
    - If the request points to a commit, PR, review comment, chat thread, or similar external context, inspect what is needed to understand the task, then rewrite it as a self-contained story. The main task body must make sense without opening the references.
    - Preserve useful markdown structure from the source content.
 
-4. **Shape the story content:**
-   - Lead with the user/product problem in plain English. The first section under `# Context` should explain what is wrong and why it matters without technical implementation details.
+4. **Shape the task content:**
+   - Infer a concise task title from the request or conversation, unless `name: <title>` was provided. Keep it short enough to become a readable folder slug when `/taskit <project> draftNN` converts the draft.
+   - Lead with the user/product problem in plain English. The first prose paragraph under `# Context` should explain what is wrong and why it matters without technical implementation details.
    - Keep code paths, service names, schema details, and suggested implementation approaches out of the main problem statement.
    - Include expected behavior and acceptance criteria when the context supports them.
    - If the change affects docs or operator-facing behavior, include a docs update in acceptance criteria.
@@ -96,22 +105,31 @@ The result is intended to be used later with:
    - Only include implementation details in `task.md` when they are essential domain facts that a future session is likely to miss and that affect the acceptance criteria; otherwise omit them.
    - Put PRs, commits, review comments, chat links, and similar source material in a final `## References` section. Do not quote long review comments or chat logs in the main body; summarize the decision or context instead.
 
-5. **Ensure draft has Shortcut-ready structure:**
+5. **Ensure draft has the right structure:**
    - The draft should be usable by `/taskit <project> draftNN` later.
-   - Every draft must start exactly with this scaffold:
+   - For local-only drafts, put a concise second-level heading immediately under `# Context`; `/taskit` uses the first meaningful heading/content to derive the local task folder slug, so do not let the first meaningful line be a long paragraph.
+   - If `epic:` is absent, create a local-only draft that starts exactly with:
+     ```md
+     # Context
+
+     ## {concise task title}
+
+     {draft content}
+     ```
+   - If `epic:` is present, create a Shortcut-ready draft that starts exactly with:
      ```md
      # Story details
 
-     Name: {explicit name, if provided}
-     Epic: {explicit epic, if provided}
+     Name: {explicit name, or concise inferred title from conversation}
+     Epic: {explicit epic id}
 
      # Context
 
      {draft content}
      ```
-   - Leave `Name` and `Epic` blank unless the user explicitly included `Name:` and `Epic:` in the `/draftit` call. Do not infer, fill, or invent them.
-   - If the request includes `Context:`, use the text after `Context:` as the draft content request and do not duplicate `Name:` / `Epic:` under `# Context`.
-   - If the source content already includes a `# Story details` section, do not preserve it as the first section; place the source content under `# Context` instead unless doing so would duplicate irrelevant metadata.
+   - For Shortcut-ready drafts, `Epic` must come from the explicit `epic:` argument. `Name` may come from explicit `name:`; otherwise infer a concise title from the conversation. If no reasonable name can be inferred, ask the user for `name:`.
+   - Do not include or preserve a `Context:` marker in `task.md`; it is not part of the invocation interface.
+   - If the source content already includes a `# Story details` section, do not preserve it as the first section unless this run is Shortcut-ready; place the source content under `# Context` instead unless doing so would duplicate irrelevant metadata.
 
 6. **Find next draft folder name:**
    - list first-level folders under `/Volumes/dev/_tasks/<project>/` matching exactly `draftNN`, where `NN` is a two-digit positive integer
@@ -150,6 +168,8 @@ The result is intended to be used later with:
 ## Important Notes
 
 - The first token is the project name only when it matches an existing project folder; otherwise the project is inferred from the current checkout and the whole input is the draft request
+- `epic: <id>` is the only Shortcut-ready trigger; without it, drafts are local-only
+- Do not ask the user for `Context:`; use the conversation context by default
 - Create only; do not modify existing drafts
 - Do not create project folders automatically
 - Do not add extra files

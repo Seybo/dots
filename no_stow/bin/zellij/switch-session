@@ -37,10 +37,10 @@ normalize_session_name() {
 
   case "$session" in
     system)
-      printf '%s\n' "shaka1"
+      printf '%s\n' "shaka_gtm1"
       ;;
     gtm)
-      printf '%s\n' "shaka2"
+      printf '%s\n' "shaka_gtm2"
       ;;
     *)
       printf '%s\n' "$session"

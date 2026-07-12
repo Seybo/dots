@@ -18,16 +18,8 @@ log_dir="$HOME/Library/Logs"
 mkdir -p "$log_dir"
 printf '%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$title" "$subtitle" "$message" >> "$log_dir/monit-notify.log"
 
-if command -v terminal-notifier >/dev/null 2>&1; then
-  terminal-notifier \
-    -title "$title" \
-    -subtitle "$subtitle" \
-    -message "$message" \
-    -sound default
-else
-  /usr/bin/osascript \
-    -e 'on run argv' \
-    -e 'display notification (item 3 of argv) with title (item 1 of argv) subtitle (item 2 of argv)' \
-    -e 'end run' \
-    "$title" "$subtitle" "$message"
-fi
+/usr/bin/osascript \
+  -e 'on run argv' \
+  -e 'display notification (item 3 of argv) with title (item 1 of argv) subtitle (item 2 of argv)' \
+  -e 'end run' \
+  "$title" "$subtitle" "$message"
