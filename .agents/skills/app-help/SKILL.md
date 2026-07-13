@@ -21,6 +21,7 @@ Typical input:
 - Keep a small app registry in `apps/`
 - Keep a small Neovim plugin registry in `nvim/plugins/`
 - Use registry files primarily as source registries, with short high-signal local gotchas when discovered during work
+- Never use registry files as snapshots of volatile runtime config or current app state
 - If an app is unknown, discover sources and add `apps/<app>.md` before answering
 - If a Neovim plugin is unknown, discover sources and add `nvim/plugins/<plugin>.md` before answering
 - Always cite the source actually used
@@ -155,6 +156,8 @@ When creating or updating a registry file:
 - only list local config files that actually exist
 - do not copy factual answers from the docs into the app file
 - do not add generic tips, summaries, keybindings, config explanations, or mini-manual content
+- do not record volatile runtime state, current settings, generated rules, current thresholds, current durations, current process lists, installed plugin versions, active sessions, cache contents, or other values that are already represented in a real config/runtime file
+- do not mirror config values from source files into registry prose; instead point to the source file or command that shows the current value
 - do add short local gotchas when the current task revealed a non-obvious behavior that is likely to save time later; keep these notes specific, source-backed, and tied to local config or workflow
 
 ## Answer format
@@ -193,6 +196,7 @@ For online sources, include a short label and URL:
 
 Update an existing app or plugin registry file when discovery reveals a clearly better official source, local doc path, `:help` entry, plugin repo, or real local config path.
 Also consider updating it at the end of each app-help run when the work uncovered a high-signal local gotcha, convention, or non-obvious interaction that would have shortened the investigation.
+Do not update the registry merely because you changed a runtime setting, threshold, key value, generated wrapper, installed process rule, or other mutable config. The registry should point to where that state lives, not duplicate it.
 Keep edits small and maintain the existing structure.
 
 ## Constraints

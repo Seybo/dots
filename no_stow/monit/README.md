@@ -1,10 +1,10 @@
 # Monit CPU alerts
 
-Free macOS high-CPU notifications using Monit plus `osascript` notification banners.
+Free macOS high-CPU notifications using Monit plus custom Hammerspoon opacity-controlled alerts, with `osascript` notification fallback.
 
 ## Why this setup
 
-Monit is a good fit for rules such as "process matching this regex uses more than 30% CPU for 60 seconds". The notifier script uses non-modal macOS notification banners via `osascript display notification`.
+Monit is a good fit for rules such as "process matching this regex uses more than 30% CPU for 60 seconds". The notifier script prefers a custom Hammerspoon drawing for top-right opacity-controlled floating alerts and falls back to non-modal macOS notification banners via `osascript display notification`. Hammerspoon reads `~/.dots/themes/active/ghostty` at notification time, uses the active terminal `background` at 90% opacity, chooses black or white text by luminance, estimates alert height from wrapped text with min/max bounds, and renders alerts as a compact service/match plus CPU-threshold summary.
 
 This setup differs slightly from generic snippets:
 
@@ -18,6 +18,7 @@ This setup differs slightly from generic snippets:
 
 ```sh
 brew install monit
+brew install --cask hammerspoon
 ~/.dots/no_stow/bin/monit-cpu-alerts install
 ```
 
@@ -89,11 +90,13 @@ After editing or adding rules while Monit is running:
 ~/.dots/no_stow/bin/monit-cpu-alerts paths
 ```
 
-Current local monitor:
+Current configured monitors live in runtime files, not in this README:
 
-- `zellij`: scan all matching `zellij` PIDs with regex `(^|/)zellij( |$)`; notify above `30%` CPU for `30s`, with `300s` per-PID cooldown.
-- `tmux`: scan all matching `tmux` PIDs with regex `(^|/)tmux( |$)`; notify above `30%` CPU for `30s`, with `300s` per-PID cooldown.
-- `pi`: scan all matching `pi` PIDs with regex `(^|/)pi( |$)`; notify above `15%` CPU for `10s`, with `300s` per-PID cooldown.
+```sh
+~/.dots/no_stow/bin/monit-cpu-alerts status
+~/.dots/no_stow/bin/monit-cpu-alerts paths
+ls ~/.local/state/monit/programs
+```
 
 Logs:
 

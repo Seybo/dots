@@ -18,6 +18,32 @@ log_dir="$HOME/Library/Logs"
 mkdir -p "$log_dir"
 printf '%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$title" "$subtitle" "$message" >> "$log_dir/monit-notify.log"
 
+if command -v hs >/dev/null 2>&1; then
+  hs_title_file="$(mktemp)"
+  hs_subtitle_file="$(mktemp)"
+  hs_message_file="$(mktemp)"
+
+  printf '%s' "$title" > "$hs_title_file"
+  printf '%s' "$subtitle" > "$hs_subtitle_file"
+  printf '%s' "$message" > "$hs_message_file"
+
+  hs_title_path="${hs_title_file//\\/\\\\}"
+  hs_title_path="${hs_title_path//\"/\\\"}"
+  hs_subtitle_path="${hs_subtitle_file//\\/\\\\}"
+  hs_subtitle_path="${hs_subtitle_path//\"/\\\"}"
+  hs_message_path="${hs_message_file//\\/\\\\}"
+  hs_message_path="${hs_message_path//\"/\\\"}"
+
+  hs_command="local function read(path) local file = assert(io.open(path, 'r')); local value = file:read('*a'); file:close(); return value end; monitNotify(read(\"$hs_title_path\"), read(\"$hs_subtitle_path\"), read(\"$hs_message_path\"))"
+
+  if hs -c "$hs_command" </dev/null >> "$log_dir/monit-notify.log" 2>&1; then
+    rm -f "$hs_title_file" "$hs_subtitle_file" "$hs_message_file"
+    exit 0
+  fi
+
+  rm -f "$hs_title_file" "$hs_subtitle_file" "$hs_message_file"
+fi
+
 /usr/bin/osascript \
   -e 'on run argv' \
   -e 'display notification (item 3 of argv) with title (item 1 of argv) subtitle (item 2 of argv)' \
