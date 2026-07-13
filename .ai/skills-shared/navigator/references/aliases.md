@@ -5,7 +5,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 ## GitHub / PRs
 
 - `github`, `gh`, `pr`, `pull request`, `review PR`, `review my branch`, `look at diff`, `code review` → `/skill:claude-super-review`
-- `review comments`, `address comments`, `inline comments`, `review id` → `/skill:addressit` or `/skill:address-review`
+- `review comments`, `address comments`, `inline comments`, `review id` → `/skill:addressit`
 - `stale branches`, `merged branches`, `delete branches` → `/skill:delete-merged-branches`
 
 ## Shortcut / tasks

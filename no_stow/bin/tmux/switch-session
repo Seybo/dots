@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  tmux-switch-session to <session-name>
+  tmux-switch-session last
+EOF
+}
+
+session_exists() {
+  local session="$1"
+  tmux has-session -t "$session" 2>/dev/null
+}
+
+project_exists() {
+  local project="$1"
+  tmuxinator list 2>/dev/null | tr '[:space:]' '\n' | grep -Fx -- "$project" >/dev/null
+}
+
+switch_or_attach() {
+  local session="$1"
+
+  if [[ -n "${TMUX:-}" ]]; then
+    exec tmux switch-client -t "$session"
+  fi
+
+  exec tmux attach-session -t "$session"
+}
+
+start_project() {
+  local project="$1"
+
+  exec tmuxinator start "$project"
+}
+
+switch_to() {
+  local target="$1"
+
+  if session_exists "$target"; then
+    switch_or_attach "$target"
+  fi
+
+  if project_exists "$target"; then
+    start_project "$target"
+  fi
+
+  echo "No tmux session or tmuxinator project found: $target" >&2
+  exit 1
+}
+
+switch_last() {
+  if [[ -z "${TMUX:-}" ]]; then
+    echo "tmux last-session switching requires running inside tmux" >&2
+    exit 1
+  fi
+
+  exec tmux switch-client -l
+}
+
+cmd="${1:-}"
+case "$cmd" in
+  to)
+    target="${2:-}"
+    if [[ -z "$target" ]]; then
+      usage
+      exit 1
+    fi
+    switch_to "$target"
+    ;;
+  last)
+    switch_last
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac

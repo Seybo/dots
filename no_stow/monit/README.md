@@ -51,6 +51,7 @@ For apps that spawn multiple processes with the same name, use `add-scan`. This 
 
 ```sh
 ~/.dots/no_stow/bin/monit-cpu-alerts add-scan zellij '(^|/)zellij( |$)' 30 30 300
+~/.dots/no_stow/bin/monit-cpu-alerts add-scan tmux '(^|/)tmux( |$)' 30 30 300
 ```
 
 Arguments:
@@ -91,6 +92,7 @@ After editing or adding rules while Monit is running:
 Current local monitor:
 
 - `zellij`: scan all matching `zellij` PIDs with regex `(^|/)zellij( |$)`; notify above `30%` CPU for `30s`, with `300s` per-PID cooldown.
+- `tmux`: scan all matching `tmux` PIDs with regex `(^|/)tmux( |$)`; notify above `30%` CPU for `30s`, with `300s` per-PID cooldown.
 - `pi`: scan all matching `pi` PIDs with regex `(^|/)pi( |$)`; notify above `15%` CPU for `10s`, with `300s` per-PID cooldown.
 
 Logs:

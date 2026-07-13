@@ -32,9 +32,13 @@ clipboard-paste-protection = true
 macos-option-as-alt = true
 quit-after-last-window-closed = true
 
-# Zellij tabs
-# cmd+t => enter tab mode
+# Zellij/tmux tabs
+# cmd+t => enter tab/window mode
 keybind = cmd+t=text:
+# cmd+u => previous tab/window
+keybind = cmd+u=text:
+# cmd+m => next tab/window
+keybind = cmd+m=text:
 
 # Zellij sessions
 # cmd+s => enter session mode

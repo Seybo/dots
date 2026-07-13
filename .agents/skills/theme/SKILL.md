@@ -56,7 +56,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 - Claude Code: custom theme file `~/.claude/themes/theme.json` is a symlink to `~/.dots/themes/active/claude.json`; select it in Claude with `/theme`. Claude Code watches `~/.claude/themes/` and reloads custom theme files automatically.
 - Lazygit: `~/Library/Application Support/lazygit/config.yml` is a symlink to `~/.dots/themes/active/lazygit.yml`; Lazygit reads it on launch.
 - Hermes Agent: `~/.hermes/skins/env-active.yaml` is a symlink to `~/.dots/themes/active/hermes.yaml`; `~/.hermes/config.yaml` sets `display.skin: env-active`.
-- tmux is legacy only. `.tmux.conf.local` may source `themes/active/tmux.conf`, but new themes should not add tmux files unless the user explicitly asks for legacy support.
+- tmux is supported for tmux-aware themes. `.tmux.conf` quiet-sources `themes/active/tmux.conf` when present, so themes without tmux files remain safe. Add `tmux.conf` only when tmux styling is in scope for that theme.
 - Alacritty is retired. Do not add Alacritty theme files.
 - Claude Code is wired through the symlink above, not by modifying the switcher or writing `~/.claude/settings.json` on every switch.
 
@@ -87,7 +87,7 @@ A standard modern theme should have a file for each current app integration:
 - `lazygit.yml`
 - `hermes.yaml`
 
-Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, or `hermes.yaml` until they are modernized. Legacy Rose Pine themes may have `tmux.conf`; do not copy that pattern for new themes unless explicitly requested.
+Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, or `hermes.yaml` until they are modernized. Themes may also omit `tmux.conf`; tmux falls back to base styling when the active theme has no tmux file.
 
 ## Creating a new theme
 

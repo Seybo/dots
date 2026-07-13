@@ -11,7 +11,6 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 
 - `/skill:claude-super-review` — default deep code-review workflow for PRs, branches, diffs, and uncommitted changes.
 - `/skill:addressit` — interactively fetch and address GitHub PR review comments one at a time.
-- `/skill:address-review` — fetch PR review comments and create a todo list.
 - `/skill:delete-merged-branches` — delete local git branches that were merged and removed from remote.
 - GitHub PR review fetch rule — source: `/Users/inseybo/.pi/agent/AGENTS.md` and project `AGENTS.md` files.
 

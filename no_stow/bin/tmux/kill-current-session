@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+current_session="${1:-}"
+
+if [[ -z "${TMUX:-}" ]]; then
+  echo "kill-current-session requires running inside tmux" >&2
+  exit 1
+fi
+
+if [[ -z "$current_session" ]]; then
+  current_session="$(tmux display-message -p '#S')"
+fi
+
+if ! tmux has-session -t "$current_session" 2>/dev/null; then
+  tmux display-message "session not found: $current_session" 2>/dev/null || true
+  echo "session not found: $current_session" >&2
+  exit 1
+fi
+
+session_count="$(tmux list-sessions -F '#{session_name}' | wc -l | tr -d ' ')"
+if [[ "$session_count" -lt 2 ]]; then
+  tmux display-message "only one session; not killing $current_session" 2>/dev/null || true
+  echo "only one session; not killing $current_session" >&2
+  exit 1
+fi
+
+if tmux switch-client -l 2>/dev/null || tmux switch-client -p 2>/dev/null; then
+  tmux kill-session -t "$current_session"
+  tmux display-message "killed session $current_session"
+else
+  tmux display-message "no previous session; not killing $current_session" 2>/dev/null || true
+  echo "no previous session; not killing $current_session" >&2
+  exit 1
+fi
