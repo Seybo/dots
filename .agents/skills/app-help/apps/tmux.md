@@ -23,3 +23,4 @@
 
 - Local tmux keeps the default `Ctrl-b` prefix; Ghostty `Cmd-p` enters local pane mode, where `n` splits right and `N` splits down.
 - Local tmux theme loading currently expects `~/.dots/themes/active/tmux.conf`, but most current themes only have Zellij/Ghostty/etc. files.
+- With local `allow-set-title on`, programs such as Pi and Claude can overwrite tmuxinator `select-pane -T` pane titles after startup.

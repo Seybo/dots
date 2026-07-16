@@ -9,7 +9,7 @@
 
 ## Local configs
 
-- `~/.config/tmuxinator/*.yml`
+- `~/.dots/.config/tmuxinator/*.yml` (stowed to `~/.config/tmuxinator`)
 - `~/.dots/no_stow/.zsh_aliases_public` (`alias mux='tmuxinator'`)
 - `~/.dots/.zshrc` (Oh My Zsh `tmuxinator` plugin)
 
@@ -20,4 +20,4 @@
 
 ## Local gotchas
 
-- Existing tmuxinator projects live in `~/.config/tmuxinator`, not in this dotfiles checkout.
+- `~/.config/tmuxinator` is a symlink to `~/.dots/.config/tmuxinator`; inspect/edit the dotfiles path for source-controlled layouts.
