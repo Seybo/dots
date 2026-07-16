@@ -41,9 +41,9 @@ Fetch GitHub PR review comments and guide the operator through them one by one:
 3. propose one or more solutions
 4. wait for the operator to choose/approve a solution
 5. implement only the approved solution
-6. summarize changes and wait for the operator to review/approve moving to the next comment
+6. summarize changes, then automatically continue to the next comment (no separate approval to advance)
 
-Never address multiple comments in one uninterrupted run.
+Start from the first comment automatically. Advance through the queue on your own, but never implement a comment's fix until the operator approves that comment's solution — one solution-approval gate per comment, no batching.
 
 ## Inputs supported
 
@@ -121,7 +121,7 @@ If the PR/repo cannot be determined, ask for a PR number or PR URL.
      ```text
      1. <kind> @<user> <path>:<line> <url>
      ```
-   - Ask which comment to start with, defaulting to `1`.
+   - Do not ask which comment to start with. Start with comment `1` and work down the list in order.
 
 ## Per-comment workflow
 
@@ -146,8 +146,8 @@ For exactly one selected comment at a time:
    - Do not implement yet.
 
 4. **Wait for operator approval:**
-   - Ask the operator to choose/approve a solution.
-   - If the operator rejects the comment or asks to skip, mark it skipped in the queue and ask whether to move to the next comment.
+   - Ask the operator to choose/approve a solution. This is the one required gate per comment.
+   - If the operator rejects the comment or asks to skip, mark it skipped in the queue and automatically continue to the next comment.
 
 5. **Implement approved solution:**
    - Make the smallest targeted change that addresses the approved comment.
@@ -160,10 +160,11 @@ For exactly one selected comment at a time:
    - Before running commands likely to take more than a few seconds, state what they will do and why.
    - Summarize pass/fail results.
 
-7. **Stop and wait:**
+7. **Report and auto-advance:**
    - Report changed files, checks run, and whether the comment appears addressed.
-   - Ask the operator to review and explicitly approve moving to the next comment.
-   - Do not proceed to the next comment without explicit approval.
+   - Then continue to the next comment automatically — do not ask for approval to advance. Go straight into the per-comment workflow for the next queued comment (present it, give an opinion, propose solutions, then stop at that comment's solution-approval gate).
+   - When the queue is empty, stop and report the final state: which comments were addressed, which were skipped.
+   - The operator can still interrupt at any time to pause, redirect, or stop the run.
 
 ## Important notes
 
