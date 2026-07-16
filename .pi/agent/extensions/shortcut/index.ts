@@ -1,7 +1,6 @@
 import { execFile } from "node:child_process"
-import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
-import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, readdirSync, statSync } from "node:fs"
 import { dirname, join } from "node:path"
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent"
 
@@ -68,7 +67,7 @@ export default function (pi: ExtensionAPI) {
     })
 
     pi.registerCommand("shortcut-story-update", {
-        description: "Update a Shortcut story description from markdown. Usage: /shortcut-story-update <id-or-link> [description.md]",
+        description: "Update a Shortcut story name and description from markdown. Usage: /shortcut-story-update <id-or-link> [description.md]",
         handler: async (args, ctx) => {
             const updateArgs = parseUpdateStoryArgs(args)
 
@@ -205,30 +204,8 @@ async function createStory(rawJson: string, signal?: AbortSignal): Promise<Short
 }
 
 async function updateStory(storyId: string, descriptionPath: string, signal?: AbortSignal): Promise<ShortcutStory> {
-    const cleanedDescriptionPath = stripStoryDetailsSection(descriptionPath)
-    const result = await runShortcut(["update-story", storyId, cleanedDescriptionPath], signal)
+    const result = await runShortcut(["update-story", storyId, descriptionPath], signal)
     return JSON.parse(result.stdout) as ShortcutStory
-}
-
-function stripStoryDetailsSection(descriptionPath: string): string {
-    const markdown = readFileSync(descriptionPath, "utf8")
-    const lines = markdown.split(/\r?\n/)
-    const start = lines.findIndex((line) => line === "# Story details")
-    if (start === -1) return descriptionPath
-
-    let end = lines.length
-    for (let i = start + 1; i < lines.length; i += 1) {
-        if (lines[i]?.startsWith("# ")) {
-            end = i
-            break
-        }
-    }
-
-    const stripped = [...lines.slice(0, start), ...lines.slice(end)].join("\n").replace(/^\n+/, "")
-    const dir = mkdtempSync(join(tmpdir(), "shortcut-story-update-"))
-    const cleanedPath = join(dir, "description.md")
-    writeFileSync(cleanedPath, stripped.endsWith("\n") ? stripped : `${stripped}\n`)
-    return cleanedPath
 }
 
 async function readStories(storyIds: string[], signal?: AbortSignal): Promise<string> {

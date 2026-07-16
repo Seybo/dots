@@ -41,9 +41,10 @@ module Shortcut
 
     def update_story_description(story_id, description_path)
       story_id = Integer(story_id)
-      description = File.read(expanded_description_path(description_path))
+      markdown = File.read(expanded_description_path(description_path))
+      story_update = story_update_from_markdown(markdown)
 
-      request(:put, "/stories/#{story_id}", body: { "description" => description })
+      request(:put, "/stories/#{story_id}", body: story_update)
     rescue ArgumentError
       raise Error, "story_id must be an integer"
     end
@@ -119,6 +120,48 @@ module Shortcut
       return nil unless params.key?("description_path")
 
       File.read(expanded_description_path(params["description_path"]))
+    end
+
+    def story_update_from_markdown(markdown)
+      details = story_details(markdown)
+      description = details ? markdown_without_story_details(markdown, details.fetch(:range)) : markdown
+      body = { "description" => ensure_trailing_newline(description) }
+      body["name"] = details.fetch(:name) if details&.fetch(:name, nil)
+      body
+    end
+
+    def story_details(markdown)
+      lines = markdown.split(/\r?\n/, -1)
+      start_index = lines.index("# Story details")
+      return nil unless start_index
+
+      end_index = lines.length
+      ((start_index + 1)...lines.length).each do |index|
+        if lines[index].start_with?("# ")
+          end_index = index
+          break
+        end
+      end
+
+      name = nil
+      lines[(start_index + 1)...end_index].each do |line|
+        next unless line.start_with?("Name:")
+
+        value = line.delete_prefix("Name:").strip
+        name = value unless value.empty?
+        break
+      end
+
+      { name: name, range: start_index...end_index }
+    end
+
+    def markdown_without_story_details(markdown, range)
+      lines = markdown.split(/\r?\n/, -1)
+      ([*lines[0...range.begin], *lines[range.end..]]).join("\n").sub(/\A\n+/, "")
+    end
+
+    def ensure_trailing_newline(value)
+      value.end_with?("\n") ? value : "#{value}\n"
     end
 
     def expanded_description_path(description_path)

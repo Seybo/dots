@@ -58,7 +58,7 @@ module ShortcutCli
         shortcut.rb update-story STORY_ID description.md
 
       Create story accepts name, epic_id, and optional description_path or description. Team defaults to AI Team, workflow to GTM Engine, and state to Ready for Development.
-      Update story currently only updates description from a markdown file.
+      Update story updates description from a markdown file and, when present, the Name from its # Story details section.
 
       Environment:
         SHORTCUT_KEY must contain your Shortcut API token.

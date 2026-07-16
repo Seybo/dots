@@ -1,11 +1,11 @@
 ---
 name: shortcut
-description: Read Shortcut stories, create minimal Shortcut stories, and update story descriptions from markdown files using the shared Ruby Shortcut CLI. Use when the user asks to read story/stories from IDs or links, explicitly asks to create a Shortcut story with a name and epic ID, or asks to update a story description.
+description: Read Shortcut stories, create minimal Shortcut stories, and update story names/descriptions from markdown files using the shared Ruby Shortcut CLI. Use when the user asks to read story/stories from IDs or links, explicitly asks to create a Shortcut story with a name and epic ID, or asks to update a story from task markdown.
 ---
 
 # Shortcut
 
-Use this skill to read Shortcut stories, create minimal Shortcut stories, and update story descriptions through the shared Ruby CLI.
+Use this skill to read Shortcut stories, create minimal Shortcut stories, and update story names/descriptions through the shared Ruby CLI.
 
 ## When to use
 
@@ -122,16 +122,16 @@ printf '%s\n' '{"name":"Story name","epic_id":123}' | ruby ~/.pi/agent/extension
 
 After creation, report the created story ID and URL from the returned JSON.
 
-## Update story description
+## Update story name and description
 
-Updating a Shortcut story is a write operation. This skill currently only supports updating the story description from a markdown file.
+Updating a Shortcut story is a write operation. This skill updates the story description from a markdown file. When the markdown file contains a `# Story details` section with a `Name:` line, it also updates the Shortcut story name from that value.
 
 Minimum arguments:
 
 - one Shortcut story ID or story URL
 - optional markdown file path ending in `.md` or `.markdown`
 
-If the markdown path is omitted, find the task file automatically by story ID under `/Volumes/dev/_tasks/*/<story_id>-*/task.md`. Exactly one matching task folder must exist. When updating from a `task.md` that contains a `# Story details` section, strip that section before sending the description to Shortcut.
+If the markdown path is omitted, find the task file automatically by story ID under `/Volumes/dev/_tasks/*/<story_id>-*/task.md`. Exactly one matching task folder must exist. When updating from a `task.md` that contains a `# Story details` section, use its `Name:` value as the Shortcut story name and strip that section before sending the description to Shortcut.
 
 In Pi, users may invoke this with plain language containing `update story`, `update stories`, `update this story`, or `update these stories`, for example:
 
@@ -156,7 +156,7 @@ ruby ~/.pi/agent/extensions/shortcut/scripts/shortcut.rb update-story 33002 ./de
 
 For story-id-only update, the Pi command/skill resolves the task file path first, then calls the CLI with that path.
 
-After update, report the updated story ID and URL from the returned JSON.
+After update, report the updated story ID, name, and URL from the returned JSON.
 
 ## Error handling
 
@@ -166,4 +166,4 @@ If one story fails but others succeed, report which story failed and continue us
 
 ## Safety
 
-Reading is safe to perform when requested. Creating is allowed only through the explicit minimal create-story flow documented above. Updating is allowed only for story descriptions from markdown files as documented above. Do not delete Shortcut resources unless a future skill version explicitly documents deletion.
+Reading is safe to perform when requested. Creating is allowed only through the explicit minimal create-story flow documented above. Updating is allowed only for story names/descriptions from markdown files as documented above. Do not delete Shortcut resources unless a future skill version explicitly documents deletion.
