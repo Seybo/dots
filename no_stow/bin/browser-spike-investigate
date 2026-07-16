@@ -1,0 +1,140 @@
+#!/bin/zsh
+set -u
+
+PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+browser=${1:-}
+log_dir="$HOME/Library/Logs/browser-monitor"
+sample_dir="$log_dir/samples"
+
+usage() {
+  cat <<'USAGE'
+Usage: browser-spike-investigate <brave|chrome>
+
+Captures a point-in-time high-CPU browser investigation:
+- recent Monit browser alerts
+- five 1-second ps samples for the browser parent PID
+- a 45-second macOS sample(1) stack trace
+- recent browser profile session/sync/extension files
+
+Writes sample files under ~/Library/Logs/browser-monitor/samples.
+USAGE
+}
+
+if [[ "$browser" != "brave" && "$browser" != "chrome" ]]; then
+  usage
+  exit 1
+fi
+
+mkdir -p "$sample_dir"
+
+case "$browser" in
+  brave)
+    service="brave"
+    display_name="Brave Browser"
+    parent_regex='/Applications/Brave Browser.app/Contents/MacOS/Brave Browser$'
+    profile_dir="$HOME/Library/Application Support/BraveSoftware/Brave-Browser/Default"
+    ;;
+  chrome)
+    service="chrome"
+    display_name="Google Chrome"
+    parent_regex='/Applications/Google Chrome( Dev)?.app/Contents/MacOS/Google Chrome( Dev)?$'
+    profile_dir="$HOME/Library/Application Support/Google/Chrome/Default"
+    ;;
+esac
+
+print_section() {
+  printf '\n== %s ==\n' "$1"
+}
+
+find_parent_pid() {
+  ps -axo pid=,ppid=,pcpu=,time=,command= | awk -v regex="$parent_regex" '
+    $2 == 1 {
+      command = ""
+      for (i = 5; i <= NF; i++) {
+        command = command (i == 5 ? "" : " ") $i
+      }
+      if (command ~ regex) {
+        print $1
+        exit
+      }
+    }
+  '
+}
+
+sample_parent_pid() {
+  local pid=$1
+  local sample_file
+
+  sample_file="$sample_dir/$(date '+%Y-%m-%d-%H-%M-%S')-${service}-pid${pid}-investigate-45s.sample.txt"
+
+  {
+    printf '# captured by browser-spike-investigate\n'
+    printf '# browser: %s\n' "$display_name"
+    printf '# pid: %s\n' "$pid"
+    printf '# timestamp: %s\n\n' "$(date '+%F %T')"
+    sample "$pid" 45
+    sample_status=$?
+    printf '\n# sample_exit_status: %s\n' "$sample_status"
+  } > "$sample_file" 2>&1
+
+  printf 'sample_file=%s\n' "$sample_file"
+  wc -l "$sample_file"
+  printf '\nVisible hot-stack hints:\n'
+  rg -n 'NSBitmapImageRep|ImageIO|rename|fcntl|mkstemp|LevelDB|Sync|Session|mach_msg|kevent64|ThreadPoolForegroundWorker' "$sample_file" | head -120 || true
+}
+
+list_recent_profile_files() {
+  [[ -d "$profile_dir" ]] || return 0
+
+  print_section "Recent ${display_name} profile files"
+  zsh -c 'ls -lt "$1"/{Local\ Extension\ Settings,Sync\ Extension\ Settings,Service\ Worker/Database,Site\ Characteristics\ Database,BraveWallet/Brave\ Wallet\ Storage,Extension\ Scripts,Sync\ Data/LevelDB,Sessions}/**/*(.N) 2>/dev/null | head -70' -- "$profile_dir"
+}
+
+map_recent_extensions() {
+  [[ -d "$profile_dir/Local Extension Settings" ]] || return 0
+
+  print_section "Recent extension stores"
+  zsh -c 'for p in "$1"/Local\ Extension\ Settings/*(.N); do id=${p:t}; mt=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" "$p"); printf "%s\t%s\n" "$mt" "$id"; done | sort -r | head -10' -- "$profile_dir"
+
+  print_section "Recent extension names"
+  zsh -c '
+    ids=()
+    for p in "$1"/Local\ Extension\ Settings/*(.N); do
+      ids+=("${p:t}")
+    done
+    for id in "${ids[@]:0:10}"; do
+      manifest=$(ls -1 "$1/Extensions/$id"/*/manifest.json 2>/dev/null | sort | tail -1)
+      if [[ -n "$manifest" ]]; then
+        ruby -rjson -e '\''m=JSON.parse(File.read(ARGV[0])); raw=m["name"]; key=raw[/__MSG_(.*?)__/,1]; value=nil; if key; Dir[File.join(File.dirname(ARGV[0]),"_locales","*","messages.json")].each { |p| data=JSON.parse(File.read(p)) rescue next; if data[key] && data[key]["message"]; value=data[key]["message"]; break; end }; end; puts [ARGV[1], value || raw, m["short_name"], m["version"]].compact.join("\t")'\'' "$manifest" "$id"
+      else
+        printf "%s\t(no installed manifest)\n" "$id"
+      fi
+    done
+  ' -- "$profile_dir"
+}
+
+print_section "Recent Monit ${service} scan lines"
+tail -80 "$HOME/Library/Logs/monit-cpu-scan.log" 2>/dev/null | rg "$service" | tail -20 || true
+
+print_section "Recent Monit ${service} notifications"
+tail -80 "$HOME/Library/Logs/monit-notify.log" 2>/dev/null | rg "$service" | tail -20 || true
+
+pid=$(find_parent_pid)
+if [[ -z "$pid" ]]; then
+  print_section "No parent PID found for ${display_name}"
+  exit 0
+fi
+
+print_section "Five 1-second ps samples for ${display_name} parent PID $pid"
+for _ in 1 2 3 4 5; do
+  date '+%F %T'
+  ps -p "$pid" -o pid=,pcpu=,time=,comm=
+  sleep 1
+done
+
+print_section "45-second sample for PID $pid"
+sample_parent_pid "$pid"
+
+list_recent_profile_files
+map_recent_extensions

@@ -1,0 +1,409 @@
+#!/bin/zsh
+set -u
+
+PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+script_path="${0:A}"
+log_dir_default="$HOME/Library/Logs/browser-monitor"
+state_dir="$HOME/Library/Application Support/browser-cpu-monitor"
+pid_file="$state_dir/browser-cpu-monitor.pid"
+
+usage() {
+  cat <<'USAGE'
+Usage: browser-cpu-monitor <command> [options]
+
+Commands:
+  run                       Run in the foreground until Ctrl+C
+  start                     Run in the background with nohup
+  stop                      Stop the background monitor
+  status                    Show whether the background monitor is running
+  hot [pct]                 Show hottest rows from the newest process log, default pct=10
+  samples                   List recent captured sample files
+  paths                     Print log/state paths
+  help                      Show this help
+
+Run/start options:
+  --threshold PCT           CPU percent that makes a browser child process hot (default: 25)
+  --interval SEC            Process snapshot interval (default: 5)
+  --warmup SEC              Required sustained hot time before sampling (default: 15)
+  --cooldown SEC            Minimum seconds between samples for the same PID (default: 300)
+  --sample-seconds SEC      Duration for macOS sample(1) capture (default: 10)
+  --log-dir DIR             Log directory (default: ~/Library/Logs/browser-monitor)
+  --match REGEX             Browser process regex (default: Google Chrome|Brave Browser)
+  --no-sample               Only log ps snapshots; do not run sample(1)
+
+Examples:
+  browser-cpu-monitor start
+  browser-cpu-monitor start --threshold 20 --warmup 30 --cooldown 600
+  browser-cpu-monitor hot 15
+  browser-cpu-monitor samples
+  browser-cpu-monitor stop
+USAGE
+}
+
+threshold=25
+interval=5
+warmup=15
+cooldown=300
+sample_seconds=10
+log_dir="$log_dir_default"
+match_regex='Google Chrome|Brave Browser'
+is_sampling=1
+
+fail() {
+  print -u2 -- "$1"
+  exit 1
+}
+
+is_number() {
+  [[ "$1" =~ '^[0-9]+([.][0-9]+)?$' ]]
+}
+
+is_integer() {
+  [[ "$1" =~ '^[0-9]+$' ]]
+}
+
+parse_run_options() {
+  while (( $# > 0 )); do
+    case "$1" in
+      --threshold)
+        (( $# >= 2 )) || fail "--threshold requires a value"
+        threshold="$2"
+        shift 2
+        ;;
+      --interval)
+        (( $# >= 2 )) || fail "--interval requires a value"
+        interval="$2"
+        shift 2
+        ;;
+      --warmup)
+        (( $# >= 2 )) || fail "--warmup requires a value"
+        warmup="$2"
+        shift 2
+        ;;
+      --cooldown)
+        (( $# >= 2 )) || fail "--cooldown requires a value"
+        cooldown="$2"
+        shift 2
+        ;;
+      --sample-seconds)
+        (( $# >= 2 )) || fail "--sample-seconds requires a value"
+        sample_seconds="$2"
+        shift 2
+        ;;
+      --log-dir)
+        (( $# >= 2 )) || fail "--log-dir requires a value"
+        log_dir="$2"
+        shift 2
+        ;;
+      --match)
+        (( $# >= 2 )) || fail "--match requires a value"
+        match_regex="$2"
+        shift 2
+        ;;
+      --no-sample)
+        is_sampling=0
+        shift
+        ;;
+      -h|--help|help)
+        usage
+        exit 0
+        ;;
+      *)
+        fail "Unknown option: $1"
+        ;;
+    esac
+  done
+
+  is_number "$threshold" || fail "Invalid --threshold: $threshold"
+  is_integer "$interval" || fail "Invalid --interval: $interval"
+  is_integer "$warmup" || fail "Invalid --warmup: $warmup"
+  is_integer "$cooldown" || fail "Invalid --cooldown: $cooldown"
+  is_integer "$sample_seconds" || fail "Invalid --sample-seconds: $sample_seconds"
+  (( interval > 0 )) || fail "--interval must be > 0"
+  (( sample_seconds > 0 )) || fail "--sample-seconds must be > 0"
+}
+
+newest_process_log() {
+  local newest
+  local logs=("$log_dir_default"/processes-*.tsv(N))
+  (( ${#logs} > 0 )) || return 1
+  newest=$(ls -t -- "${logs[@]}" 2>/dev/null | head -1)
+  [[ -n "$newest" ]] || return 1
+  print -r -- "$newest"
+}
+
+pid_is_running() {
+  local pid=$1
+  [[ -n "$pid" ]] || return 1
+  kill -0 "$pid" >/dev/null 2>&1
+}
+
+snapshot_browser_processes() {
+  local timestamp=$1 output=$2
+
+  ps -axo pid=,ppid=,pcpu=,pmem=,etime=,command= | awk \
+    -v ts="$timestamp" \
+    -v regex="$match_regex" '
+      {
+        pid = $1
+        ppid = $2
+        cpu = $3
+        mem = $4
+        etime = $5
+        command = ""
+        for (i = 6; i <= NF; i++) {
+          command = command (i == 6 ? "" : " ") $i
+        }
+
+        if (command !~ regex) next
+        if (command ~ /browser-cpu-monitor/) next
+
+        browser = "Google Chrome"
+        if (command ~ /Brave Browser/) browser = "Brave Browser"
+
+        kind = "browser"
+        detail = ""
+        if (match(command, /--type=[^ ]+/)) {
+          kind = substr(command, RSTART + 7, RLENGTH - 7)
+        }
+        if (match(command, /--utility-sub-type=[^ ]+/)) {
+          detail = substr(command, RSTART + 19, RLENGTH - 19)
+        } else if (command ~ /--extension-process/) {
+          detail = "extension-process"
+        }
+
+        gsub(/\t/, " ", command)
+        printf "%s\t%s\t%s\t%.1f\t%.1f\t%s\t%s\t%s\t%s\t%s\n", ts, pid, ppid, cpu, mem, etime, browser, kind, detail, command
+      }
+    ' > "$output"
+}
+
+slugify() {
+  print -r -- "$1" | tr '[:upper:] /' '[:lower:]--' | tr -cd '[:alnum:]._-'
+}
+
+capture_sample() {
+  local timestamp=$1 pid=$2 ppid=$3 cpu=$4 mem=$5 etime=$6 browser=$7 kind=$8 detail=$9 command=${10}
+  local browser_slug kind_slug sample_file
+
+  if (( is_sampling == 0 )); then
+    return 0
+  fi
+
+  if ! command -v sample >/dev/null 2>&1; then
+    printf '%s\tsample-unavailable\tpid=%s\tbrowser=%s\tkind=%s\n' "$timestamp" "$pid" "$browser" "$kind" >> "$events_log"
+    return 0
+  fi
+
+  browser_slug=$(slugify "$browser")
+  kind_slug=$(slugify "${kind:-unknown}")
+  sample_file="$sample_dir/${timestamp//[ :]/-}-${browser_slug}-pid${pid}-${kind_slug}.sample.txt"
+
+  printf '%s\tsample-start\tpid=%s\tppid=%s\tcpu=%s\tmem=%s\tetime=%s\tbrowser=%s\tkind=%s\tdetail=%s\tfile=%s\n' \
+    "$timestamp" "$pid" "$ppid" "$cpu" "$mem" "$etime" "$browser" "$kind" "$detail" "$sample_file" >> "$events_log"
+
+  {
+    printf '# Captured by browser-cpu-monitor\n'
+    printf '# timestamp: %s\n' "$timestamp"
+    printf '# pid: %s\n' "$pid"
+    printf '# ppid: %s\n' "$ppid"
+    printf '# cpu_percent: %s\n' "$cpu"
+    printf '# mem_percent: %s\n' "$mem"
+    printf '# elapsed: %s\n' "$etime"
+    printf '# browser: %s\n' "$browser"
+    printf '# kind: %s\n' "$kind"
+    printf '# detail: %s\n' "$detail"
+    printf '# command: %s\n\n' "$command"
+    sample "$pid" "$sample_seconds"
+    sample_status=$?
+    printf '\n# sample_exit_status: %s\n' "$sample_status"
+    exit "$sample_status"
+  } > "$sample_file" 2>&1 &
+}
+
+run_monitor() {
+  parse_run_options "$@"
+
+  mkdir -p "$log_dir" "$log_dir/samples" "$state_dir"
+
+  local run_stamp snapshot_file hot_file timestamp now_epoch
+  typeset -A first_hot_seen
+  typeset -A last_sample_seen
+
+  run_stamp=$(date +%Y%m%d-%H%M%S)
+  process_log="$log_dir/processes-$run_stamp.tsv"
+  events_log="$log_dir/events-$run_stamp.log"
+  sample_dir="$log_dir/samples"
+  snapshot_file=$(mktemp)
+  hot_file=$(mktemp)
+
+  cleanup_run() {
+    rm -f "$snapshot_file" "$hot_file"
+    if [[ -f "$pid_file" ]] && [[ "$(cat "$pid_file" 2>/dev/null)" == "$$" ]]; then
+      rm -f "$pid_file"
+    fi
+  }
+  trap cleanup_run EXIT
+  trap 'cleanup_run; exit 130' INT
+  trap 'cleanup_run; exit 143' TERM
+
+  printf 'timestamp\tpid\tppid\tcpu_percent\tmem_percent\telapsed\tbrowser\tkind\tdetail\tcommand\n' > "$process_log"
+  printf '%s\tmonitor-start\tpid=%s\tthreshold=%s\tinterval=%s\twarmup=%s\tcooldown=%s\tsample_seconds=%s\tmatch=%s\n' \
+    "$(date '+%F %T')" "$$" "$threshold" "$interval" "$warmup" "$cooldown" "$sample_seconds" "$match_regex" > "$events_log"
+
+  print -r -- "browser-cpu-monitor running. Stop with Ctrl+C."
+  print -r -- "process_log=$process_log"
+  print -r -- "events_log=$events_log"
+  print -r -- "sample_dir=$sample_dir"
+
+  while true; do
+    timestamp=$(date '+%F %T')
+    now_epoch=$(date +%s)
+
+    if snapshot_browser_processes "$timestamp" "$snapshot_file"; then
+      cat "$snapshot_file" >> "$process_log"
+      awk -F '\t' -v threshold="$threshold" '$4 + 0 >= threshold + 0 { print }' "$snapshot_file" > "$hot_file"
+
+      typeset -A hot_now
+      while IFS=$'\t' read -r row_timestamp pid ppid cpu mem etime browser kind detail command; do
+        [[ -n "${pid:-}" ]] || continue
+        hot_now[$pid]=1
+
+        if (( ${+first_hot_seen[$pid]} == 0 )); then
+          first_hot_seen[$pid]=$now_epoch
+        fi
+
+        hot_duration=$(( now_epoch - first_hot_seen[$pid] ))
+        last_sample=${last_sample_seen[$pid]:-0}
+        since_sample=$(( now_epoch - last_sample ))
+
+        if (( hot_duration >= warmup && since_sample >= cooldown )); then
+          capture_sample "$timestamp" "$pid" "$ppid" "$cpu" "$mem" "$etime" "$browser" "$kind" "$detail" "$command"
+          last_sample_seen[$pid]=$now_epoch
+        fi
+      done < "$hot_file"
+
+      for pid in ${(k)first_hot_seen}; do
+        if (( ${+hot_now[$pid]} == 0 )); then
+          unset "first_hot_seen[$pid]"
+        fi
+      done
+    else
+      printf '%s\tsnapshot-failed\n' "$timestamp" >> "$events_log"
+    fi
+
+    sleep "$interval"
+  done
+}
+
+start_monitor() {
+  mkdir -p "$state_dir" "$log_dir_default"
+
+  if [[ -f "$pid_file" ]]; then
+    existing_pid=$(cat "$pid_file" 2>/dev/null)
+    if pid_is_running "$existing_pid"; then
+      print -r -- "browser-cpu-monitor is already running: pid=$existing_pid"
+      exit 0
+    fi
+    rm -f "$pid_file"
+  fi
+
+  nohup "$script_path" run "$@" > "$log_dir_default/launcher.out.log" 2> "$log_dir_default/launcher.err.log" &
+  monitor_pid=$!
+  print -r -- "$monitor_pid" > "$pid_file"
+  print -r -- "Started browser-cpu-monitor: pid=$monitor_pid"
+  print -r -- "Logs: $log_dir_default"
+}
+
+stop_monitor() {
+  if [[ ! -f "$pid_file" ]]; then
+    print -r -- "browser-cpu-monitor is not running (no pid file)."
+    exit 0
+  fi
+
+  monitor_pid=$(cat "$pid_file" 2>/dev/null)
+  if pid_is_running "$monitor_pid"; then
+    kill "$monitor_pid"
+    print -r -- "Stopped browser-cpu-monitor: pid=$monitor_pid"
+  else
+    print -r -- "Removed stale pid file: $pid_file"
+  fi
+  rm -f "$pid_file"
+}
+
+status_monitor() {
+  if [[ -f "$pid_file" ]]; then
+    monitor_pid=$(cat "$pid_file" 2>/dev/null)
+    if pid_is_running "$monitor_pid"; then
+      print -r -- "running pid=$monitor_pid"
+      exit 0
+    fi
+    print -r -- "not running; stale pid file=$pid_file pid=$monitor_pid"
+    exit 1
+  fi
+  print -r -- "not running"
+}
+
+show_hot() {
+  local pct=${1:-10} log
+  is_number "$pct" || fail "Invalid pct: $pct"
+  log=$(newest_process_log) || fail "No process logs found in $log_dir_default"
+  print -r -- "log=$log"
+  print -r -- $'timestamp\tpid\tppid\tcpu_percent\tmem_percent\telapsed\tbrowser\tkind\tdetail\tcommand'
+  awk -F '\t' -v threshold="$pct" 'NR > 1 && $4 + 0 >= threshold + 0 { print }' "$log" | sort -t $'\t' -k4,4nr | head -50
+}
+
+show_samples() {
+  local samples=("$log_dir_default"/samples/*.sample.txt(N))
+  if (( ${#samples} == 0 )); then
+    print -r -- "No sample files found in $log_dir_default/samples"
+    return 0
+  fi
+  ls -lt -- "${samples[@]}" 2>/dev/null | head -50
+}
+
+show_paths() {
+  cat <<EOF
+log_dir=$log_dir_default
+sample_dir=$log_dir_default/samples
+state_dir=$state_dir
+pid_file=$pid_file
+launcher_stdout=$log_dir_default/launcher.out.log
+launcher_stderr=$log_dir_default/launcher.err.log
+EOF
+}
+
+cmd=${1:-help}
+shift || true
+
+case "$cmd" in
+  run)
+    run_monitor "$@"
+    ;;
+  start)
+    start_monitor "$@"
+    ;;
+  stop)
+    stop_monitor
+    ;;
+  status)
+    status_monitor
+    ;;
+  hot)
+    show_hot "$@"
+    ;;
+  samples)
+    show_samples
+    ;;
+  paths)
+    show_paths
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac

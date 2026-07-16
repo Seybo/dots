@@ -16,6 +16,7 @@
 ## Tool permissions
 
 - For permission prompts / allowlist changes, read `refs/dev-env/agent-permissions.md` or use the shared `agent-permissions` skill. Default: update both Claude Code and Pi permissions unless the user explicitly scopes to one.
+- For browser CPU spike investigations from this repo, use the exact approved wrapper commands: `/Users/inseybo/.dots/no_stow/bin/browser-spike-investigate brave` or `/Users/inseybo/.dots/no_stow/bin/browser-spike-investigate chrome`. Do not run ad-hoc `ps`/`sample`/`lsof`/`awk` investigation chains unless the wrapper is insufficient and the user approves.
 - Before using bash patterns that may be restricted, check `.agents/permission.settings.json` mentally/explicitly and avoid commands matching the `deny` list when practical.
 - In particular, avoid `find ... -exec`, `find ... -delete`, `find ... -ok`, and `find ... -execdir`; prefer separate `find`, `ls`, `rg`, or shell-safe follow-up commands.
 
