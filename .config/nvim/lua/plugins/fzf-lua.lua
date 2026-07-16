@@ -60,6 +60,7 @@ return {
     map_with_cursor_restore('n', '<leader>fm', fzf.files, { cwd = '../_mydev' }, '[Fzf] Search in my dev')
     map_with_cursor_restore('n', '<leader>ft', fzf.files, { cwd = '/Volumes/dev/_tasks' }, '[Fzf] Search in all tasks')
     map_with_cursor_restore('n', '<leader>ttg', fzf.files, { cwd = '/Volumes/dev/_tasks/shaka_gtm' }, '[Fzf] Search Shaka GTM tasks')
+    map_with_cursor_restore('n', '<leader>tte', fzf.files, { cwd = '/Volumes/dev/_tasks/env' }, '[Fzf] Search env tasks')
     map_with_cursor_restore('n', '<leader>ttm', fzf.files, { cwd = '/Volumes/dev/_tasks', raw_cmd = 'rg --files my_*' }, '[Fzf] Search my_ tasks')
     map_with_cursor_restore('n', '<leader>fgc', fzf.git_status, nil, '[Fzf] Search Git Changed Files')
     map_with_cursor_restore('n', '<leader>fha', fzf.oldfiles, nil, '[Fzf] Files History (all)')
