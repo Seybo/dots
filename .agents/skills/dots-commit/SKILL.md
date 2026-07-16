@@ -26,11 +26,16 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
 - Do not mutate git history, branches, tags, stashes, remotes, or commit state.
 - Only suggest commit groups and commit messages unless the user later gives explicit approval for a specific git mutation.
 - If `dots-check` reports any finding, stop before reviewing commit groups. Ask the user whether each finding should be fixed or intentionally ignored.
+- If the user explicitly approves creating commits, run `dots-check` again after the commits for every new commit created in the session and verify that every finding is expected.
 
 ## Workflow
 
 1. **Resolve repo and status**
    - Work in `/Users/inseybo/.dots`.
+   - Record the starting commit before any later approved commit work:
+     ```bash
+     git -C /Users/inseybo/.dots rev-parse HEAD
+     ```
    - Run:
      ```bash
      git -C /Users/inseybo/.dots status --short
@@ -48,7 +53,7 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
      ```
    - Interpret exit codes:
      - `0`: continue.
-     - `1`: findings present. Stop and summarize the findings. Ask the user whether to fix or explicitly ignore them.
+     - `1`: findings present. Stop and summarize the findings. Ask the user whether to fix or explicitly ignore them. If the user explicitly ignores a finding, remember its rule/path/snippet as an expected finding for the post-commit scan.
      - `2`: usage/fatal error. Stop and report the error.
 
 3. **Inspect all uncommitted changes**
@@ -95,6 +100,21 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
      - any paths to exclude or handle separately
    - If a group is mixed or risky, say what needs user guidance.
 
+7. **After explicitly approved commits, scan the new commits**
+   - This step applies only if the user gives explicit approval to stage/commit specific groups and commits are created in this session.
+   - Count commits created since the starting commit from step 1:
+     ```bash
+     git -C /Users/inseybo/.dots rev-list --count <starting_head>..HEAD
+     ```
+   - If the count is greater than zero, scan all new commits:
+     ```bash
+     ./.agents/skills/dots-check/scripts/scan.rb --last-commits <count>
+     ```
+   - If the scan returns `0`, report that the post-commit dots-check passed.
+   - If the scan returns `1`, compare findings against findings the user explicitly approved ignoring during the pre-commit scan. Treat a finding as expected only when the rule, path, and relevant snippet clearly match the approved finding. Stop and ask the user about any new or changed finding.
+   - If the scan returns `2`, stop and report the scanner error.
+   - Include the post-commit scan result in the final response.
+
 ## Output format
 
 Use this structure:
@@ -110,6 +130,9 @@ Suggested commits:
    Include:
    - path
    Rationale: ...
+
+Post-commit dots-check:
+- not run|pass|expected findings|unexpected findings|error
 
 Needs your decision:
 - ...
