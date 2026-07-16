@@ -43,6 +43,7 @@
 - `monit-notify` prefers a custom Hammerspoon drawing and falls back to `osascript display notification` when `hs`/Hammerspoon is unavailable.
 - Current notification styling/text behavior lives in `~/.dots/.hammerspoon/init.lua`; consult that file instead of duplicating details here.
 - `hs -c` runs code in the Hammerspoon app process, so environment variables assigned to the `hs` CLI are not visible through `os.getenv` in the evaluated Lua. Pass dynamic notification text another way, such as temp files.
+- The terminal-themed alert is an `hs.drawing` overlay from `~/.dots/.hammerspoon/init.lua`; if it sticks, reload Hammerspoon to clear active drawings.
 
 ## Official sources
 
