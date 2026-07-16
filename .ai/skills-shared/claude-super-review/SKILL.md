@@ -635,7 +635,14 @@ After printing the Phase 3 markdown, ALWAYS persist the SAME markdown verbatim t
 
 **Where to write it** (first match wins):
 
-1. **Task folder known** - the invocation references a task under `/Volumes/dev/_tasks/<project>/<id>/` (the user passed a `task.md` path, a task folder path, or you derived one from the branch's Shortcut id). Write to `<task-folder>/super-review.md`.
+1. **Task folder** - resolve it deterministically, do NOT eyeball or improvise. Resolution follows the shared task-resolution logic (`~/.ai/skills-shared/components/task-resolution.md`):
+   - **Project**: if the user passed a `task.md` path or task-folder path, use that folder directly. Otherwise infer the project from the review's working dir — e.g. any of `/Volumes/dev/projects/shaka/gtm/{1st,2nd,3rd}/` → project `shaka_gtm`; task root is `/Volumes/dev/_tasks/<project>/`.
+   - **Story ID**: from the branch name, capture with `(?:^|/)sc-(\d+)(?:/|$)` (e.g. `mikhail/sc-33672/...` → `33672`). Task folders are named `<id>-<slug>` with NO `sc-` prefix.
+   - **Find the folder** with `find`, never a shell glob (a bare zsh glob aborts the whole command on a non-matching pattern and prints `no matches found`, which looks like a real negative but is a broken command):
+     ```bash
+     find "/Volumes/dev/_tasks/<project>" -maxdepth 1 -type d -name '<id>-*'
+     ```
+   - If `find` prints exactly one path, that is the task folder → write `<task-folder>/super-review.md`. If it prints nothing, the task folder genuinely does not exist → fall through to case 2/3. If it prints more than one, ask the user which. **A `find` that errored (non-zero exit) is not an empty result — re-run it before concluding "no task folder"; never route to the fallback on an unverified negative.**
 2. **PR review, no task folder** - write to `<repo-root>/super-review.md` in the user's main working dir (NOT the throwaway worktree - it gets removed in Phase 5). If that would clobber an existing unrelated file, use `super-review-pr<num>.md`.
 3. **Branch / staged / last-commit review, no task folder** - write to `<repo-root>/super-review.md`.
 
