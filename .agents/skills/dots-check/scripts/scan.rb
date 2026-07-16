@@ -42,14 +42,16 @@ CANDIDATE_TOKEN_REGEX = %r{[A-Za-z0-9+/_-]{#{ENTROPY_MIN_LEN},#{ENTROPY_MAX_LEN}
 
 options = {
   all: false,
+  unstaged: false,
   untracked: false,
   path: nil,
   last_commits: nil
 }
 
 parser = OptionParser.new do |opts|
-  opts.banner = 'Usage: scan.rb [--all] [--untracked] [--path GLOB] [--last-commits COUNT]'
+  opts.banner = 'Usage: scan.rb [--all] [--unstaged] [--untracked] [--path GLOB] [--last-commits COUNT]'
   opts.on('--all', 'Scan all tracked files') { options[:all] = true }
+  opts.on('--unstaged', 'Scan unstaged tracked changes, ignoring staged changes and HEAD fallback') { options[:unstaged] = true }
   opts.on('--untracked', 'Include untracked files') { options[:untracked] = true }
   opts.on('--path GLOB', 'Only scan files matching glob') { |g| options[:path] = g }
   opts.on('--last-commits COUNT', '--last COUNT', Integer, 'Scan changed lines in the last COUNT commits') do |count|
@@ -75,8 +77,14 @@ if options[:last_commits] && options[:last_commits] <= 0
   exit EXIT_USAGE
 end
 
-if options[:last_commits] && (options[:all] || options[:untracked])
-  warn 'Error: --last-commits cannot be combined with --all or --untracked'
+if options[:last_commits] && (options[:all] || options[:unstaged] || options[:untracked])
+  warn 'Error: --last-commits cannot be combined with --all, --unstaged, or --untracked'
+  warn parser
+  exit EXIT_USAGE
+end
+
+if options[:all] && options[:unstaged]
+  warn 'Error: --all cannot be combined with --unstaged'
   warn parser
   exit EXIT_USAGE
 end
@@ -154,7 +162,12 @@ def collect_targets(options)
     diff_cmd = nil
     source = nil
 
-    if !staged.strip.empty?
+    if options[:unstaged]
+      if !unstaged.strip.empty?
+        diff_cmd = 'git diff -U0'
+        source = :worktree
+      end
+    elsif !staged.strip.empty?
       diff_cmd = 'git diff --cached -U0'
       source = :index
     elsif !unstaged.strip.empty?

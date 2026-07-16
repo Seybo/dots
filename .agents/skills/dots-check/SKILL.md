@@ -24,8 +24,14 @@ No extra repo-detection guard is needed: if this skill is available, you're alre
 # Scan all tracked files
 ./.agents/skills/dots-check/scripts/scan.rb --all
 
+# Scan unstaged tracked changes, ignoring staged changes and HEAD fallback
+./.agents/skills/dots-check/scripts/scan.rb --unstaged
+
 # Include untracked files (text only)
 ./.agents/skills/dots-check/scripts/scan.rb --untracked
+
+# Scan unstaged tracked changes plus untracked files
+./.agents/skills/dots-check/scripts/scan.rb --unstaged --untracked
 
 # Filter to a glob
 ./.agents/skills/dots-check/scripts/scan.rb --path 'home/**/config/**'
@@ -93,7 +99,8 @@ Do not report a scanner behavior change as complete unless the relevant spec was
 
 ## Notes
 - Default behavior is: scan staged changes; if there are none, scan unstaged changes; if there are none, scan `HEAD`.
-- `--last-commits N` / `--last N` scans changed lines in each of the last `N` commits; it can be combined with `--path`, but not with `--all` or `--untracked`.
+- `--unstaged` scans only unstaged tracked changes, ignoring staged changes and avoiding the `HEAD` fallback. Combine it with `--untracked` to scan the whole uncommitted working tree.
+- `--last-commits N` / `--last N` scans changed lines in each of the last `N` commits; it can be combined with `--path`, but not with `--all`, `--unstaged`, or `--untracked`.
 - Keep output short to save model tokens. The scanner redacts matched secrets, absolute local user/volume paths, and truncates snippets.
 - The scanner prints the files it checks before reporting findings.
 - False positives happen; prefer auditing each finding rather than suppressing by default.

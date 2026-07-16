@@ -54,6 +54,31 @@ class ScanSpec < Minitest::Test
     end
   end
 
+  def test_unstaged_option_scans_unstaged_changes_even_when_staged_changes_exist
+    with_repo do |dir|
+      index_path = File.join(dir, "index_only.txt")
+      unstaged_path = File.join(dir, "unstaged.txt")
+
+      File.write(index_path, "safe staged change\n")
+      system({"HOME" => dir}, "git", "add", "index_only.txt", chdir: dir)
+      File.write(unstaged_path, "safe\n")
+      system({"HOME" => dir}, "git", "add", "unstaged.txt", chdir: dir)
+      system({"HOME" => dir}, "git", "commit", "-m", "init", chdir: dir)
+
+      File.write(index_path, "safe staged update\n")
+      system({"HOME" => dir}, "git", "add", "index_only.txt", chdir: dir)
+      token = ["ghp_", "1234567890abcdef", "12345678"].join
+      File.write(unstaged_path, "#{token}\n")
+
+      stdout, _stderr, status = run_scan(dir, "--unstaged")
+      assert_equal 1, status.exitstatus
+      assert_match(/Checking files \(1\):/, stdout)
+      assert_match(/unstaged\.txt/, stdout)
+      refute_match(/index_only\.txt/, stdout)
+      assert_match(/github_token/, stdout)
+    end
+  end
+
   def test_only_changed_lines_are_scanned_by_default
     with_repo do |dir|
       path = File.join(dir, "config.txt")
