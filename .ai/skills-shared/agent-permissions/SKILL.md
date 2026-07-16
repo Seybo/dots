@@ -29,7 +29,7 @@ Unless the user explicitly says **Pi only** or **Claude only**, update **both** 
 Memoize the scope decision before editing:
 
 - Use **repo-local** permission files for command shapes tied to one checkout, repo layout, app folders, local scripts, local DBs, or workflow-specific paths. Prefer local files for relative path allows such as `find app*`, `find docs*`, `sqlite3 db/...`, or repo `_mydev` scripts.
-- Use **global** permission files only for broadly reusable, low-risk command families that should work the same in most repos, such as `pwd`, `git status`, `git diff`, `rg`, `grep`, `head`, `sed -n`, and `python3 -m json.tool`.
+- Use **global** permission files for broadly reusable, low-risk command families that should work the same in most repos, such as `pwd`, `man *`, `col -b`, `git status`, `git diff`, `rg`, `grep`, `head`, `sed -n`, and `python3 -m json.tool`.
 - If the user asks to reduce prompts for commands seen in a specific repo and does not explicitly request global behavior, default to repo-local.
 - If the user asks to update repo-local permissions across all active projects, read `/Users/inseybo/.dots/refs/dev-env/active-projects.md` and update only the repo roots listed there.
 - NEVER assume the repo path for repo-local rules from the agent's current working directory or from this dotfiles checkout. If the prompted command uses relative paths or otherwise needs repo-local permissions, first confirm the actual repo path from the prompt context, an explicit user-provided path, or a `pwd` from that same agent session. If the repo path is unknown, ask the user before editing any repo-local permission file.
@@ -45,7 +45,10 @@ Memoize the scope decision before editing:
    - QA the safer alternative if it is safe
    - if the alternative is reusable, update the current repo's `AGENTS.md` with a concise safe-command substitution note so future agents avoid the unsafe shape
 4. Choose repo-local vs global using the selection rule above; when in doubt for repo-specific prompts, use repo-local.
-5. Prefer narrow, read-only command shapes.
+5. Prefer safe, read-only command shapes at the right level of generality:
+   - Do **not** over-narrow universally safe documentation/inspection commands to one subject. For example, if prompted for `man tmux`, suggest/allow `man *` globally, not `man tmux` only.
+   - Use broad global rules for non-mutating documentation/listing/filtering helpers such as `man *`, `col -b`, `pwd`, `ls`, `rg`, `grep`, `head`, `tail`, and `sed -n`.
+   - Use narrower rules when a command is repo-specific, path-specific, writes files, shells out, executes code, or has dangerous flags.
 6. Avoid broad executor allow rules unless explicitly approved (`python*`, `pytest*`, `xargs*`, `sh -c*`, arbitrary `bash(*)`).
 7. Preserve existing `deny` / `ask` safety rules.
 8. On every update, perform a redundancy check before and after editing:
