@@ -177,11 +177,18 @@ creates project roots or code checkouts.
      ```
    - Choose the checkout using the "Selecting the GTM checkout" rules in
      [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
-   - Generate the branch name manually:
+   - Generate the branch name manually from the Shortcut story name:
      ```text
-     mikhail/sc-{story_id}/{slug}
+     mikhail/sc-{story_id}/{shortcut_story_name_slug}
      ```
      - Always use `mikhail` as the branch prefix, regardless of story owner.
+     - Build `shortcut_story_name_slug` by slugifying the current Shortcut story `name` with the slug rules from step 3.
+     - If the story was just fetched or created in this command, use that returned story `name`.
+     - If the command is setting up a branch for an existing task folder, fetch the story first with the shared Shortcut CLI and use the returned `name`:
+       ```bash
+       ruby ~/.pi/agent/extensions/shortcut/scripts/shortcut.rb get-story <story_id>
+       ```
+     - Do not use the task folder suffix, `# Story details` local name, draft name, or any other local task title for the branch slug. Local task folders can drift from Shortcut titles; the branch slug must match Shortcut's Git Helper name.
      - Do NOT call `mcp__shortcut__stories-get-branch-name` — the MCP returns incorrect names (triple dashes, truncation).
    - Check the current branch in the selected checkout with `git -C /Volumes/dev/projects/shaka/gtm/<checkout> branch --show-current`.
      - If the current branch contains `sc-{story_id}` as a path segment, treat branch setup as already done and do not create or switch branches.

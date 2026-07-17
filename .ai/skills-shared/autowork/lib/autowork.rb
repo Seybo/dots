@@ -1,0 +1,2046 @@
+# frozen_string_literal: true
+
+require 'fileutils'
+require 'json'
+require 'open3'
+require 'time'
+require 'yaml'
+
+module Autowork
+  class Error < StandardError; end
+
+  ROOT = File.expand_path('..', __dir__)
+  TASK_ROOT = '/Volumes/dev/_tasks'
+  DOTS_REPO = '/Users/inseybo/.dots'
+  STEP_HEADING = /^## Step ([0-9]+)\b/.freeze
+
+  class Shell
+    Result = Struct.new(:stdout, :stderr, :status, keyword_init: true) do
+      def success?
+        status.success?
+      end
+    end
+
+    def self.capture(*args, chdir: nil)
+      options = {}
+      options[:chdir] = chdir if chdir
+      stdout, stderr, status = Open3.capture3(*args, **options)
+      Result.new(stdout: stdout, stderr: stderr, status: status)
+    end
+
+    def self.capture!(*args, chdir: nil)
+      result = capture(*args, chdir: chdir)
+      return result.stdout if result.success?
+
+      raise Error, "Command failed: #{args.join(' ')}\n#{result.stderr}"
+    end
+  end
+
+  TaskContext = Struct.new(:project, :task_id, :task_root, :task_folder, :code_dir, keyword_init: true)
+  Pane = Struct.new(:id, :session, :window_id, :window_name, :active, :command, :title, :path, keyword_init: true)
+  RolePanes = Struct.new(:manager, :pi_worker, :claude_worker, keyword_init: true)
+
+  class TaskResolver
+    def initialize(argv, cwd: Dir.pwd)
+      @argv = argv.dup
+      @cwd = File.expand_path(cwd)
+    end
+
+    def resolve
+      project_arg, task_id = parse_args
+      project, checkout = project_arg ? normalize_project(project_arg) : infer_project
+      task_root = File.join(TASK_ROOT, project)
+      raise Error, "Task project not found: #{task_root}" unless File.directory?(task_root)
+
+      code_dir = code_dir_for(project, checkout)
+      task_id ||= infer_story_id(code_dir)
+      raise Error, 'Could not infer task id. Pass /autowork <task_id> or /autowork <project> <task_id>.' if task_id.nil? || task_id.empty?
+      raise Error, "Task id must be digits only, got #{task_id.inspect}" unless task_id.match?(/\A\d+\z/)
+
+      task_folder = resolve_task_folder(task_root, task_id)
+      TaskContext.new(project: project, task_id: task_id, task_root: task_root, task_folder: task_folder, code_dir: code_dir)
+    end
+
+    private
+
+    def parse_args
+      case @argv.length
+      when 0 then [nil, nil]
+      when 1
+        token = @argv[0]
+        project_name?(token) || gtm_alias?(token) ? [token, nil] : [nil, token]
+      when 2 then [@argv[0], @argv[1]]
+      else raise Error, 'Usage: autowork [project-or-gtm-session] [task_id]'
+      end
+    end
+
+    def project_name?(value)
+      File.directory?(File.join(TASK_ROOT, value))
+    end
+
+    def gtm_alias?(value)
+      %w[shaka_gtm1 shaka_gtm2 shaka_gtm3].include?(value)
+    end
+
+    def normalize_project(value)
+      case value
+      when 'shaka_gtm1' then ['shaka_gtm', '1st']
+      when 'shaka_gtm2' then ['shaka_gtm', '2nd']
+      when 'shaka_gtm3' then ['shaka_gtm', '3rd']
+      else [value, nil]
+      end
+    end
+
+    def infer_project
+      case @cwd
+      when %r{\A/Volumes/dev/projects/shaka/gtm/(1st|2nd|3rd)(/|\z)}
+        ['shaka_gtm', Regexp.last_match(1)]
+      when %r{\A/Volumes/dev/projects/mydev/([^/]+)(/|\z)}
+        project = Regexp.last_match(1)
+        raise Error, "Cannot infer project from #{@cwd}; #{project.inspect} does not start with my_" unless project.start_with?('my_')
+
+        [project, nil]
+      when %r{\A/Volumes/dev/projects/shaka/([^/]+)(/|\z)}
+        project = Regexp.last_match(1)
+        raise Error, "Cannot infer project from #{@cwd}; #{project.inspect} does not start with shaka_" unless project.start_with?('shaka_')
+
+        [project, nil]
+      when %r{\A/Volumes/dev/projects/misc/([^/]+)(/|\z)}
+        project = Regexp.last_match(1)
+        raise Error, "Cannot infer project from #{@cwd}; #{project.inspect} does not start with misc_" unless project.start_with?('misc_')
+
+        [project, nil]
+      when %r{\A#{Regexp.escape(DOTS_REPO)}(/|\z)}
+        ['env', nil]
+      else
+        raise Error, "Could not infer project from #{@cwd}. Pass project explicitly."
+      end
+    end
+
+    def code_dir_for(project, checkout)
+      case project
+      when 'shaka_gtm'
+        selected = checkout || infer_gtm_checkout_from_cwd
+        raise Error, 'GTM checkout is ambiguous. Invoke from a GTM checkout or pass shaka_gtm1/shaka_gtm2/shaka_gtm3.' unless selected
+
+        "/Volumes/dev/projects/shaka/gtm/#{selected}"
+      when 'env'
+        DOTS_REPO
+      else
+        return "/Volumes/dev/projects/mydev/#{project}" if project.start_with?('my_')
+        return "/Volumes/dev/projects/shaka/#{project}" if project.start_with?('shaka_')
+        return "/Volumes/dev/projects/misc/#{project}" if project.start_with?('misc_')
+
+        raise Error, "No code directory mapping for project #{project.inspect}"
+      end
+    end
+
+    def infer_gtm_checkout_from_cwd
+      match = @cwd.match(%r{\A/Volumes/dev/projects/shaka/gtm/(1st|2nd|3rd)(/|\z)})
+      match && match[1]
+    end
+
+    def infer_story_id(code_dir)
+      return nil unless File.directory?(code_dir)
+
+      branch = Shell.capture('git', '-C', code_dir, 'branch', '--show-current').stdout.strip
+      match = branch.match(%r{(?:^|/)sc-(\d+)(?:/|$)})
+      match && match[1]
+    end
+
+    def resolve_task_folder(task_root, task_id)
+      exact = File.join(task_root, task_id)
+      return exact if File.directory?(exact)
+
+      matches = Dir.glob(File.join(task_root, "#{task_id}*")).select { |path| File.directory?(path) }
+      raise Error, "No task folder starts with #{task_id.inspect} under #{task_root}" if matches.empty?
+      raise Error, "Multiple task folders match #{task_id.inspect}:\n#{matches.join("\n")}" if matches.length > 1
+
+      matches.first
+    end
+  end
+
+  class GitRepo
+    attr_reader :root
+
+    def initialize(path)
+      @root = File.realpath(Shell.capture!('git', '-C', path, 'rev-parse', '--show-toplevel').strip)
+    end
+
+    def clean?
+      status.empty?
+    end
+
+    def status
+      Shell.capture!('git', '-C', root, 'status', '--porcelain')
+    end
+
+    def branch
+      Shell.capture!('git', '-C', root, 'branch', '--show-current').strip
+    end
+
+    def head_sha
+      Shell.capture!('git', '-C', root, 'rev-parse', 'HEAD').strip
+    end
+
+    def add_all
+      Shell.capture!('git', '-C', root, 'add', '-A')
+    end
+
+    def commit(message)
+      Shell.capture!('git', '-C', root, 'commit', '-m', message)
+      head_sha
+    end
+  end
+
+  class StatusValidator
+    ALLOWED_STATUSES = %w[done needs_user failed].freeze
+    ALLOWED_AGENTS = %w[pi claude].freeze
+    ALLOWED_PHASES = %w[implement review classify fix debate final_checks].freeze
+
+    Result = Struct.new(:valid, :errors, :data, keyword_init: true) do
+      def valid?
+        valid
+      end
+    end
+
+    def validate_file(path, expected: {})
+      data = JSON.parse(File.read(path))
+      validate_hash(data, expected: expected)
+    rescue Errno::ENOENT
+      Result.new(valid: false, errors: ["missing status file: #{path}"], data: nil)
+    rescue JSON::ParserError => e
+      Result.new(valid: false, errors: ["invalid JSON: #{e.message}"], data: nil)
+    end
+
+    def validate_hash(data, expected: {})
+      return Result.new(valid: false, errors: ['status JSON must be an object'], data: data) unless data.is_a?(Hash)
+
+      errors = []
+      validate_required_string(data, 'status', errors)
+      validate_required_string(data, 'agent', errors)
+      validate_required_string(data, 'phase', errors)
+      validate_required_string(data, 'summary', errors)
+      validate_step(data, errors)
+      validate_membership(data, errors)
+      validate_expected(data, expected, errors)
+      validate_optional_fields(data, errors)
+      validate_findings(data, errors)
+      validate_resolutions(data, errors)
+      validate_debate(data, errors)
+      Result.new(valid: errors.empty?, errors: errors, data: data)
+    end
+
+    private
+
+    def validate_required_string(data, key, errors)
+      errors << "#{key} is required" unless data.key?(key)
+      return unless data.key?(key)
+
+      errors << "#{key} must be a non-empty string" unless data[key].is_a?(String) && !data[key].strip.empty?
+    end
+
+    def validate_step(data, errors)
+      errors << 'step is required' unless data.key?('step')
+      return unless data.key?('step')
+
+      errors << 'step must be an integer' unless data['step'].is_a?(Integer)
+    end
+
+    def validate_membership(data, errors)
+      errors << "status must be one of #{ALLOWED_STATUSES.join(', ')}" if data['status'].is_a?(String) && !ALLOWED_STATUSES.include?(data['status'])
+      errors << "agent must be one of #{ALLOWED_AGENTS.join(', ')}" if data['agent'].is_a?(String) && !ALLOWED_AGENTS.include?(data['agent'])
+      errors << "phase must be one of #{ALLOWED_PHASES.join(', ')}" if data['phase'].is_a?(String) && !ALLOWED_PHASES.include?(data['phase'])
+    end
+
+    def validate_expected(data, expected, errors)
+      expected.each do |key, value|
+        string_key = key.to_s
+        errors << "#{string_key} expected #{value.inspect}, got #{data[string_key].inspect}" unless data[string_key] == value
+      end
+    end
+
+    def validate_optional_fields(data, errors)
+      errors << 'question is required when status is needs_user' if data['status'] == 'needs_user' && (!data['question'].is_a?(String) || data['question'].strip.empty?)
+      errors << 'checks_run must be an array when present' if data.key?('checks_run') && !data['checks_run'].is_a?(Array)
+    end
+
+    def validate_findings(data, errors)
+      return unless data.key?('findings')
+
+      unless data['findings'].is_a?(Array)
+        errors << 'findings must be an array when present'
+        return
+      end
+      data['findings'].each_with_index do |finding, index|
+        unless finding.is_a?(Hash)
+          errors << "findings[#{index}] must be an object"
+          next
+        end
+        %w[id severity title body].each do |key|
+          errors << "findings[#{index}].#{key} must be a non-empty string" unless finding[key].is_a?(String) && !finding[key].strip.empty?
+        end
+        unless %w[BLOCKER MINOR PASS].include?(finding['severity'])
+          errors << "findings[#{index}].severity must be BLOCKER, MINOR, or PASS"
+        end
+      end
+    end
+
+    def validate_resolutions(data, errors)
+      return unless data.key?('resolutions')
+
+      unless data['resolutions'].is_a?(Array)
+        errors << 'resolutions must be an array when present'
+        return
+      end
+      data['resolutions'].each_with_index do |resolution, index|
+        unless resolution.is_a?(Hash)
+          errors << "resolutions[#{index}] must be an object"
+          next
+        end
+        %w[finding_id decision rationale].each do |key|
+          errors << "resolutions[#{index}].#{key} must be a non-empty string" unless resolution[key].is_a?(String) && !resolution[key].strip.empty?
+        end
+        unless %w[accept accept_with_alternative_fix dispute defer_minor needs_user].include?(resolution['decision'])
+          errors << "resolutions[#{index}].decision is invalid"
+        end
+      end
+    end
+
+    def validate_debate(data, errors)
+      return unless data.key?('debate')
+
+      debate = data['debate']
+      unless debate.is_a?(Hash)
+        errors << 'debate must be an object when present'
+        return
+      end
+      %w[finding_id decision].each do |key|
+        errors << "debate.#{key} must be a non-empty string" unless debate[key].is_a?(String) && !debate[key].strip.empty?
+      end
+      errors << 'debate.round must be an integer' unless debate['round'].is_a?(Integer)
+      unless %w[agree_with_pi still_disagree accept accept_with_alternative_fix needs_user].include?(debate['decision'])
+        errors << 'debate.decision is invalid'
+      end
+    end
+  end
+
+  class Tmux
+    DEFAULT_SUBMIT_DELAY_SECONDS = 0.2
+
+    def current_window_target
+      Shell.capture!('tmux', 'display-message', '-p', '#{session_name}:#{window_id}').strip
+    end
+
+    def panes
+      output = Shell.capture!('tmux', 'list-panes', '-t', current_window_target, '-F', pane_format)
+      output.lines.filter_map do |line|
+        id, session, window_id, window_name, active, command, title, path = line.chomp.split("\t", 8)
+        Pane.new(id: id, session: session, window_id: window_id, window_name: window_name, active: active == '1', command: command, title: title, path: path)
+      end
+    end
+
+    def discover_roles(repo_root)
+      role_panes = panes
+      roles = RolePanes.new(
+        manager: select_title(role_panes, 'pi-manager'),
+        pi_worker: select_title(role_panes, 'pi-worker'),
+        claude_worker: select_title(role_panes, 'claude-worker')
+      )
+      verify_repo_roots!(roles, repo_root)
+      roles
+    end
+
+    def pane_exists?(pane_id)
+      Shell.capture('tmux', 'list-panes', '-a', '-F', '#{pane_id}').stdout.lines.map(&:strip).include?(pane_id)
+    end
+
+    def send_prompt(target, prompt_file)
+      send_text(target, "Please read and follow: #{prompt_file}")
+    end
+
+    def send_text(target, text)
+      Shell.capture!('tmux', 'send-keys', '-t', target, '-l', text)
+      sleep submit_delay_seconds
+      Shell.capture!('tmux', 'send-keys', '-t', target, 'Enter')
+    end
+
+    private
+
+    def submit_delay_seconds
+      ENV.fetch('AUTOWORK_SEND_SUBMIT_DELAY_SECONDS', DEFAULT_SUBMIT_DELAY_SECONDS).to_f
+    end
+
+
+    def pane_format
+      ['#{pane_id}', '#{session_name}', '#{window_id}', '#{window_name}', '#{pane_active}', '#{pane_current_command}', '#{pane_title}', '#{pane_current_path}'].join("\t")
+    end
+
+    def select_title(panes, title)
+      matching = panes.select { |pane| pane.title == title }
+      raise Error, "No tmux pane titled #{title.inspect} in current window" if matching.empty?
+      raise Error, "Multiple tmux panes titled #{title.inspect} in current window" if matching.length > 1
+
+      matching.first
+    end
+
+    def verify_repo_roots!(roles, repo_root)
+      expected_root = File.realpath(repo_root)
+      roles.to_h.each_value do |pane|
+        pane_root = GitRepo.new(pane.path).root
+        raise Error, "Pane #{pane.id} git root #{pane_root} does not match repo root #{expected_root}" unless pane_root == expected_root
+      end
+    end
+  end
+
+  class Steps
+    attr_reader :path, :numbers
+
+    def initialize(path)
+      @path = path
+      @numbers = parse_numbers
+    end
+
+    def count = numbers.count
+
+    private
+
+    def parse_numbers
+      raise Error, "Missing required steps file: #{path}. Run `/workit <project-or-task> create-steps-only` or invoke `/autowork` through the skill preflight so it can create the plan before starting the helper." unless File.file?(path)
+
+      found = File.readlines(path).filter_map do |line|
+        match = line.match(STEP_HEADING)
+        match && match[1].to_i
+      end
+      raise Error, "#{path} has no headings matching #{STEP_HEADING.inspect}" if found.empty?
+
+      found
+    end
+  end
+
+  class RunFiles
+    attr_reader :task_folder, :log_dir
+
+    def initialize(task_folder)
+      @task_folder = task_folder
+      @log_dir = File.join(task_folder, 'autowork-log')
+    end
+
+    def mkdirs
+      %w[control prompts reviews debates resolutions status].each { |name| FileUtils.mkdir_p(File.join(log_dir, name)) }
+    end
+
+    def config_path = File.join(log_dir, 'config.yml')
+    def state_path = File.join(log_dir, 'state.json')
+    def lock_path = File.join(log_dir, 'run.lock')
+    def pause_path = File.join(log_dir, 'control', 'pause')
+    def paused_reason_path = File.join(log_dir, 'paused_reason.md')
+    def final_checks_path = File.join(log_dir, 'final_checks.md')
+    def final_summary_path = File.join(log_dir, 'final_summary.md')
+    def final_check_review_path(review) = File.join(log_dir, 'reviews', "final_checks_claude_review#{review}_result.md")
+    def prompt_path(name) = File.join(log_dir, 'prompts', name)
+    def review_path(step, review) = File.join(log_dir, 'reviews', "step#{step}_claude_review#{review}_result.md")
+    def resolution_path(step, review) = File.join(log_dir, 'resolutions', "step#{step}_pi_review#{review}_result.md")
+    def debate_path(step) = File.join(log_dir, 'debates', "step#{step}_debates.md")
+    def debate_claude_result_path(step, debate, round) = File.join(log_dir, 'debates', "step#{step}_debate_#{debate}_round#{round}_claude_result.md")
+    def debate_pi_result_path(step, debate, round) = File.join(log_dir, 'debates', "step#{step}_debate_#{debate}_round#{round}_pi_result.md")
+    def status_path(step, agent, phase, iteration = nil)
+      suffix = iteration ? "#{phase}#{iteration}" : phase
+      File.join(log_dir, 'status', "step#{step}_#{agent}_#{suffix}_status.json")
+    end
+  end
+
+  class StateStore
+    attr_reader :path
+
+    def initialize(path)
+      @path = path
+    end
+
+    def read
+      raise Error, "Missing state file: #{path}" unless File.file?(path)
+
+      data = JSON.parse(File.read(path))
+      raise Error, "State file must contain a JSON object: #{path}" unless data.is_a?(Hash)
+
+      data
+    rescue JSON::ParserError => e
+      raise Error, "Invalid state JSON in #{path}: #{e.message}"
+    end
+
+    def write(data)
+      raise Error, 'State data must be a Hash' unless data.is_a?(Hash)
+
+      data['updated_at'] = Time.now.iso8601
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, JSON.pretty_generate(data) + "\n")
+    end
+  end
+
+  class RunLock
+    attr_reader :path
+
+    def initialize(path)
+      @path = path
+    end
+
+    def acquire!
+      FileUtils.mkdir_p(File.dirname(path))
+      write_new_lock
+    rescue Errno::EEXIST
+      if stale?
+        FileUtils.rm_f(path)
+        retry
+      end
+      raise Error, "Autowork run is already locked by live pid #{lock_pid}: #{path}"
+    end
+
+    def release! = FileUtils.rm_f(path)
+
+    def stale?
+      pid = lock_pid
+      return true unless pid
+
+      !pid_alive?(pid)
+    end
+
+    def lock_pid
+      return nil unless File.file?(path)
+
+      pid = JSON.parse(File.read(path))['pid']
+      pid.is_a?(Integer) ? pid : nil
+    rescue JSON::ParserError
+      nil
+    end
+
+    private
+
+    def write_new_lock
+      File.open(path, File::WRONLY | File::CREAT | File::EXCL) do |file|
+        file.write(JSON.pretty_generate('pid' => Process.pid, 'created_at' => Time.now.iso8601) + "\n")
+      end
+      true
+    end
+
+    def pid_alive?(pid)
+      Process.kill(0, pid)
+      true
+    rescue Errno::ESRCH
+      false
+    rescue Errno::EPERM
+      true
+    end
+  end
+
+  class PromptWriter
+    def initialize(files, context, repo)
+      @files = files
+      @context = context
+      @repo = repo
+    end
+
+    def pi_implement(step)
+      path = @files.prompt_path("step#{step}_pi_implement_request.md")
+      FileUtils.rm_f(@files.status_path(step, 'pi', 'implement'))
+      File.write(path, <<~PROMPT)
+        # Autowork: implement Step #{step}
+
+        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+        - autowork config: #{@files.config_path}
+        - autowork state: #{@files.state_path}
+
+        Implement only `## Step #{step}` from `steps.md`.
+
+        Rules:
+        - Work only in repo: #{@repo.root}
+        - Do not commit.
+        - Leave code changes unstaged/uncommitted for `/autowork` to commit.
+        - Use idempotent file setup commands where safe, such as `mkdir -p qa-output` instead of `mkdir qa-output`, so retries/resumes do not fail on existing directories.
+        - Treat `steps.md` as frozen. If the step is missing, stale, ambiguous, or impossible, stop and report that in the status file.
+        - Create or update the requested files first, then run verification checks. Do not run exact-content checks for files that this step is about to create before writing them.
+        - You may run targeted checks if useful.
+        - Prefer simple read-only checks such as `test -f`, `cmp`, and `git status --short`.
+        - Avoid heredoc interpreters such as `python3 - <<'PY'`, `ruby <<'RUBY'`, or `node <<'JS'` for routine content checks.
+        - Avoid command substitution, backticks, and process substitution such as `$()`, `` `cmd` ``, `<(...)`, or `>(...)` for routine checks; these trigger broad shell execution permissions.
+        - For exact text checks, avoid literal multiline expected strings. Prefer one argument per expected line: `printf '%s\\n' 'line 1' 'line 2' | cmp -s - path/to/file`.
+        - When done, write valid JSON status to:
+          #{@files.status_path(step, 'pi', 'implement')}
+
+        Required status JSON shape:
+
+        ```json
+        {
+          "status": "done",
+          "agent": "pi",
+          "phase": "implement",
+          "step": #{step},
+          "summary": "...",
+          "checks_run": []
+        }
+        ```
+
+        If you need user input, use `"status": "needs_user"` and include a `"question"` string.
+        If implementation failed, use `"status": "failed"` and explain in `"summary"`.
+      PROMPT
+      path
+    end
+
+    def claude_review(step, review, commit_sha)
+      review_path = @files.review_path(step, review)
+      status_path = @files.status_path(step, 'claude', 'review', review)
+      path = @files.prompt_path("step#{step}_claude_review#{review}_request.md")
+      FileUtils.rm_f(review_path)
+      FileUtils.rm_f(status_path)
+      File.write(path, <<~PROMPT)
+        # Autowork: review Step #{step}, review #{review}
+
+        You are the Claude review agent participating in `/autowork` as `claude-worker`.
+
+        Review commit `#{commit_sha}` against Step #{step} only.
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+
+        Rules:
+        - Work in repo: #{@repo.root}
+        - Do not edit repo files.
+        - Scope findings to the current Step #{step}; do not require future-step behavior unless the current commit blocks or contradicts it.
+        - Use `/gtm-revit`-style review depth.
+        - Do not run full RuboCop or full RSpec during normal step review. `/gtm-revit` does not require that, Pi may already have run targeted checks, and `/autowork` runs full final checks after all planned steps are accepted.
+        - Classify checklist items with `PASS`, `MINOR`, or `BLOCKER`.
+        - Prefer simple read-only checks such as `test -f`, `cmp`, `git show`, `git diff --exit-code`, `git diff-tree --no-commit-id --name-only -r HEAD`, and `git status --short`.
+        - Avoid heredoc interpreters such as `python3 - <<'PY'`, `ruby <<'RUBY'`, or `node <<'JS'` for routine content checks.
+        - Avoid command substitution, backticks, and process substitution such as `$()`, `` `cmd` ``, `<(...)`, or `>(...)` for routine checks; these trigger broad shell execution permissions.
+        - For exact text checks, avoid literal multiline expected strings. Prefer one argument per expected line: `printf '%s\\n' 'line 1' 'line 2' | cmp -s - path/to/file`.
+        - When reviewing a clean worktree after `/autowork` committed, compare expected content directly against the repo file path instead of against `git show` via process substitution.
+        - Write the human-readable review to:
+          #{review_path}
+        - Write the review file before the status JSON.
+        - Write the status JSON last. `/autowork` treats status JSON as the signal that all required artifacts for this turn are complete.
+        - When done, write valid JSON status to:
+          #{status_path}
+
+        Required review summary shape:
+
+        ```text
+        Summary: <N> BLOCKER / <M> MINOR / <K> PASS
+        Recommendation: merge | amend | split
+        ```
+
+        Required status JSON shape:
+
+        ```json
+        {
+          "status": "done",
+          "agent": "claude",
+          "phase": "review",
+          "step": #{step},
+          "summary": "...",
+          "findings": [
+            {
+              "id": "B1",
+              "severity": "BLOCKER",
+              "title": "Short title",
+              "body": "What is wrong and why it matters",
+              "recommendation": "Concrete suggested fix"
+            }
+          ]
+        }
+        ```
+
+        Use an empty `"findings": []` array when there are no `BLOCKER` or `MINOR` findings. `PASS` checklist notes may stay in the human review file and do not need status JSON entries.
+
+        If you need user input, use `"status": "needs_user"` and include a `"question"` string.
+        If review failed, use `"status": "failed"` and explain in `"summary"`.
+      PROMPT
+      path
+    end
+
+    def pi_classify(step, review, findings)
+      resolution_path = @files.resolution_path(step, review)
+      status_path = @files.status_path(step, 'pi', 'classify', review)
+      path = @files.prompt_path("step#{step}_pi_classify_review#{review}_request.md")
+      FileUtils.rm_f(resolution_path)
+      FileUtils.rm_f(status_path)
+      File.write(path, <<~PROMPT)
+        # Autowork: classify Step #{step} review #{review} findings
+
+        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+        - Claude review: #{@files.review_path(step, review)}
+
+        Claude reported these machine-readable findings:
+
+        ```json
+        #{JSON.pretty_generate(findings)}
+        ```
+
+        Classify every finding. Do not edit repo files in this classification turn.
+
+        Allowed decisions:
+        - `accept`: Claude is right; fix exactly this finding.
+        - `accept_with_alternative_fix`: Claude is right, but use a different safe/local fix.
+        - `dispute`: the finding is invalid or not reachable.
+        - `defer_minor`: the finding is MINOR and larger/riskier/out of scope for this step.
+        - `needs_user`: user decision is required.
+
+        Write human-readable rationale to:
+        #{resolution_path}
+
+        Write the resolution file before the status JSON.
+        Write the status JSON last. `/autowork` treats status JSON as the signal that all required artifacts for this turn are complete.
+
+        Then write valid JSON status to:
+        #{status_path}
+
+        Required status JSON shape:
+
+        ```json
+        {
+          "status": "done",
+          "agent": "pi",
+          "phase": "classify",
+          "step": #{step},
+          "summary": "...",
+          "resolutions": [
+            {
+              "finding_id": "B1",
+              "decision": "accept",
+              "rationale": "Why this decision is correct"
+            }
+          ]
+        }
+        ```
+      PROMPT
+      path
+    end
+
+    def pi_fix(step, fix_iteration, review, accepted_resolutions)
+      status_path = @files.status_path(step, 'pi', 'fix', fix_iteration)
+      path = @files.prompt_path("step#{step}_pi_fix#{fix_iteration}_request.md")
+      FileUtils.rm_f(status_path)
+      File.write(path, <<~PROMPT)
+        # Autowork: fix Step #{step}, fix #{fix_iteration}
+
+        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+        - Claude review: #{@files.review_path(step, review)}
+        - Pi resolution: #{@files.resolution_path(step, review)}
+
+        Implement only these accepted findings/resolutions:
+
+        ```json
+        #{JSON.pretty_generate(accepted_resolutions)}
+        ```
+
+        Rules:
+        - Work only in repo: #{@repo.root}
+        - Do not commit.
+        - Leave code changes unstaged/uncommitted for `/autowork` to commit.
+        - Use idempotent file setup commands where safe, such as `mkdir -p qa-output` instead of `mkdir qa-output`, so retries/resumes do not fail on existing directories.
+        - Do not implement disputed, deferred, or unrelated review comments.
+        - Create or update the requested fixes first, then run verification checks. Do not run exact-content checks for files that this fix is about to create before writing them.
+        - You may run targeted checks if useful.
+        - Prefer simple read-only checks such as `test -f`, `cmp`, and `git status --short`.
+        - Avoid heredoc interpreters such as `python3 - <<'PY'`, `ruby <<'RUBY'`, or `node <<'JS'` for routine content checks.
+        - Avoid command substitution, backticks, and process substitution such as `$()`, `` `cmd` ``, `<(...)`, or `>(...)` for routine checks; these trigger broad shell execution permissions.
+        - For exact text checks, avoid literal multiline expected strings. Prefer one argument per expected line: `printf '%s\\n' 'line 1' 'line 2' | cmp -s - path/to/file`.
+        - When done, write valid JSON status to:
+          #{status_path}
+
+        Required status JSON shape:
+
+        ```json
+        {
+          "status": "done",
+          "agent": "pi",
+          "phase": "fix",
+          "step": #{step},
+          "summary": "...",
+          "checks_run": []
+        }
+        ```
+      PROMPT
+      path
+    end
+
+    def pi_final_check_fix(iteration, final_checks, review_findings)
+      status_path = @files.status_path(0, 'pi', 'final_checks_fix', iteration)
+      path = @files.prompt_path("final_checks_pi_fix#{iteration}_request.md")
+      FileUtils.rm_f(status_path)
+      File.write(path, <<~PROMPT)
+        # Autowork: fix final checks, iteration #{iteration}
+
+        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+        - final checks: #{@files.final_checks_path}
+
+        Final check results:
+
+        ```json
+        #{JSON.pretty_generate(final_checks)}
+        ```
+
+        Claude final-check review findings to address, if any:
+
+        ```json
+        #{JSON.pretty_generate(review_findings || [])}
+        ```
+
+        Rules:
+        - Work only in repo: #{@repo.root}
+        - Do not commit.
+        - Leave code changes unstaged/uncommitted for `/autowork` to commit.
+        - Fix only the final-check failures and listed final-check review findings.
+        - Prefer local, low-risk fixes.
+        - Run targeted checks if useful.
+        - When done, write valid JSON status to:
+          #{status_path}
+
+        Required status JSON shape:
+
+        ```json
+        {
+          "status": "done",
+          "agent": "pi",
+          "phase": "final_checks",
+          "step": 0,
+          "summary": "...",
+          "checks_run": []
+        }
+        ```
+
+        If you need user input, use `"status": "needs_user"` and include a `"question"` string.
+        If the fix failed, use `"status": "failed"` and explain in `"summary"`.
+      PROMPT
+      path
+    end
+
+    def claude_final_check_review(review, commits)
+      review_path = @files.final_check_review_path(review)
+      status_path = @files.status_path(0, 'claude', 'final_checks_review', review)
+      path = @files.prompt_path("final_checks_claude_review#{review}_request.md")
+      FileUtils.rm_f(review_path)
+      FileUtils.rm_f(status_path)
+      File.write(path, <<~PROMPT)
+        # Autowork: review final-check fix commits, review #{review}
+
+        You are the Claude review agent participating in `/autowork` as `claude-worker`.
+
+        Review these final-check fix commit(s):
+
+        ```json
+        #{JSON.pretty_generate(commits)}
+        ```
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+        - final checks: #{@files.final_checks_path}
+
+        Rules:
+        - Work in repo: #{@repo.root}
+        - Do not edit repo files.
+        - Scope findings to the final-check fix commits only.
+        - Do not rerun full RuboCop or full RSpec here. `/autowork` already reran final checks before sending this review; inspect `final_checks.md` and the fix commits.
+        - Classify checklist items with `PASS`, `MINOR`, or `BLOCKER`.
+        - Write the human-readable review to:
+          #{review_path}
+        - Write the review file before status JSON.
+        - Write valid JSON status last to:
+          #{status_path}
+
+        Required status JSON shape:
+
+        ```json
+        {
+          "status": "done",
+          "agent": "claude",
+          "phase": "final_checks",
+          "step": 0,
+          "summary": "...",
+          "findings": []
+        }
+        ```
+
+        Use an empty `"findings": []` array when there are no `BLOCKER` or `MINOR` findings.
+        If you need user input, use `"status": "needs_user"` and include a `"question"` string.
+        If review failed, use `"status": "failed"` and explain in `"summary"`.
+      PROMPT
+      path
+    end
+
+    def claude_debate(step, review, debate_id, round, resolution)
+      result_path = @files.debate_claude_result_path(step, debate_id, round)
+      status_path = @files.status_path(step, 'claude', 'debate', "_#{debate_id}_round#{round}")
+      path = @files.prompt_path("step#{step}_debate_#{debate_id}_round#{round}_claude_request.md")
+      FileUtils.rm_f(result_path)
+      FileUtils.rm_f(status_path)
+      File.write(path, <<~PROMPT)
+        # Autowork: debate Step #{step} finding #{debate_id}, round #{round} — Claude
+
+        You are the Claude review agent participating in `/autowork` as `claude-worker`.
+
+        Pi disputed or deferred this finding/resolution:
+
+        ```json
+        #{JSON.pretty_generate(resolution)}
+        ```
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+        - Claude review: #{@files.review_path(step, review)}
+        - Pi resolution: #{@files.resolution_path(step, review)}
+        - debate log: #{@files.debate_path(step)}
+
+        Rules:
+        - Work in repo: #{@repo.root}
+        - Do not edit repo files.
+        - Reply only about finding #{debate_id}.
+        - Decide whether Pi's dispute/defer rationale resolves the concern.
+        - Write your human-readable response to:
+          #{result_path}
+        - Write the response file before status JSON.
+        - Write valid JSON status last to:
+          #{status_path}
+
+        Required status JSON shape:
+
+        ```json
+        {
+          "status": "done",
+          "agent": "claude",
+          "phase": "debate",
+          "step": #{step},
+          "summary": "agreement | still_disagree | needs_user: ...",
+          "debate": {
+            "finding_id": "#{debate_id}",
+            "round": #{round},
+            "decision": "agree_with_pi"
+          }
+        }
+        ```
+
+        Allowed debate decisions: `agree_with_pi`, `still_disagree`, `needs_user`.
+        If you need user input, use top-level `"status": "needs_user"` and include a `"question"` string.
+      PROMPT
+      path
+    end
+
+    def pi_debate(step, review, debate_id, round, resolution)
+      result_path = @files.debate_pi_result_path(step, debate_id, round)
+      status_path = @files.status_path(step, 'pi', 'debate', "_#{debate_id}_round#{round}")
+      path = @files.prompt_path("step#{step}_debate_#{debate_id}_round#{round}_pi_request.md")
+      FileUtils.rm_f(result_path)
+      FileUtils.rm_f(status_path)
+      File.write(path, <<~PROMPT)
+        # Autowork: debate Step #{step} finding #{debate_id}, round #{round} — Pi
+
+        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+
+        Claude still disagrees about this finding/resolution:
+
+        ```json
+        #{JSON.pretty_generate(resolution)}
+        ```
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+        - Claude review: #{@files.review_path(step, review)}
+        - Pi resolution: #{@files.resolution_path(step, review)}
+        - latest Claude debate response: #{@files.debate_claude_result_path(step, debate_id, round)}
+        - debate log: #{@files.debate_path(step)}
+
+        Rules:
+        - Do not edit repo files in this debate turn.
+        - Reply only about finding #{debate_id}.
+        - If Claude convinced you, choose `accept` or `accept_with_alternative_fix` so `/autowork` can send a fix turn.
+        - If you still disagree or still defer, choose `still_disagree`.
+        - Write your human-readable response to:
+          #{result_path}
+        - Write the response file before status JSON.
+        - Write valid JSON status last to:
+          #{status_path}
+
+        Required status JSON shape:
+
+        ```json
+        {
+          "status": "done",
+          "agent": "pi",
+          "phase": "debate",
+          "step": #{step},
+          "summary": "...",
+          "debate": {
+            "finding_id": "#{debate_id}",
+            "round": #{round},
+            "decision": "still_disagree",
+            "rationale": "..."
+          }
+        }
+        ```
+
+        Allowed debate decisions: `accept`, `accept_with_alternative_fix`, `still_disagree`, `needs_user`.
+        If you need user input, use top-level `"status": "needs_user"` and include a `"question"` string.
+      PROMPT
+      path
+    end
+  end
+
+  class RunSetup
+    attr_reader :context, :repo, :steps, :roles, :files
+
+    def initialize(argv, tmux: Tmux.new)
+      @argv = argv
+      @tmux = tmux
+    end
+
+    def prepare!
+      @context = TaskResolver.new(@argv).resolve
+      @repo = GitRepo.new(context.code_dir)
+      raise Error, "Refusing to start with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      @steps = Steps.new(File.join(context.task_folder, 'steps.md'))
+      @roles = @tmux.discover_roles(repo.root)
+      @files = RunFiles.new(context.task_folder)
+      files.mkdirs
+      write_config
+      write_state
+      PromptWriter.new(files, context, repo).pi_implement(steps.numbers.first)
+      self
+    end
+
+    private
+
+    def write_config
+      config = {
+        'task_folder' => context.task_folder,
+        'task_project' => context.project,
+        'task_id' => context.task_id,
+        'repo_dir' => repo.root,
+        'steps_count' => steps.count,
+        'pi_manager_target' => roles.manager.id,
+        'pi_worker_target' => roles.pi_worker.id,
+        'claude_worker_target' => roles.claude_worker.id,
+        'max_total_commits' => steps.count * 3,
+        'max_fix_iterations_per_step' => 10,
+        'max_debate_rounds_per_disagreement' => 5,
+        'max_final_check_fix_iterations' => 5,
+        'max_runtime_hours_per_run' => 1,
+        'worker_status_timeout_minutes' => 10,
+        'final_check_commands' => default_final_check_commands
+      }
+      File.write(files.config_path, config.to_yaml)
+    end
+
+    def default_final_check_commands
+      return [] unless File.file?(File.join(repo.root, 'Gemfile'))
+
+      ['bundle exec rubocop', 'bundle exec rspec']
+    end
+
+    def write_state
+      now = Time.now.iso8601
+      state = {
+        'status' => 'initialized',
+        'phase' => 'ready_to_send_pi_implement',
+        'current_step' => steps.numbers.first,
+        'next_action' => 'send_pi_implement_prompt',
+        'created_at' => now,
+        'updated_at' => now,
+        'steps' => steps.numbers.to_h { |number| [number.to_s, { 'status' => 'pending', 'commits' => [], 'reviews' => [] }] }
+      }
+      StateStore.new(files.state_path).write(state)
+    end
+  end
+
+  class Orchestrator
+    def initialize(argv, tmux: Tmux.new, sleeper: Kernel.method(:sleep))
+      @argv = argv
+      @tmux = tmux
+      @sleeper = sleeper
+    end
+
+    def run
+      context = TaskResolver.new(@argv).resolve
+      files = RunFiles.new(context.task_folder)
+      setup = setup_if_needed(context, files)
+      repo = setup&.repo || GitRepo.new(context.code_dir)
+      lock = RunLock.new(files.lock_path)
+      lock.acquire!
+      begin
+        run_state_machine(context, repo, files)
+      ensure
+        lock.release!
+      end
+    end
+
+    private
+
+    def setup_if_needed(context, files)
+      return nil if File.file?(files.config_path) && File.file?(files.state_path)
+
+      setup = RunSetup.new(@argv, tmux: @tmux).prepare!
+      puts "Initialized autowork run for #{setup.context.task_folder}"
+      setup
+    end
+
+    def run_state_machine(context, repo, files)
+      raise Error, "Autowork is paused: #{files.pause_path}" if File.file?(files.pause_path)
+
+      config = YAML.safe_load(File.read(files.config_path))
+      store = StateStore.new(files.state_path)
+      state = store.read
+      case state['phase']
+      when 'ready_to_send_pi_implement'
+        send_pi_implement(context, repo, files, config, store, state)
+      when 'waiting_for_pi_implement'
+        wait_for_pi_implement(context, repo, files, config, store, state)
+      when 'ready_to_commit_step'
+        commit_step(context, repo, files, config, store, state)
+      when 'ready_to_send_claude_review'
+        send_claude_review(context, repo, files, config, store, state)
+      when 'waiting_for_claude_review'
+        wait_for_claude_review(context, repo, files, config, store, state)
+      when 'ready_to_send_pi_classify'
+        send_pi_classify(context, repo, files, config, store, state)
+      when 'waiting_for_pi_classify'
+        wait_for_pi_classify(context, repo, files, config, store, state)
+      when 'ready_to_send_pi_fix'
+        send_pi_fix(context, repo, files, config, store, state)
+      when 'waiting_for_pi_fix'
+        wait_for_pi_fix(context, repo, files, config, store, state)
+      when 'ready_to_commit_fix'
+        commit_fix(context, repo, files, config, store, state)
+      when 'ready_to_send_claude_debate'
+        send_claude_debate(context, repo, files, config, store, state)
+      when 'waiting_for_claude_debate'
+        wait_for_claude_debate(context, repo, files, config, store, state)
+      when 'ready_to_send_pi_debate'
+        send_pi_debate(context, repo, files, config, store, state)
+      when 'waiting_for_pi_debate'
+        wait_for_pi_debate(context, repo, files, config, store, state)
+      when 'step_accepted'
+        advance_after_step(context, repo, files, config, store, state)
+      when 'ready_to_run_final_checks', 'all_steps_accepted'
+        run_final_checks(context, repo, files, config, store, state)
+      when 'ready_to_send_pi_final_check_fix'
+        send_pi_final_check_fix(context, repo, files, config, store, state)
+      when 'waiting_for_pi_final_check_fix'
+        wait_for_pi_final_check_fix(context, repo, files, config, store, state)
+      when 'ready_to_commit_final_check_fix'
+        commit_final_check_fix(context, repo, files, config, store, state)
+      when 'ready_to_send_claude_final_check_review'
+        send_claude_final_check_review(context, repo, files, config, store, state)
+      when 'waiting_for_claude_final_check_review'
+        wait_for_claude_final_check_review(context, repo, files, config, store, state)
+      when 'complete'
+        puts "Autowork complete. Summary: #{files.final_summary_path}"
+      else
+        raise Error, "Unknown autowork phase: #{state['phase'].inspect}"
+      end
+    end
+
+    def send_pi_implement(context, repo, files, config, store, state)
+      raise Error, "Refusing to send Pi work with dirty baseline in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      step = state['current_step']
+      prompt = PromptWriter.new(files, context, repo).pi_implement(step)
+      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      state['status'] = 'running'
+      state['phase'] = 'waiting_for_pi_implement'
+      state['next_action'] = 'wait_for_pi_implement_status'
+      store.write(state)
+      puts "Sent Step #{step} implementation prompt to pi-worker: #{prompt}"
+      wait_for_pi_implement(context, repo, files, config, store, state)
+    end
+
+    def wait_for_pi_implement(context, repo, files, config, store, state)
+      step = state['current_step']
+      result = wait_for_status(files.status_path(step, 'pi', 'implement'), expected: { agent: 'pi', phase: 'implement', step: step }, config: config)
+      handle_agent_status!(result, files, store, state)
+      state['phase'] = 'ready_to_commit_step'
+      state['next_action'] = 'commit_step'
+      store.write(state)
+      commit_step(context, repo, files, config, store, state)
+    end
+
+    def commit_step(context, repo, files, config, store, state)
+      step = state['current_step']
+      raise Error, "No changes to commit for Step #{step}; pi-worker status was done but worktree is clean" if repo.clean?
+
+      repo.add_all
+      commit_sha = repo.commit("Step #{step}")
+      raise Error, "Worktree is dirty after Step #{step} commit:\n#{repo.status}" unless repo.clean?
+
+      state.dig('steps', step.to_s, 'commits') << commit_sha
+      state['last_commit'] = commit_sha
+      state['review_iteration'] = 1
+      state['phase'] = 'ready_to_send_claude_review'
+      state['next_action'] = 'send_claude_review_prompt'
+      store.write(state)
+      puts "Committed Step #{step}: #{commit_sha}"
+      send_claude_review(context, repo, files, config, store, state)
+    end
+
+    def send_claude_review(context, repo, files, config, store, state)
+      raise Error, "Refusing to send Claude review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      step = state['current_step']
+      review = state['review_iteration'] || 1
+      prompt = PromptWriter.new(files, context, repo).claude_review(step, review, state.fetch('last_commit'))
+      @tmux.send_prompt(config.fetch('claude_worker_target'), prompt)
+      state['status'] = 'running'
+      state['phase'] = 'waiting_for_claude_review'
+      state['next_action'] = 'wait_for_claude_review_status'
+      store.write(state)
+      puts "Sent Step #{step} review prompt to claude-worker: #{prompt}"
+      wait_for_claude_review(context, repo, files, config, store, state)
+    end
+
+    def wait_for_claude_review(context, repo, files, config, store, state)
+      step = state['current_step']
+      review = state['review_iteration'] || 1
+      result = wait_for_status(files.status_path(step, 'claude', 'review', review), expected: { agent: 'claude', phase: 'review', step: step }, config: config)
+      handle_agent_status!(result, files, store, state)
+      require_nonempty_artifact!(files.review_path(step, review), 'Claude review')
+      raise Error, "Claude review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+
+      findings = actionable_findings(result.data)
+      state.dig('steps', step.to_s, 'reviews') << { 'iteration' => review, 'status' => 'done', 'summary' => result.data['summary'], 'findings_count' => findings.count }
+      if findings.empty?
+        state.dig('steps', step.to_s)['status'] = 'accepted'
+        state['phase'] = 'step_accepted'
+        state['next_action'] = 'advance_after_step'
+        store.write(state)
+        puts "Step #{step} review #{review} completed with no actionable findings."
+        advance_after_step(context, repo, files, config, store, state)
+      else
+        state['current_findings'] = findings
+        state['phase'] = 'ready_to_send_pi_classify'
+        state['next_action'] = 'send_pi_classify_prompt'
+        store.write(state)
+        puts "Step #{step} review #{review} completed with #{findings.count} actionable finding(s)."
+        send_pi_classify(context, repo, files, config, store, state)
+      end
+    end
+
+    def send_pi_classify(context, repo, files, config, store, state)
+      raise Error, "Refusing to classify findings with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      step = state['current_step']
+      review = state['review_iteration'] || 1
+      findings = state.fetch('current_findings')
+      prompt = PromptWriter.new(files, context, repo).pi_classify(step, review, findings)
+      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      state['status'] = 'running'
+      state['phase'] = 'waiting_for_pi_classify'
+      state['next_action'] = 'wait_for_pi_classify_status'
+      store.write(state)
+      puts "Sent Step #{step} review #{review} classification prompt to pi-worker: #{prompt}"
+      wait_for_pi_classify(context, repo, files, config, store, state)
+    end
+
+    def wait_for_pi_classify(context, repo, files, config, store, state)
+      step = state['current_step']
+      review = state['review_iteration'] || 1
+      result = wait_for_status(files.status_path(step, 'pi', 'classify', review), expected: { agent: 'pi', phase: 'classify', step: step }, config: config)
+      handle_agent_status!(result, files, store, state)
+      require_nonempty_artifact!(files.resolution_path(step, review), 'Pi resolution')
+      raise Error, "Pi classification changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+
+      resolutions = result.data.fetch('resolutions', [])
+      validate_resolution_coverage!(state.fetch('current_findings'), resolutions)
+      state['current_resolutions'] = resolutions
+      needs_user = resolutions.select { |resolution| resolution['decision'] == 'needs_user' }
+      pause_for_needs_user!(needs_user, files, store, state) unless needs_user.empty?
+
+      accepted = accepted_resolutions(resolutions)
+      unresolved = unresolved_resolutions(resolutions)
+      record_unresolved_findings(files, state, unresolved) unless unresolved.empty?
+      if accepted.empty?
+        unless unresolved.empty?
+          state['current_debate_resolutions'] = unresolved
+          state['debate_index'] = 0
+          state['debate_round'] = 1
+          state['phase'] = 'ready_to_send_claude_debate'
+          state['next_action'] = 'send_claude_debate_prompt'
+          store.write(state)
+          send_claude_debate(context, repo, files, config, store, state)
+          return
+        end
+        state.dig('steps', step.to_s)['status'] = 'accepted'
+        state['phase'] = 'step_accepted'
+        state['next_action'] = 'advance_after_step'
+        store.write(state)
+        advance_after_step(context, repo, files, config, store, state)
+      else
+        state['accepted_resolutions'] = accepted
+        state['fix_iteration'] = (state['fix_iteration'] || 0) + 1
+        state['phase'] = 'ready_to_send_pi_fix'
+        state['next_action'] = 'send_pi_fix_prompt'
+        store.write(state)
+        send_pi_fix(context, repo, files, config, store, state)
+      end
+    end
+
+    def send_pi_fix(context, repo, files, config, store, state)
+      raise Error, "Refusing to send Pi fix with dirty baseline in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      step = state['current_step']
+      review = state['review_iteration'] || 1
+      fix_iteration = state.fetch('fix_iteration')
+      prompt = PromptWriter.new(files, context, repo).pi_fix(step, fix_iteration, review, state.fetch('accepted_resolutions'))
+      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      state['status'] = 'running'
+      state['phase'] = 'waiting_for_pi_fix'
+      state['next_action'] = 'wait_for_pi_fix_status'
+      store.write(state)
+      puts "Sent Step #{step} fix #{fix_iteration} prompt to pi-worker: #{prompt}"
+      wait_for_pi_fix(context, repo, files, config, store, state)
+    end
+
+    def wait_for_pi_fix(context, repo, files, config, store, state)
+      step = state['current_step']
+      fix_iteration = state.fetch('fix_iteration')
+      result = wait_for_status(files.status_path(step, 'pi', 'fix', fix_iteration), expected: { agent: 'pi', phase: 'fix', step: step }, config: config)
+      handle_agent_status!(result, files, store, state)
+      state['phase'] = 'ready_to_commit_fix'
+      state['next_action'] = 'commit_fix'
+      store.write(state)
+      commit_fix(context, repo, files, config, store, state)
+    end
+
+    def commit_fix(context, repo, files, config, store, state)
+      step = state['current_step']
+      fix_iteration = state.fetch('fix_iteration')
+      raise Error, "No changes to commit for Step #{step} fix #{fix_iteration}; pi-worker status was done but worktree is clean" if repo.clean?
+
+      repo.add_all
+      commit_sha = repo.commit("Step #{step} fix #{fix_iteration}")
+      raise Error, "Worktree is dirty after Step #{step} fix #{fix_iteration} commit:\n#{repo.status}" unless repo.clean?
+
+      state.dig('steps', step.to_s, 'commits') << commit_sha
+      state['last_commit'] = commit_sha
+      state['review_iteration'] = (state['review_iteration'] || 1) + 1
+      state.delete('current_findings')
+      state.delete('current_resolutions')
+      state.delete('accepted_resolutions')
+      state.delete('current_debate_resolutions')
+      state.delete('debate_index')
+      state.delete('debate_round')
+      state['phase'] = 'ready_to_send_claude_review'
+      state['next_action'] = 'send_claude_review_prompt'
+      store.write(state)
+      puts "Committed Step #{step} fix #{fix_iteration}: #{commit_sha}"
+      send_claude_review(context, repo, files, config, store, state)
+    end
+
+    def send_claude_debate(context, repo, files, config, store, state)
+      raise Error, "Refusing to send Claude debate with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      step = state['current_step']
+      review = state['review_iteration'] || 1
+      round = state.fetch('debate_round')
+      resolution = current_debate_resolution(state)
+      debate_id = resolution.fetch('finding_id')
+      prompt = PromptWriter.new(files, context, repo).claude_debate(step, review, debate_id, round, resolution)
+      @tmux.send_prompt(config.fetch('claude_worker_target'), prompt)
+      state['status'] = 'running'
+      state['phase'] = 'waiting_for_claude_debate'
+      state['next_action'] = 'wait_for_claude_debate_status'
+      store.write(state)
+      puts "Sent Step #{step} debate #{debate_id} round #{round} prompt to claude-worker: #{prompt}"
+      wait_for_claude_debate(context, repo, files, config, store, state)
+    end
+
+    def wait_for_claude_debate(context, repo, files, config, store, state)
+      step = state['current_step']
+      round = state.fetch('debate_round')
+      resolution = current_debate_resolution(state)
+      debate_id = resolution.fetch('finding_id')
+      result = wait_for_status(files.status_path(step, 'claude', 'debate', "_#{debate_id}_round#{round}"), expected: { agent: 'claude', phase: 'debate', step: step }, config: config)
+      handle_agent_status!(result, files, store, state)
+      require_nonempty_artifact!(files.debate_claude_result_path(step, debate_id, round), 'Claude debate')
+      raise Error, "Claude debate changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+
+      decision = debate_decision!(result.data, %w[agree_with_pi still_disagree needs_user])
+      append_debate_turn(files, state, 'Claude', debate_id, round, result.data['summary'])
+      case decision
+      when 'agree_with_pi'
+        append_debate_turn(files, state, 'Decision', debate_id, round, 'Claude agrees with Pi; no code change required for this finding.')
+        advance_debate_or_accept_step(context, repo, files, config, store, state)
+      when 'still_disagree'
+        state['phase'] = 'ready_to_send_pi_debate'
+        state['next_action'] = 'send_pi_debate_prompt'
+        store.write(state)
+        send_pi_debate(context, repo, files, config, store, state)
+      when 'needs_user'
+        pause_with_reason!(files, store, state, "Claude requested user arbitration for debate #{debate_id}: #{result.data['summary']}")
+      end
+    end
+
+    def send_pi_debate(context, repo, files, config, store, state)
+      raise Error, "Refusing to send Pi debate with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      step = state['current_step']
+      review = state['review_iteration'] || 1
+      round = state.fetch('debate_round')
+      resolution = current_debate_resolution(state)
+      debate_id = resolution.fetch('finding_id')
+      prompt = PromptWriter.new(files, context, repo).pi_debate(step, review, debate_id, round, resolution)
+      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      state['status'] = 'running'
+      state['phase'] = 'waiting_for_pi_debate'
+      state['next_action'] = 'wait_for_pi_debate_status'
+      store.write(state)
+      puts "Sent Step #{step} debate #{debate_id} round #{round} prompt to pi-worker: #{prompt}"
+      wait_for_pi_debate(context, repo, files, config, store, state)
+    end
+
+    def wait_for_pi_debate(context, repo, files, config, store, state)
+      step = state['current_step']
+      round = state.fetch('debate_round')
+      resolution = current_debate_resolution(state)
+      debate_id = resolution.fetch('finding_id')
+      result = wait_for_status(files.status_path(step, 'pi', 'debate', "_#{debate_id}_round#{round}"), expected: { agent: 'pi', phase: 'debate', step: step }, config: config)
+      handle_agent_status!(result, files, store, state)
+      require_nonempty_artifact!(files.debate_pi_result_path(step, debate_id, round), 'Pi debate')
+      raise Error, "Pi debate changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+
+      decision = debate_decision!(result.data, %w[accept accept_with_alternative_fix still_disagree needs_user])
+      append_debate_turn(files, state, 'Pi', debate_id, round, result.data['summary'])
+      case decision
+      when 'accept', 'accept_with_alternative_fix'
+        state['accepted_resolutions'] = [{
+          'finding_id' => debate_id,
+          'decision' => decision,
+          'rationale' => result.data.dig('debate', 'rationale') || result.data['summary']
+        }]
+        state['fix_iteration'] = (state['fix_iteration'] || 0) + 1
+        state['phase'] = 'ready_to_send_pi_fix'
+        state['next_action'] = 'send_pi_fix_prompt'
+        store.write(state)
+        send_pi_fix(context, repo, files, config, store, state)
+      when 'still_disagree'
+        if round >= config.fetch('max_debate_rounds_per_disagreement', 5).to_i
+          pause_with_reason!(files, store, state, "Pi and Claude still disagree about #{debate_id} after #{round} debate round(s). See #{files.debate_path(step)}")
+        end
+        state['debate_round'] = round + 1
+        state['phase'] = 'ready_to_send_claude_debate'
+        state['next_action'] = 'send_claude_debate_prompt'
+        store.write(state)
+        send_claude_debate(context, repo, files, config, store, state)
+      when 'needs_user'
+        pause_with_reason!(files, store, state, "Pi requested user arbitration for debate #{debate_id}: #{result.data['summary']}")
+      end
+    end
+
+    def current_debate_resolution(state)
+      resolutions = state.fetch('current_debate_resolutions')
+      index = state.fetch('debate_index')
+      resolutions.fetch(index)
+    end
+
+    def debate_decision!(data, allowed)
+      debate = data['debate']
+      raise Error, 'Debate status must include debate object' unless debate.is_a?(Hash)
+
+      decision = debate['decision']
+      raise Error, "Debate decision must be one of #{allowed.join(', ')}" unless allowed.include?(decision)
+
+      decision
+    end
+
+    def append_debate_turn(files, state, speaker, debate_id, round, text)
+      step = state['current_step']
+      File.open(files.debate_path(step), 'a') do |file|
+        file.puts "### Round #{round} — #{speaker} — #{debate_id}"
+        file.puts
+        file.puts text
+        file.puts
+      end
+    end
+
+    def advance_debate_or_accept_step(context, repo, files, config, store, state)
+      next_index = state.fetch('debate_index') + 1
+      if next_index < state.fetch('current_debate_resolutions').length
+        state['debate_index'] = next_index
+        state['debate_round'] = 1
+        state['phase'] = 'ready_to_send_claude_debate'
+        state['next_action'] = 'send_claude_debate_prompt'
+        store.write(state)
+        send_claude_debate(context, repo, files, config, store, state)
+      else
+        step = state['current_step']
+        state.dig('steps', step.to_s)['status'] = 'accepted'
+        state.delete('current_findings')
+        state.delete('current_resolutions')
+        state.delete('current_debate_resolutions')
+        state.delete('debate_index')
+        state.delete('debate_round')
+        state['phase'] = 'step_accepted'
+        state['next_action'] = 'advance_after_step'
+        store.write(state)
+        advance_after_step(context, repo, files, config, store, state)
+      end
+    end
+
+    def advance_after_step(context, repo, files, config, store, state)
+      steps = state.fetch('steps').keys.map(&:to_i).sort
+      current = state.fetch('current_step')
+      next_step = steps.find { |step| step > current }
+      if next_step
+        state['current_step'] = next_step
+        state['phase'] = 'ready_to_send_pi_implement'
+        state['next_action'] = 'send_pi_implement_prompt'
+        state.delete('last_commit')
+        state.delete('review_iteration')
+        state.delete('fix_iteration')
+        store.write(state)
+        puts "Advancing to Step #{next_step}."
+        send_pi_implement(context, repo, files, config, store, state)
+      else
+        state['status'] = 'running'
+        state['phase'] = 'ready_to_run_final_checks'
+        state['next_action'] = 'run_final_checks'
+        store.write(state)
+        puts 'All planned steps are accepted. Running final checks.'
+        run_final_checks(context, repo, files, config, store, state)
+      end
+    end
+
+    def run_final_checks(context, repo, files, config, store, state)
+      raise Error, "Refusing to run final checks with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      commands = Array(config.fetch('final_check_commands', []))
+      results = commands.empty? ? skipped_final_check_results : execute_final_check_commands(repo, commands)
+      write_final_checks(files, results)
+      state['final_checks'] = results
+      failures = results.reject { |result| result.fetch('status') == 'passed' || result.fetch('status') == 'skipped' }
+      if failures.empty?
+        if final_check_fix_commits(state).empty? || state['final_check_reviewed']
+          complete_run(context, repo, files, store, state, results)
+        else
+          state['phase'] = 'ready_to_send_claude_final_check_review'
+          state['next_action'] = 'send_claude_final_check_review_prompt'
+          store.write(state)
+          send_claude_final_check_review(context, repo, files, config, store, state)
+        end
+        return
+      end
+
+      state['final_check_failures'] = failures
+      state['phase'] = 'ready_to_send_pi_final_check_fix'
+      state['next_action'] = 'send_pi_final_check_fix_prompt'
+      store.write(state)
+      send_pi_final_check_fix(context, repo, files, config, store, state)
+    end
+
+    def complete_run(context, repo, files, store, state, results)
+      FileUtils.rm_f(files.paused_reason_path)
+      state.delete('paused_reason')
+      write_final_summary(context, repo, files, state, results)
+      state['status'] = 'done'
+      state['phase'] = 'complete'
+      state['next_action'] = 'none'
+      state['final_summary'] = files.final_summary_path
+      store.write(state)
+      puts "/autowork complete. Review final result:"
+      puts "- summary: #{files.final_summary_path}"
+      puts "- repo: #{repo.root}"
+    end
+
+    def send_pi_final_check_fix(context, repo, files, config, store, state)
+      raise Error, "Refusing to send Pi final-check fix with dirty baseline in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      iteration = (state['final_check_fix_iteration'] || 0) + 1
+      if iteration > config.fetch('max_final_check_fix_iterations', 5).to_i
+        pause_with_reason!(files, store, state, "Final checks still fail after #{iteration - 1} fix iteration(s). See #{files.final_checks_path}")
+      end
+      prompt = PromptWriter.new(files, context, repo).pi_final_check_fix(iteration, state.fetch('final_checks', []), state['final_check_review_findings'])
+      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      state['status'] = 'running'
+      state['final_check_fix_iteration'] = iteration
+      state['phase'] = 'waiting_for_pi_final_check_fix'
+      state['next_action'] = 'wait_for_pi_final_check_fix_status'
+      store.write(state)
+      puts "Sent final-check fix #{iteration} prompt to pi-worker: #{prompt}"
+      wait_for_pi_final_check_fix(context, repo, files, config, store, state)
+    end
+
+    def wait_for_pi_final_check_fix(context, repo, files, config, store, state)
+      iteration = state.fetch('final_check_fix_iteration')
+      result = wait_for_status(files.status_path(0, 'pi', 'final_checks_fix', iteration), expected: { agent: 'pi', phase: 'final_checks', step: 0 }, config: config)
+      handle_agent_status!(result, files, store, state)
+      state['phase'] = 'ready_to_commit_final_check_fix'
+      state['next_action'] = 'commit_final_check_fix'
+      store.write(state)
+      commit_final_check_fix(context, repo, files, config, store, state)
+    end
+
+    def commit_final_check_fix(context, repo, files, config, store, state)
+      iteration = state.fetch('final_check_fix_iteration')
+      if repo.clean?
+        state['phase'] = 'ready_to_run_final_checks'
+        state['next_action'] = 'run_final_checks'
+        store.write(state)
+        puts "Final-check fix #{iteration} produced no repo changes; rerunning final checks."
+        run_final_checks(context, repo, files, config, store, state)
+        return
+      end
+
+      repo.add_all
+      commit_sha = repo.commit("Final checks fix #{iteration}")
+      raise Error, "Worktree is dirty after final-check fix #{iteration} commit:\n#{repo.status}" unless repo.clean?
+
+      state['final_check_fix_commits'] = final_check_fix_commits(state) + [commit_sha]
+      state['last_commit'] = commit_sha
+      state.delete('final_check_review_findings')
+      state.delete('final_check_reviewed')
+      state['phase'] = 'ready_to_run_final_checks'
+      state['next_action'] = 'run_final_checks'
+      store.write(state)
+      puts "Committed final-check fix #{iteration}: #{commit_sha}"
+      run_final_checks(context, repo, files, config, store, state)
+    end
+
+    def send_claude_final_check_review(context, repo, files, config, store, state)
+      raise Error, "Refusing to send Claude final-check review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      review = (state['final_check_review_iteration'] || 0) + 1
+      prompt = PromptWriter.new(files, context, repo).claude_final_check_review(review, final_check_fix_commits(state))
+      @tmux.send_prompt(config.fetch('claude_worker_target'), prompt)
+      state['status'] = 'running'
+      state['final_check_review_iteration'] = review
+      state['phase'] = 'waiting_for_claude_final_check_review'
+      state['next_action'] = 'wait_for_claude_final_check_review_status'
+      store.write(state)
+      puts "Sent final-check review #{review} prompt to claude-worker: #{prompt}"
+      wait_for_claude_final_check_review(context, repo, files, config, store, state)
+    end
+
+    def wait_for_claude_final_check_review(context, repo, files, config, store, state)
+      review = state.fetch('final_check_review_iteration')
+      result = wait_for_status(files.status_path(0, 'claude', 'final_checks_review', review), expected: { agent: 'claude', phase: 'final_checks', step: 0 }, config: config)
+      handle_agent_status!(result, files, store, state)
+      require_nonempty_artifact!(files.final_check_review_path(review), 'Claude final-check review')
+      raise Error, "Claude final-check review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+
+      findings = actionable_findings(result.data)
+      state['final_check_reviews'] = Array(state['final_check_reviews']) + [{
+        'iteration' => review,
+        'status' => 'done',
+        'summary' => result.data['summary'],
+        'findings_count' => findings.count
+      }]
+      if findings.empty?
+        state['final_check_reviewed'] = true
+        store.write(state)
+        complete_run(context, repo, files, store, state, state.fetch('final_checks'))
+      else
+        state['final_check_review_findings'] = findings
+        state['phase'] = 'ready_to_send_pi_final_check_fix'
+        state['next_action'] = 'send_pi_final_check_fix_prompt'
+        store.write(state)
+        send_pi_final_check_fix(context, repo, files, config, store, state)
+      end
+    end
+
+    def final_check_fix_commits(state)
+      Array(state['final_check_fix_commits'])
+    end
+
+    def skipped_final_check_results
+      [{
+        'command' => nil,
+        'status' => 'skipped',
+        'summary' => 'No final_check_commands configured. Ruby checks are configured automatically only when Gemfile exists.'
+      }]
+    end
+
+    def execute_final_check_commands(repo, commands)
+      commands.map do |command|
+        result = Shell.capture('bash', '-c', command, chdir: repo.root)
+        {
+          'command' => command,
+          'status' => result.success? ? 'passed' : 'failed',
+          'exit_status' => result.status.exitstatus,
+          'stdout' => result.stdout,
+          'stderr' => result.stderr
+        }
+      end
+    end
+
+    def write_final_checks(files, results)
+      File.write(files.final_checks_path, <<~MD)
+        # Final checks
+
+        #{results.map { |result| final_check_result_markdown(result) }.join("\n")}
+      MD
+    end
+
+    def final_check_result_markdown(result)
+      if result.fetch('status') == 'skipped'
+        return <<~MD
+          ## skipped
+
+          #{result.fetch('summary')}
+        MD
+      end
+
+      <<~MD
+        ## #{result.fetch('command')}
+
+        Status: #{result.fetch('status')}
+        Exit status: #{result.fetch('exit_status')}
+
+        ### stdout
+
+        ```text
+        #{result.fetch('stdout')}
+        ```
+
+        ### stderr
+
+        ```text
+        #{result.fetch('stderr')}
+        ```
+      MD
+    end
+
+    def write_final_summary(context, repo, files, state, final_checks)
+      File.write(files.final_summary_path, <<~MD)
+        # Autowork final summary
+
+        - Task: #{context.task_folder}
+        - Repo: #{repo.root}
+        - Final status: done
+        - Final phase: complete
+
+        ## Steps completed
+
+        #{summary_steps_markdown(state)}
+
+        ## Commits created
+
+        #{summary_commits_markdown(state)}
+
+        ## Reviews and outcomes
+
+        #{summary_reviews_markdown(state)}
+
+        ## Debates and final decisions
+
+        #{summary_debates_markdown(files)}
+
+        ## Final checks
+
+        #{summary_final_checks_markdown(final_checks)}
+
+        ## Unresolved caveats
+
+        - `/autowork` facilitates bounded Pi/Claude debate, but unresolved disagreement after the configured round limit requires operator arbitration.
+      MD
+    end
+
+    def summary_steps_markdown(state)
+      state.fetch('steps').map do |number, data|
+        "- Step #{number}: #{data.fetch('status')}"
+      end.join("\n")
+    end
+
+    def summary_commits_markdown(state)
+      step_commits = state.fetch('steps').flat_map do |number, data|
+        data.fetch('commits').map { |sha| "- Step #{number}: #{sha}" }
+      end
+      final_commits = final_check_fix_commits(state).each_with_index.map do |sha, index|
+        "- Final checks fix #{index + 1}: #{sha}"
+      end
+      (step_commits + final_commits).join("\n")
+    end
+
+    def summary_reviews_markdown(state)
+      step_reviews = state.fetch('steps').flat_map do |number, data|
+        data.fetch('reviews').map do |review|
+          "- Step #{number} review #{review.fetch('iteration')}: #{review.fetch('summary')}"
+        end
+      end
+      final_reviews = Array(state['final_check_reviews']).map do |review|
+        "- Final checks review #{review.fetch('iteration')}: #{review.fetch('summary')}"
+      end
+      (step_reviews + final_reviews).join("\n")
+    end
+
+    def summary_debates_markdown(files)
+      debates = Dir.glob(File.join(files.log_dir, 'debates', '*.md')).sort
+      return '- None.' if debates.empty?
+
+      debates.map { |path| "- #{path}" }.join("\n")
+    end
+
+    def summary_final_checks_markdown(final_checks)
+      final_checks.map do |result|
+        label = result['command'] || 'no configured command'
+        "- #{label}: #{result.fetch('status')}"
+      end.join("\n")
+    end
+
+    def wait_for_status(path, expected:, config:)
+      validator = StatusValidator.new
+      deadline = Time.now + worker_status_timeout_seconds(config)
+      last_invalid_result = nil
+      loop do
+        result = validator.validate_file(path, expected: expected)
+        return result if result.valid?
+
+        last_invalid_result = result if File.file?(path)
+        break if Time.now >= deadline
+
+        @sleeper.call(1)
+      end
+      if last_invalid_result
+        raise Error, "Invalid status JSON at #{path}: #{last_invalid_result.errors.join('; ')}"
+      end
+      raise Error, "Worker status timeout while waiting for status JSON: #{path}\nUse `autowork status <task_folder>` or inspect autowork-log/state.json for read-only status. Rerunning `/autowork` resumes orchestration and may stage/commit if the worker has finished. If the manager process was killed by an outer shell/tool timeout, do not rerun automatically; ask the operator for a fresh explicit continue/resume instruction."
+    end
+
+    def require_nonempty_artifact!(path, label)
+      return if File.file?(path) && !File.read(path).strip.empty?
+
+      raise Error, "#{label} artifact is missing or empty: #{path}. Agents must write artifacts before status JSON."
+    end
+
+    def handle_agent_status!(result, files, store, state)
+      return if result.data['status'] == 'done'
+
+      pause_with_reason!(files, store, state, "Agent reported #{result.data['status']}: #{result.data['summary']}")
+    end
+
+    def actionable_findings(status_data)
+      Array(status_data['findings']).select { |finding| %w[BLOCKER MINOR].include?(finding['severity']) }
+    end
+
+    def accepted_resolutions(resolutions)
+      resolutions.select { |resolution| %w[accept accept_with_alternative_fix].include?(resolution['decision']) }
+    end
+
+    def unresolved_resolutions(resolutions)
+      resolutions.select { |resolution| %w[dispute defer_minor].include?(resolution['decision']) }
+    end
+
+    def validate_resolution_coverage!(findings, resolutions)
+      finding_ids = findings.map { |finding| finding.fetch('id') }
+      resolution_ids = resolutions.map { |resolution| resolution.fetch('finding_id') }
+      missing = finding_ids - resolution_ids
+      unknown = resolution_ids - finding_ids
+      raise Error, "Pi classification did not cover findings: #{missing.join(', ')}" unless missing.empty?
+      raise Error, "Pi classification referenced unknown findings: #{unknown.join(', ')}" unless unknown.empty?
+    end
+
+    def pause_for_needs_user!(resolutions, files, store, state)
+      details = resolutions.map { |resolution| "- #{resolution['finding_id']}: #{resolution['rationale']}" }.join("\n")
+      pause_with_reason!(files, store, state, "Pi requested user input for review finding(s):\n#{details}")
+    end
+
+    def pause_for_unresolved!(resolutions, files, store, state)
+      details = resolutions.map { |resolution| "- #{resolution['finding_id']} #{resolution['decision']}: #{resolution['rationale']}" }.join("\n")
+      pause_with_reason!(files, store, state, "Review finding(s) need debate/user review before continuing:\n#{details}")
+    end
+
+    def pause_with_reason!(files, store, state, reason)
+      state['status'] = 'paused'
+      state['paused_reason'] = reason
+      File.write(files.paused_reason_path, "# Autowork paused\n\n#{reason}\n")
+      store.write(state)
+      raise Error, reason
+    end
+
+    def record_unresolved_findings(files, state, resolutions)
+      return if resolutions.empty?
+
+      step = state['current_step']
+      review = state['review_iteration'] || 1
+      File.open(files.debate_path(step), 'a') do |file|
+        file.puts "## Review #{review} unresolved findings"
+        resolutions.each do |resolution|
+          file.puts
+          file.puts "### #{resolution['finding_id']} — #{resolution['decision']}"
+          file.puts
+          file.puts resolution['rationale']
+        end
+        file.puts
+      end
+    end
+
+    def worker_status_timeout_seconds(config)
+      return ENV.fetch('AUTOWORK_WORKER_STATUS_TIMEOUT_SECONDS').to_i if ENV.key?('AUTOWORK_WORKER_STATUS_TIMEOUT_SECONDS')
+      return ENV.fetch('AUTOWORK_PROMPT_TIMEOUT_SECONDS').to_i if ENV.key?('AUTOWORK_PROMPT_TIMEOUT_SECONDS')
+
+      config.fetch('worker_status_timeout_minutes', config.fetch('agent_prompt_timeout_minutes', 10)).to_i * 60
+    end
+  end
+
+  class Doctor
+    def initialize(argv, tmux: Tmux.new, cwd: Dir.pwd)
+      @argv = argv.dup
+      @tmux = tmux
+      @cwd = cwd
+      remove_flag('--send-test')
+      remove_flag('send-test')
+      @is_send_test = !(remove_flag('--no-send-test') || remove_flag('no-send-test'))
+    end
+
+    def run
+      raise Error, 'Usage: autowork doctor [--no-send-test]' unless @argv.empty?
+
+      repo = safe_repo(@cwd)
+      puts 'Autowork doctor'
+      puts "helper: #{File.join(ROOT, 'bin', 'autowork')}"
+      puts "repo_dir: #{repo&.root || @cwd}"
+      puts "branch: #{repo ? repo.branch : 'unknown'}"
+      puts "worktree: #{repo ? (repo.clean? ? 'clean' : 'dirty') : 'unknown'}"
+      roles = report_panes(repo)
+      report_prompt_delivery(roles)
+      send_test(roles) if @is_send_test && roles
+      report_status_validator
+    end
+
+    private
+
+    def remove_flag(flag)
+      removed = @argv.delete(flag)
+      !removed.nil?
+    end
+
+    def safe_repo(path)
+      GitRepo.new(path)
+    rescue Error => e
+      puts "repo_error: #{e.message}"
+      nil
+    end
+
+    def report_panes(repo)
+      roles = repo ? @tmux.discover_roles(repo.root) : nil
+      if roles
+        puts 'tmux_panes: ok'
+        puts "pi-manager: #{roles.manager.id} #{roles.manager.path}"
+        puts "pi-worker: #{roles.pi_worker.id} #{roles.pi_worker.path}"
+        puts "claude-worker: #{roles.claude_worker.id} #{roles.claude_worker.path}"
+      end
+      roles
+    rescue Error => e
+      puts "tmux_panes: failed - #{e.message}"
+      nil
+    end
+
+    def report_prompt_delivery(roles)
+      if roles
+        puts 'prompt_delivery: ready'
+        if @is_send_test
+          puts 'prompt_delivery_send_test: enabled'
+        else
+          puts 'prompt_delivery_send_test: skipped (--no-send-test)'
+        end
+      else
+        puts 'prompt_delivery: blocked until tmux panes are healthy'
+      end
+    end
+
+    def send_test(roles)
+      message = "AUTOWORK DOCTOR SEND TEST #{Time.now.iso8601}: no action required"
+      @tmux.send_text(roles.pi_worker.id, message)
+      @tmux.send_text(roles.claude_worker.id, message)
+      puts 'prompt_delivery_send_test: sent to pi-worker and claude-worker'
+    end
+
+    def report_status_validator
+      sample = { 'status' => 'done', 'agent' => 'pi', 'phase' => 'implement', 'step' => 1, 'summary' => 'sample' }
+      result = StatusValidator.new.validate_hash(sample, expected: { agent: 'pi', phase: 'implement', step: 1 })
+      puts "status_json_validator: #{result.valid? ? 'ok' : "failed - #{result.errors.join('; ')}"}"
+    end
+  end
+
+  class Initializer
+    def initialize(argv)
+      @argv = argv
+    end
+
+    def run
+      setup = RunSetup.new(@argv).prepare!
+      puts 'Initialized autowork run'
+      puts "task_folder=#{setup.context.task_folder}"
+      puts "repo=#{setup.repo.root}"
+      puts "steps_count=#{setup.steps.count}"
+      puts "pi_manager_target=#{setup.roles.manager.id}"
+      puts "pi_worker_target=#{setup.roles.pi_worker.id}"
+      puts "claude_worker_target=#{setup.roles.claude_worker.id}"
+      puts "first_prompt=#{setup.files.prompt_path("step#{setup.steps.numbers.first}_pi_implement_request.md")}"
+      puts
+      puts 'Next manual/integration step: run autowork normally to send the prompt.'
+    end
+  end
+
+  class CLI
+    def initialize(argv)
+      @argv = argv
+    end
+
+    def run
+      command = @argv.first
+      case command
+      when 'help', '-h', '--help'
+        puts usage
+      when 'doctor'
+        Doctor.new(@argv[1..]).run
+      when 'init'
+        Initializer.new(@argv[1..]).run
+      when 'status'
+        show_status(@argv[1..])
+      else
+        Orchestrator.new(@argv).run
+      end
+    rescue Error => e
+      warn "autowork: #{e.message}"
+      exit 1
+    end
+
+    private
+
+    def usage
+      <<~USAGE
+        Usage:
+          autowork [project-or-gtm-session] [task_id]
+          autowork init [project-or-gtm-session] [task_id]
+          autowork doctor [--no-send-test]
+          autowork status <task_folder>
+      USAGE
+    end
+
+    def show_status(args)
+      task_folder = args&.first
+      raise Error, 'Usage: autowork status <task_folder>' unless task_folder
+
+      state_path = File.join(task_folder, 'autowork-log', 'state.json')
+      config_path = File.join(task_folder, 'autowork-log', 'config.yml')
+      puts File.read(config_path) if File.file?(config_path)
+      puts JSON.pretty_generate(StateStore.new(state_path).read)
+    end
+  end
+end
