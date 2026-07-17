@@ -1,0 +1,257 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+label="local.agent-broker.brave-search"
+service_user="_agentbroker"
+service_group="staff"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source_broker="$repo_root/no_stow/agent-brave-search/brave_search_broker.rb"
+install_root="/usr/local/libexec/agent-broker/brave-search"
+broker_path="$install_root/brave_search_broker.rb"
+config_dir="/usr/local/etc/agent-broker/brave-search"
+identity_path="$config_dir/identity.txt"
+encrypted_key_path="$config_dir/brave-api-key.age"
+socket_dir="/var/tmp/agent-broker"
+socket_path="$socket_dir/brave-search.sock"
+log_dir="/var/log/agent-broker/brave-search"
+plist_path="/Library/LaunchDaemons/$label.plist"
+rage_bin="${AGENT_BRAVE_SEARCH_RAGE_BIN:-/opt/homebrew/bin/rage}"
+rage_keygen_bin="${AGENT_BRAVE_SEARCH_RAGE_KEYGEN_BIN:-/opt/homebrew/bin/rage-keygen}"
+ruby_bin="/usr/bin/ruby"
+
+usage() {
+  cat <<USAGE
+Usage: sudo agent-brave-search-admin <command>
+
+Commands:
+  install     Create isolated user, install broker, create age identity, install LaunchDaemon plist
+  set-key     Prompt for Brave API key and store it encrypted for the broker
+  load        Load/restart the LaunchDaemon
+  unload      Stop/unload the LaunchDaemon
+  status      Print launchd status
+  uninstall   Unload LaunchDaemon and remove installed broker/plist/config/socket/log dirs
+
+Typical first run:
+  sudo no_stow/bin/agent-brave-search-admin install
+  sudo no_stow/bin/agent-brave-search-admin set-key
+  sudo no_stow/bin/agent-brave-search-admin load
+  no_stow/bin/agent-brave-search --health
+USAGE
+}
+
+require_root() {
+  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+    echo "Error: this command must be run with sudo/root." >&2
+    exit 1
+  fi
+}
+
+require_file() {
+  local path="$1"
+  if [[ ! -f "$path" ]]; then
+    echo "Error: missing file: $path" >&2
+    exit 1
+  fi
+}
+
+require_executable() {
+  local path="$1"
+  if [[ ! -x "$path" ]]; then
+    echo "Error: missing executable: $path" >&2
+    exit 1
+  fi
+}
+
+service_user_exists() {
+  dscl . -read "/Users/$service_user" >/dev/null 2>&1
+}
+
+next_system_uid() {
+  local used uid
+  used="$(dscl . -list /Users UniqueID | awk '{print $2}' | sort -n)"
+  for uid in $(seq 401 499); do
+    if ! grep -qx "$uid" <<<"$used"; then
+      echo "$uid"
+      return 0
+    fi
+  done
+  echo "Error: no free UID in 401..499" >&2
+  return 1
+}
+
+create_service_user() {
+  if ! service_user_exists; then
+    dscl . -create "/Users/$service_user"
+  fi
+
+  if ! dscl . -read "/Users/$service_user" UniqueID >/dev/null 2>&1; then
+    dscl . -create "/Users/$service_user" UniqueID "$(next_system_uid)"
+  fi
+
+  dscl . -create "/Users/$service_user" UserShell /usr/bin/false
+  dscl . -create "/Users/$service_user" RealName "Agent Private Broker"
+  dscl . -create "/Users/$service_user" PrimaryGroupID 20
+  dscl . -create "/Users/$service_user" NFSHomeDirectory /var/empty
+  dscl . -create "/Users/$service_user" AuthenticationAuthority ';DisabledUser;'
+  dscl . -create "/Users/$service_user" Password '*'
+}
+
+install_broker() {
+  require_file "$source_broker"
+  mkdir -p "$install_root" "$config_dir" "$socket_dir" "$log_dir"
+
+  install -o root -g wheel -m 0555 "$source_broker" "$broker_path"
+
+  chown "$service_user":wheel "$config_dir"
+  chmod 0700 "$config_dir"
+
+  chown "$service_user:$service_group" "$socket_dir"
+  chmod 0750 "$socket_dir"
+
+  chown "$service_user:$service_group" "$log_dir"
+  chmod 0750 "$log_dir"
+}
+
+create_identity() {
+  require_executable "$rage_keygen_bin"
+  if [[ -f "$identity_path" ]]; then
+    chown "$service_user":wheel "$identity_path"
+    chmod 0400 "$identity_path"
+    return 0
+  fi
+
+  local tmp_dir tmp_identity
+  tmp_dir="$(mktemp -d /tmp/agent-broker-brave-search-identity.XXXXXX)"
+  tmp_identity="$tmp_dir/identity.txt"
+  "$rage_keygen_bin" -o "$tmp_identity" >/dev/null
+  install -o "$service_user" -g wheel -m 0400 "$tmp_identity" "$identity_path"
+  rm -rf "$tmp_dir"
+}
+
+write_plist() {
+  cat >"$plist_path" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$label</string>
+  <key>UserName</key>
+  <string>$service_user</string>
+  <key>GroupName</key>
+  <string>$service_group</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$ruby_bin</string>
+    <string>$broker_path</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>AGENT_BRAVE_SEARCH_SOCKET</key>
+    <string>$socket_path</string>
+    <key>AGENT_BRAVE_SEARCH_SOCKET_GROUP</key>
+    <string>$service_group</string>
+    <key>AGENT_BRAVE_SEARCH_IDENTITY_PATH</key>
+    <string>$identity_path</string>
+    <key>AGENT_BRAVE_SEARCH_ENCRYPTED_KEY_PATH</key>
+    <string>$encrypted_key_path</string>
+    <key>AGENT_BRAVE_SEARCH_RAGE_BIN</key>
+    <string>$rage_bin</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>$log_dir/stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>$log_dir/stderr.log</string>
+</dict>
+</plist>
+PLIST
+  chown root:wheel "$plist_path"
+  chmod 0644 "$plist_path"
+}
+
+install_command() {
+  require_root
+  require_executable "$rage_bin"
+  require_executable "$ruby_bin"
+  create_service_user
+  install_broker
+  create_identity
+  write_plist
+
+  echo "Installed $label."
+  echo "Next: sudo $0 set-key"
+  echo "Then: sudo $0 load"
+}
+
+set_key_command() {
+  require_root
+  require_executable "$rage_bin"
+  require_executable "$rage_keygen_bin"
+  require_file "$identity_path"
+
+  local recipient api_key tmp_dir tmp_out
+  recipient="$($rage_keygen_bin -y "$identity_path")"
+
+  printf "Brave API key: " >&2
+  stty -echo
+  IFS= read -r api_key
+  stty echo
+  printf "\n" >&2
+
+  if [[ -z "$api_key" ]]; then
+    echo "Error: empty API key." >&2
+    exit 1
+  fi
+
+  tmp_dir="$(mktemp -d /tmp/agent-broker-brave-search-key.XXXXXX)"
+  tmp_out="$tmp_dir/brave-api-key.age"
+  printf '%s' "$api_key" | "$rage_bin" -r "$recipient" -o "$tmp_out"
+  api_key=""
+  install -o "$service_user" -g wheel -m 0400 "$tmp_out" "$encrypted_key_path"
+  rm -rf "$tmp_dir"
+  echo "Encrypted Brave API key installed at $encrypted_key_path"
+}
+
+load_command() {
+  require_root
+  launchctl bootout system "$plist_path" >/dev/null 2>&1 || true
+  launchctl bootstrap system "$plist_path"
+  launchctl kickstart -k "system/$label"
+}
+
+unload_command() {
+  require_root
+  launchctl bootout system "$plist_path" >/dev/null 2>&1 || true
+}
+
+status_command() {
+  launchctl print "system/$label"
+}
+
+uninstall_command() {
+  require_root
+  unload_command
+  rm -f "$plist_path"
+  rm -rf "$install_root" "$config_dir" "$socket_dir" "$log_dir"
+  echo "Removed installed files. Service user $service_user was left in place."
+}
+
+command="${1:-}"
+case "$command" in
+  install) install_command ;;
+  set-key) set_key_command ;;
+  load) load_command ;;
+  unload) unload_command ;;
+  status) status_command ;;
+  uninstall) uninstall_command ;;
+  -h|--help|help|'') usage ;;
+  *)
+    usage >&2
+    exit 64
+    ;;
+esac

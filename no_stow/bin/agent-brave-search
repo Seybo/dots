@@ -1,0 +1,87 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require 'optparse'
+require 'socket'
+
+options = {
+  socket: ENV.fetch('AGENT_BRAVE_SEARCH_SOCKET', '/var/tmp/agent-broker/brave-search.sock'),
+  count: 5,
+  offset: 0,
+  json: false
+}
+
+parser = OptionParser.new do |opts|
+  opts.banner = 'Usage: agent-brave-search [options] <query>'
+  opts.on('--socket PATH', 'Broker Unix socket path') { |value| options[:socket] = value }
+  opts.on('--count N', Integer, 'Result count, 1-10') { |value| options[:count] = value }
+  opts.on('--offset N', Integer, 'Result offset, 0-50') { |value| options[:offset] = value }
+  opts.on('--safesearch VALUE', 'off, moderate, strict') { |value| options[:safesearch] = value }
+  opts.on('--freshness VALUE', 'pd, pw, pm, py') { |value| options[:freshness] = value }
+  opts.on('--country CC', 'Two-letter country, e.g. US') { |value| options[:country] = value }
+  opts.on('--search-lang LL', 'Two-letter search language, e.g. en') { |value| options[:search_lang] = value }
+  opts.on('--json', 'Print sanitized JSON') { options[:json] = true }
+  opts.on('--health', 'Check broker health') { options[:health] = true }
+  opts.on('-h', '--help', 'Show help') do
+    puts opts
+    exit 0
+  end
+end
+
+parser.parse!(ARGV)
+
+request = if options[:health]
+            { action: 'health' }
+          else
+            query = ARGV.join(' ').strip
+            if query.empty?
+              warn parser.to_s
+              exit 64
+            end
+
+            warn "WEB_SEARCH_USED provider=brave count=#{options[:count]} query=#{query.inspect}"
+
+            {
+              action: 'search',
+              query: query,
+              count: options[:count],
+              offset: options[:offset],
+              safesearch: options[:safesearch],
+              freshness: options[:freshness],
+              country: options[:country],
+              search_lang: options[:search_lang]
+            }.compact
+          end
+
+begin
+  socket = UNIXSocket.new(options[:socket])
+  socket.write(JSON.generate(request))
+  socket.write("\n")
+  response = JSON.parse(socket.read)
+ensure
+  socket&.close
+end
+
+unless response['ok']
+  warn "agent-brave-search: #{response['error']}: #{response['message']}"
+  exit 1
+end
+
+if options[:json] || options[:health]
+  puts JSON.pretty_generate(response)
+  exit 0
+end
+
+results = response.fetch('results', [])
+if results.empty?
+  puts 'No results.'
+  exit 0
+end
+
+results.each_with_index do |result, index|
+  puts "#{index + 1}. #{result['title']}"
+  puts "   #{result['url']}" if result['url']
+  puts "   #{result['description']}" if result['description']
+  puts
+end
