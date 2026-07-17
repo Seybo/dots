@@ -1,11 +1,11 @@
 ---
 name: claude-super-review
-description: Multi-agent code review for PR / branch / diff in any repo. Runs 6 parallel Claude subagents (4 generic adversarial + 1 Security + 1 Deployment) + an independent Codex pass. Convergence filter (≥2 agents confirmed = valid issue; Critical/HIGH = always surfaced). Surface Critical / High / Medium with mandatory short writeup "what's wrong / code / why it matters / fix". Senior architect voice, output ready to paste into a GitHub comment. Use this skill whenever the user writes "/claude-super-review", "review PR 247", "review my branch", "look at what X pushed", supplies a GitHub PR URL, or asks for a code review of uncommitted changes. Trigger even if "skill" isn't said explicitly - this is the default review workflow.
+description: Multi-agent code review for PR / branch / diff in any repo. Runs 6 parallel Claude subagents (3 generic adversarial + 1 Architecture + 1 Security + 1 Deployment) + an independent Codex pass. Convergence filter (≥2 agents confirmed = valid issue; Critical/HIGH = always surfaced). Surface Critical / High / Medium with mandatory short writeup "what's wrong / code / why it matters / fix". Senior architect voice, output ready to paste into a GitHub comment. Use this skill whenever the user writes "/claude-super-review", "review PR 247", "review my branch", "look at what X pushed", supplies a GitHub PR URL, or asks for a code review of uncommitted changes. Trigger even if "skill" isn't said explicitly - this is the default review workflow.
 ---
 
 # code-review
 
-Multi-agent code review skill - runs 6 parallel Claude subagents (a mixed Opus+Sonnet panel, with the model set EXPLICITLY in each Task call) and a Codex pass on the same diff, filters via convergence, returns a ranked list with verdict. Optimized for AI-generated code where single-pass review misses blind spots, and for cross-cutting issues that narrow specialists skip over.
+Multi-agent code review skill - runs 6 parallel Claude subagents (a mixed Opus+Sonnet panel, with the model set EXPLICITLY in each Task call) and a Codex pass on the same diff, filters via convergence, returns a ranked list with verdict. Optimized for AI-generated code where single-pass review misses blind spots, for cross-cutting issues that narrow specialists skip over, and for structural issues that need an architecture lens.
 
 ## When to trigger
 
@@ -36,8 +36,9 @@ Never trigger for plain review requests such as:
    the user's current working dir stays untouched.
 
 PHASE 1 - Independent reviews (parallel, blind to each other):
-   - 4 Generic adversarial subagents (no role bias) → broad coverage
-     (2x model: "opus" + 2x model: "sonnet")
+   - 3 Generic adversarial subagents (no role bias) → broad coverage
+     (2x model: "opus" + 1x model: "sonnet")
+   - 1 Architecture subagent → file/module split, God files, layering (model: "sonnet")
    - 1 Security subagent → secrets / PII / injection / regex completeness (model: "opus")
    - 1 Deployment subagent → migrations / env vars / PR description structure (model: "sonnet")
    - 1 Codex independent pass → cross-vendor signal (gpt-5.5)
@@ -57,7 +58,7 @@ PHASE 4 - Interactive posting: ask which findings to post, leave each as a PENDI
 PHASE 5 - Cleanup worktree
 ```
 
-**Empirically: 4 generic agents find more cross-cutting issues than 4 specialized ones.** Specialized prompts force each agent to think only within its niche (a Logic agent won't think "approval gate compares a different field from the idempotency key" - that requires cross-lens reasoning). Give the generics a mandate of "find anything wrong" and they naturally cluster around the issues that actually matter. Specialization is kept only for Security (where legal/compliance domain knowledge is critical) and Deployment (the PR-description gap - a structural check).
+**Empirically: generic broad-mandate agents find more cross-cutting issues than narrow specialists.** Specialized prompts force each agent to think only within its niche (a Logic agent won't think "approval gate compares a different field from the idempotency key" - that requires cross-lens reasoning). Give the generics a mandate of "find anything wrong" and they naturally cluster around the issues that actually matter. Specialization is kept only where the narrow lens is worth one panel slot: Architecture (file/module split, God files, layering), Security (legal/compliance domain knowledge), and Deployment (the PR-description gap - a structural check).
 
 ## Step 1 - Determine scope
 
@@ -100,7 +101,7 @@ If project CLAUDE.md is >300 lines, extract only the relevant sections (severity
 
 ## Phase 1 - Independent reviews (parallel)
 
-Launch **7 parallel** calls in a single message: 4 generic Task calls + 1 Security Task + 1 Deployment Task + Codex (via Bash background).
+Launch **7 parallel** calls in a single message: 3 generic Task calls + 1 Architecture Task + 1 Security Task + 1 Deployment Task + Codex (via Bash background).
 
 ### Model assignment (MANDATORY)
 
@@ -109,17 +110,18 @@ Pass `model` explicitly in EVERY Task call. Without an explicit `model`, the sub
 | Role | model | Why |
 |---|---|---|
 | Generic 1, Generic 2 | `"opus"` (= Opus 4.8) | Deep cross-file reasoning; Opus 4.8 has a stated gain specifically in bug-finding |
-| Generic 3, Generic 4 | `"sonnet"` (= Sonnet 4.6) | Strong code reviewer; a second model in the panel gives cross-model diversity in convergence |
+| Generic 3 | `"sonnet"` (= Sonnet 4.6) | Strong code reviewer; a second model in the panel gives cross-model diversity in convergence |
+| Architecture | `"sonnet"` (= Sonnet 4.6) | Structural role for file/module split, God files, and layering; prompt does the heavy lifting while keeping the Sonnet share of the panel |
 | Security | `"opus"` | The most expensive class of misses; adversarial analysis of regex/auth/race needs maximum depth |
 | Deployment | `"sonnet"` | The most structural role (migrations / env vars / PR description) - the prompt does the heavy lifting |
 | Phase 2 Call A (Claude reviews Codex) | `"opus"` | Adjudication: the power to kill findings - a wrong DISAGREE costs more than the tokens saved |
 | Codex | `gpt-5.5` (CLI `-m`) | Cross-vendor diversity; fallback `gpt-5.4` |
 
-The layout is locked by Sasha 2026-06-09 - do not change it without his decision.
+The layout is locked by Sasha 2026-06-09; Architecture role added 2026-07-10 by replacing one generic reviewer while preserving the Sonnet slot. Do not change it without his decision.
 
 Do NOT use Haiku in any role: the loss of depth on subtle bugs destroys the pipeline's value, plus the 200K context may not fit a large PR + files.
 
-Logic of the mixed panel: Opus sits where maximum depth is needed (2 generic + Security + adjudication), Sonnet where the prompt does the heavy lifting (Deployment) and where a second model adds diversity (2 generic). Two identical models share common blind spots, so Opus+Sonnet convergence is a stronger signal than two runs of one model; the same principle as the cross-vendor signal from Codex.
+Logic of the mixed panel: Opus sits where maximum depth is needed (2 generic + Security + adjudication), Sonnet where the prompt does the heavy lifting (Architecture + Deployment) and where a second model adds diversity (1 generic). Two identical models share common blind spots, so Opus+Sonnet convergence is a stronger signal than two runs of one model; the same principle as the cross-vendor signal from Codex.
 
 **Hard prompt rules** (apply to ALL subagent prompts):
 
@@ -292,9 +294,9 @@ SKIP LIST (do not surface these as findings):
 
 ### Subagent prompts
 
-**Subagents 1-4: Generic adversarial reviewers**
+**Subagents 1-3: Generic adversarial reviewers**
 
-Identical prompt for all four (this is intentional - same prompt, 4 separate runs, gives 4 independent signal sources):
+Identical prompt for all three (this is intentional - same prompt, 3 separate runs, gives 3 independent signal sources):
 
 ```
 You are a senior code reviewer. You have full mandate to find what is wrong
@@ -334,6 +336,38 @@ Your process:
 
 Output a complete list of findings in the required format. If no issues,
 say "No findings" explicitly. End with "Verdict: <clean | N findings>".
+```
+
+**Subagent 4: Architecture + modularity**
+
+Model `"sonnet"`. This role keeps the PR from shipping one giant blob when it should be a directory of focused modules.
+
+```
+You are a senior software architect. Review this PR for STRUCTURE, not correctness - the other reviewers hunt bugs. Your single question: is the code at the right altitude, or is it being dumped into one oversized file/blob when it should be split across files, models, and modules in a clean architecture?
+
+[INSERT HARD RULES BLOCK]
+
+SCOPE OVERRIDE: the generic SKIP LIST's "could be extracted to a helper" exclusion does NOT bind you for genuinely large or multi-concern units - layout is your entire mandate. But keep your bar HIGH: flag material structural problems, never cosmetic ones. A 40-line function is fine; a 900-line file doing six unrelated jobs is not. Only judge code CHANGED or ADDED by THIS PR - do not flag a pre-existing God file the diff didn't create or materially grow.
+
+What to flag, worst first:
+- GOD FILE: a file added or grown large that mixes many concerns (types + IO + business logic + rendering + CLI wiring in one). Rule of thumb: a source file pushed past ~400-500 lines with more than one clear responsibility should be a directory of focused modules. Name each concern and where it should live.
+- GOD FUNCTION / GOD CLASS: one function/class doing too much (long body, many responsibilities, deep nesting, dozens of methods). Name the split seams.
+- CONCERNS NOT SEPARATED: pure logic tangled with IO / network / filesystem / rendering, so none of it is unit-testable in isolation; business rules that belong in a model sitting inline in a CLI command or controller.
+- WRONG LAYER / WRONG DIRECTORY: code added to a file that does not match the project's own layout - read the module-layout / package-structure section of CLAUDE.md + AGENTS.md and hold the diff to it.
+- DUPLICATION THAT WANTS A MODULE: the same block copy-pasted across 3+ files that should be one shared module.
+- MISSING EXTENSION SEAM: variant-specific behavior added via a `switch (name)` / long if-else dispatcher in a shared module instead of a polymorphic seam, when the project documents such a convention. Do not invent a convention the repo lacks.
+
+For EACH finding give a concrete TARGET ARCHITECTURE, not just "split this up" - show the file/module breakdown so the author can act. Match the target to the project's existing conventions; never impose a generic structure the repo does not use. If CLAUDE.md / AGENTS.md documents a layout, your proposed split MUST follow and cite it.
+
+SEVERITY:
+- An oversized multi-concern file / God-object INTRODUCED by this PR that will be a lasting maintenance and review blind spot -> [HIGH].
+- A file trending too large, a function that should be 2-3, a misplaced module -> [MEDIUM].
+- Do NOT flag small single-purpose files, short functions, or preference-level reshuffles. If the only argument is "I'd organize it differently", drop it.
+
+Project conventions: <paste module-layout / package-structure sections>
+PR context: <paste>
+
+Process as in the generic prompt. Find what is structurally wrong. If the layout is already clean, say so explicitly. End with "Verdict: <clean | N findings>".
 ```
 
 **Subagent 5: Security focus**
@@ -481,12 +515,14 @@ Fix: <concrete change>
 ### Phase 1 → Phase 2 handoff
 
 After Phase 1:
-- `claude_findings` = union of the 6 subagent outputs (4 generic + Security + Deployment)
+- `claude_findings` = union of the 6 subagent outputs (3 generic + Architecture + Security + Deployment)
 - `codex_findings` = Codex output (if completed)
 
 Dedup within `claude_findings`: if 2+ agents flagged the same hole (same file, line ± 5, same conceptual issue), merge with a note "subagents: gen-1 + gen-3 + Sec". Convergence count = HIGH signal.
 
-With 4 generic agents, a reliable convergence threshold is **2 of 4 = high signal**, **3+ of 4 = almost certain**. Cross-model convergence (Opus+Sonnet within the panel, Claude+Codex across vendors) weighs more than agreement between two agents of the same model: different models don't share blind spots.
+With 3 generic agents, a reliable generic convergence threshold is **2 of 3 = high signal**, **3 of 3 = almost certain**. Cross-model convergence (Opus+Sonnet within the panel, Claude+Codex across vendors) weighs more than agreement between two agents of the same model: different models don't share blind spots.
+
+**Specialists (Architecture / Security / Deployment) rarely converge with generic agents** because their mandates include structural, security, and deployment classes that generic agents often skip. Judge specialist findings on substance, not only confirmation count: specialist High surfaces by itself, and concrete, well-justified specialist Medium findings (for example, Architecture identifies a real God file and target layout) count as "interesting" and are not automatically dropped as single-agent Mediums.
 
 **BUT: convergence is NOT verification for control-flow / exception-semantics / state-machine claims.** N agents (and Codex) can AGREE on a plausible-but-overstated mechanism while sharing ONE blind spot (none traced the language semantics or the trigger precondition). Before surfacing such a finding as High, independently trace the normal path and state the exact precondition (see PRECONDITION & SEVERITY DISCIPLINE). Agreement on a mechanism is not proof it fires. (Real miss: a compound-edge "error masking" was tagged HIGH + "lost" even though Ruby preserves the original in `.cause` and the case needs a second simultaneous DB failure.)
 
@@ -552,7 +588,7 @@ Decision tree per finding:
 **Verdict: <Ready to Merge | Needs Attention | Needs Work>**
 <One sentence on what to do next.>
 
-Reviewers: 6 Claude subagents (4 generic + Security + Deployment) + Codex.
+Reviewers: 6 Claude subagents (3 generic + Architecture + Security + Deployment) + Codex.
 Convergence: <X findings caught by 2+ agents, Y by 1 agent + Codex>.
 
 ---
@@ -749,7 +785,7 @@ If the worktree is busy (subagent still holds an fd), use `git worktree remove -
 
 - **Phase 1 reviewers (6 Claude + Codex) are blind to each other.** Otherwise anchoring bias.
 - **7 parallel Task/Bash calls in a single message.** Sequential = 7x slower.
-- **`model` explicit in EVERY Task call** (gen-1/gen-2 + Security = `"opus"`, gen-3/gen-4 + Deployment = `"sonnet"`, Phase 2 Call A = `"opus"`). Inheriting the session model is forbidden - the session may be running on an expensive model, and the review silently costs 2-3x more.
+- **`model` explicit in EVERY Task call** (gen-1/gen-2 + Security = `"opus"`, gen-3 + Architecture + Deployment = `"sonnet"`, Phase 2 Call A = `"opus"`). Inheriting the session model is forbidden - the session may be running on an expensive model, and the review silently costs 2-3x more.
 - **CLAUDE.md + AGENTS.md in EVERY prompt.** Without them agents flag violations of conventions that don't exist.
 - **HARD RULES BLOCK pasted into EVERY prompt** (location citations / finding format / intent verification / domain knowledge / cross-field consistency / skip list).
 - **`git worktree add` before launching subagents** - so they can open files and use real line numbers, not diff positions. Worktree, not `gh pr checkout` - so parallel reviews of other PRs in the main working dir are not blocked.
@@ -771,14 +807,14 @@ If the worktree is busy (subagent still holds an fd), use `git worktree remove -
 - Do not propose stylistic rewrites if the code works.
 - Do not produce one-sentence findings - they get lost and aren't actionable.
 - Do not use diff hunk positions as line numbers.
-- Do not run 5 specialized agents (Logic/Security/Tests/Perf/Deploy) - that is the legacy setup; generic broad-mandate agents find more cross-cutting issues. Current correct setup: 4 generic + 1 Security + 1 Deployment.
+- Do not run 5 specialized agents (Logic/Security/Tests/Perf/Deploy) - that is the legacy setup; generic broad-mandate agents find more cross-cutting issues. Current correct setup: 3 generic + 1 Architecture + 1 Security + 1 Deployment.
 - Do not use `gh pr checkout` - it blocks parallel reviews of other PRs. Use `git worktree add` only.
 
 ## Pitfalls
 
 **Codex CLI truncates mid-investigation** - a typical problem of `codex exec` non-interactive mode. Default `-m gpt-5.5`; fallback `-m gpt-5.4`. If both truncate, skip and note "Codex unavailable - 6-Claude convergence applied". Don't burn time on a 3rd attempt.
 
-**Specialized agents miss cross-cutting issues** - e.g. "approval gate filter does not include the same fields the idempotency key uses". A Logic specialist looks at approval logic in isolation and doesn't compare with other files. Solution: 3 generic agents have a broad mandate and natural cross-reference, plus the CROSS-FIELD CONSISTENCY rule in HARD RULES BLOCK.
+**Over-specialized panels miss cross-cutting issues** - e.g. "approval gate filter does not include the same fields the idempotency key uses". A Logic specialist looks at approval logic in isolation and doesn't compare with other files. Solution: 3 generic agents have a broad mandate and natural cross-reference, plus the CROSS-FIELD CONSISTENCY rule in HARD RULES BLOCK. Architecture is kept as the one structural specialist because generic agents are told to skip most refactor/layout findings.
 
 **Phase 2 reviewer always AGREEs** - sycophancy. If >70% of findings come back as AGREE, abort and tell the user "Phase 2 debate degenerate, don't trust it - verify manually".
 
@@ -803,8 +839,8 @@ If the worktree is busy (subagent still holds an fd), use `git worktree remove -
 2. `gh pr diff 247 > /tmp/pr247.diff`
 3. `BRANCH=$(gh pr view 247 --json headRefName -q .headRefName); git fetch origin "$BRANCH"; git worktree add /tmp/pr247_worktree "origin/$BRANCH"` (CRITICAL - isolated worktree preserves parallelism)
 4. Read `CLAUDE.md` + `AGENTS.md` in the worktree root.
-5. **Phase 1**: spawn 6 subagents (4 generic + Security + Deployment) + Codex in parallel - all blind to each other. Models: gen-1/gen-2 + Security `model: "opus"`, gen-3/gen-4 + Deployment `model: "sonnet"`. Each prompt includes HARD RULES BLOCK, project conventions, PR context, and worktree path.
-6. Wait for all 6 + Codex (background notifications). Dedup intra-Claude (4 generic agents give a good convergence signal).
+5. **Phase 1**: spawn 6 subagents (3 generic + Architecture + Security + Deployment) + Codex in parallel - all blind to each other. Models: gen-1/gen-2 + Security `model: "opus"`, gen-3 + Architecture + Deployment `model: "sonnet"`. Each prompt includes HARD RULES BLOCK, project conventions, PR context, and worktree path.
+6. Wait for all 6 + Codex (background notifications). Dedup intra-Claude (3 generic agents plus specialist signals give a good convergence signal).
 7. **Phase 2**: parallel calls - Claude reviews Codex findings, Codex reviews Claude findings.
 8. **Phase 3**: synthesize per the decision tree → final markdown with detailed findings.
 8.5. **Phase 3.5**: write the same markdown verbatim to `super-review.md` (task folder if known, else repo root). Print `Report saved: <path>`.
