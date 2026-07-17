@@ -6,7 +6,9 @@ font-family-bold = "Hack Nerd Font"
 font-family-italic = "Iosevka Nerd Font Mono"
 font-family-bold-italic = "Hack Nerd Font"
 
-font-size = 15
+font-size = 14
+# cmd+shift+0 => reset font size to configured default
+keybind = cmd+shift+0=reset_font_size
 font-thicken = false
 adjust-cell-height = 0
 adjust-box-thickness = 0
