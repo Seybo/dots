@@ -13,6 +13,11 @@ When the user asks about a Pi "skill" or `/command`, treat that as any Pi slash 
 - Staging files (`git add`) is also a git state mutation. Ask first unless the user explicitly asked to commit or prepare a commit.
 - If approval is ambiguous, stop and ask. Do not infer approval from words like "go", "fix it", or "next".
 
+## Dotfiles stow safety
+
+- In the dotfiles repo, never manually create symlinks from `~/.dots` into `$HOME`. Dotfile linking must go through the user's `stow_check` dry-run and `stow_do` apply commands.
+- If `stow_check` reports a conflict, stop and explain the conflict. Do not work around Stow by running `ln -s`, replacing targets manually, or using `stow --adopt` unless the user explicitly approves that exact action.
+
 ## Command efficiency
 
 - Prefer targeted, low-latency commands over broad scans or mass replacements. Scope `rg`, tests, RuboCop, and file edits to the smallest relevant paths first; run full checks only at step boundaries or when needed.
