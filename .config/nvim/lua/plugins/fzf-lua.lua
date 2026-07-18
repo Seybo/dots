@@ -51,7 +51,7 @@ return {
     end
 
     map_with_cursor_restore('n', '<leader>fb', fzf.builtin, nil, '[Fzf] Builtin')
-    map_with_cursor_restore('n', '<leader>fa', fzf.files, nil, '[Fzf] Search All Files')
+    map_with_cursor_restore('n', '<leader>fa', fzf.files, { no_ignore = true }, '[Fzf] Search All Files')
     map_with_cursor_restore('n', '<leader>ff', fzf.git_files, nil, '[Fzf] Search Git Files')
     map_with_cursor_restore('n', '<leader>fc', function()
       fzf.files({ cwd = vim.fn.expand('%:p:h') })
