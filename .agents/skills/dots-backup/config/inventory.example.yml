@@ -1,0 +1,19 @@
+version: 1
+
+# Real local inventory lives in config/inventory.yml and is gitignored.
+# Keep this example safe for a public repo: no personal paths, provider account names,
+# private volume names, or real backup destinations.
+active_backups:
+  - name: example-rclone-backup
+    tool: rclone
+    destination: remote:example
+    included:
+      - /path/to/local/folder
+    excluded: []
+    last_run: unknown
+    status: unknown
+    commands:
+      dry-run: rclone sync /path/to/local/folder remote:example --dry-run
+      backup: rclone sync /path/to/local/folder remote:example
+      check: rclone check /path/to/local/folder remote:example
+    related_commands: []
