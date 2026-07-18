@@ -5,6 +5,8 @@ require "fileutils"
 require "json"
 require "open3"
 require "optparse"
+require "rbconfig"
+require "shellwords"
 require "time"
 require "yaml"
 
@@ -16,32 +18,19 @@ BackupEntry = Struct.new(:name, :tool, :included, :excluded, :last_run, :status,
 OverlapFinding = Struct.new(:first_entry, :first_path, :second_entry, :second_path, keyword_init: true)
 
 class BackupRunner
-  def initialize(inventory_path:, status_dir:, name:, run_type:, input: $stdin, output: $stdout)
-    @inventory_path = inventory_path
-    @status_dir = status_dir
+  def initialize(inventory_path:, status_dir:, name:, run_type:, output: $stdout, repo_root: Dir.pwd)
+    @inventory_path = File.expand_path(inventory_path)
+    @status_dir = File.expand_path(status_dir)
     @name = name
     @run_type = run_type
-    @input = input
     @output = output
+    @repo_root = File.expand_path(repo_root)
   end
 
   def run
     validate_run_type!
     command = command_for_entry
-
-    @output.puts "Command: #{command}"
-    @output.print "Type yes to run: "
-    confirmation = @input.gets&.strip
-    unless confirmation == "yes"
-      @output.puts "Run cancelled"
-      return 1
-    end
-
-    started_at = Time.now.utc.iso8601
-    stdout, stderr, status = Open3.capture3(command)
-    finished_at = Time.now.utc.iso8601
-    persist_status(command, stdout, stderr, status.exitstatus, started_at, finished_at)
-    status.success? ? 0 : 1
+    launch_in_sibling_pane(command)
   rescue KeyError, ArgumentError => e
     warn "Error: #{e.message}"
     EXIT_USAGE
@@ -69,31 +58,99 @@ class BackupRunner
     @inventory ||= YAML.safe_load_file(@inventory_path, permitted_classes: [], aliases: false) || {}
   end
 
-  def persist_status(command, stdout, stderr, exit_status, started_at, finished_at)
+  def launch_in_sibling_pane(command)
+    target_pane = sibling_pane
+    raise ArgumentError, "no sibling tmux pane available for visible backup run" unless target_pane
+
+    script_path = write_pane_script(command)
+    tmux_command = "bash #{script_path.shellescape}"
+
+    @output.puts "Command: #{command}"
+    @output.puts "Launching in tmux pane #{target_pane}"
+    @output.puts "Pane script: #{script_path}"
+    stdout, status = Open3.capture2e("tmux", "send-keys", "-t", target_pane, tmux_command, "C-m")
+    raise ArgumentError, "tmux send-keys failed: #{stdout.strip}" unless status.success?
+
+    @output.puts "Run is visible in pane #{target_pane}. Status/logs will be written under #{display_path(@status_dir)} when it finishes."
+    0
+  end
+
+  def sibling_pane
+    current = current_pane
+    return unless current
+
+    stdout, status = Open3.capture2e("tmux", "list-panes", "-F", "#{pane_id_format} #{pane_index_format}")
+    return unless status.success?
+
+    stdout.lines.map(&:strip).reject(&:empty?).map { |line| line.split.first }.find { |pane| pane != current }
+  end
+
+  def current_pane
+    return unless ENV["TMUX"] && ENV["TMUX_PANE"]
+
+    ENV.fetch("TMUX_PANE")
+  end
+
+  def pane_id_format
+    '#{pane_id}'
+  end
+
+  def pane_index_format
+    '#{pane_index}'
+  end
+
+  def write_pane_script(command)
     FileUtils.mkdir_p(@status_dir)
     base = safe_filename("#{@name}-#{@run_type}")
+    combined_log = File.join(@status_dir, "#{base}.log")
     stdout_log = File.join(@status_dir, "#{base}.stdout.log")
     stderr_log = File.join(@status_dir, "#{base}.stderr.log")
     status_path = File.join(@status_dir, "#{base}.json")
-    run_status = exit_status.zero? ? "success" : "failed"
+    script_path = File.join(@status_dir, "#{base}.run.sh")
 
-    File.write(stdout_log, stdout)
-    File.write(stderr_log, stderr)
-    File.write(status_path, JSON.pretty_generate({
-      "name" => @name,
-      "run_type" => @run_type,
-      "command" => command,
-      "started_at" => started_at,
-      "finished_at" => finished_at,
-      "exit_status" => exit_status,
-      "status" => run_status,
-      "stdout_log" => stdout_log,
-      "stderr_log" => stderr_log
-    }) + "\n")
+    File.write(script_path, pane_script(command, combined_log, stdout_log, stderr_log, status_path))
+    FileUtils.chmod(0o700, script_path)
+    script_path
+  end
+
+  def pane_script(command, combined_log, stdout_log, stderr_log, status_path)
+    <<~BASH
+      #!/usr/bin/env bash
+      set -u
+      cd #{@repo_root.shellescape}
+      mkdir -p #{@status_dir.shellescape}
+      backup_command=#{command.shellescape}
+      combined_log=#{combined_log.shellescape}
+      stdout_log=#{stdout_log.shellescape}
+      stderr_log=#{stderr_log.shellescape}
+      status_path=#{status_path.shellescape}
+      started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      {
+        printf '[dots-backup] command: %s\\n' "$backup_command"
+        printf '[dots-backup] started_at: %s\\n' "$started_at"
+      } | tee "$combined_log"
+      bash -o pipefail -c "$backup_command" 2>&1 | tee -a "$combined_log"
+      exit_status=${PIPESTATUS[0]}
+      finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      if [[ "$exit_status" == "0" ]]; then run_status=success; else run_status=failed; fi
+      {
+        printf '\\n[dots-backup] finished_at: %s\\n' "$finished_at"
+        printf '[dots-backup] status: %s (exit %s)\\n' "$run_status" "$exit_status"
+      } | tee -a "$combined_log"
+      cp "$combined_log" "$stdout_log"
+      : > "$stderr_log"
+      BACKUP_NAME=#{@name.shellescape} RUN_TYPE=#{@run_type.shellescape} BACKUP_COMMAND="$backup_command" STARTED_AT="$started_at" FINISHED_AT="$finished_at" EXIT_STATUS="$exit_status" RUN_STATUS="$run_status" STDOUT_LOG="$stdout_log" STDERR_LOG="$stderr_log" COMBINED_LOG="$combined_log" STATUS_PATH="$status_path" #{RbConfig.ruby.shellescape} -rjson -e 'payload = {"name" => ENV.fetch("BACKUP_NAME"), "run_type" => ENV.fetch("RUN_TYPE"), "command" => ENV.fetch("BACKUP_COMMAND"), "started_at" => ENV.fetch("STARTED_AT"), "finished_at" => ENV.fetch("FINISHED_AT"), "exit_status" => ENV.fetch("EXIT_STATUS").to_i, "status" => ENV.fetch("RUN_STATUS"), "stdout_log" => ENV.fetch("STDOUT_LOG"), "stderr_log" => ENV.fetch("STDERR_LOG"), "combined_log" => ENV.fetch("COMBINED_LOG")}; File.write(ENV.fetch("STATUS_PATH"), JSON.pretty_generate(payload) + "\\n")'
+      exit "$exit_status"
+    BASH
   end
 
   def safe_filename(value)
     value.to_s.downcase.gsub(/[^a-z0-9_-]+/, "-").gsub(/-+/, "-").gsub(/\A-|\-\z/, "")
+  end
+
+  def display_path(path)
+    home = File.expand_path("~")
+    path == home ? "~" : path.sub(%r{\A#{Regexp.escape(home)}/}, "~/")
   end
 end
 
@@ -305,7 +362,7 @@ parser = OptionParser.new do |opts|
   opts.banner = "Usage: dots_backup.rb [--inventory PATH] [--status-dir PATH] [--run NAME --type TYPE]"
   opts.on("--inventory PATH", "Inventory YAML path") { |path| options[:inventory_path] = path }
   opts.on("--status-dir PATH", "Skill-managed run status/log directory") { |path| options[:status_dir] = path }
-  opts.on("--run NAME", "Run a stored backup entry command after confirmation") { |name| options[:run_name] = name }
+  opts.on("--run NAME", "Run a stored backup entry command") { |name| options[:run_name] = name }
   opts.on("--type TYPE", "Run type: dry-run, backup, or check") { |type| options[:run_type] = type }
   opts.on("-h", "--help", "Show help") do
     puts opts

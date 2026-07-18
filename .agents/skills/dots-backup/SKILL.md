@@ -1,6 +1,6 @@
 ---
 name: dots-backup
-description: Repo-local dots backup monitor. Reports active backup destinations, covered/excluded folders, last run/status when known, and backup coverage overlaps. Runs stored backup commands after explicit confirmation.
+description: Repo-local dots backup monitor. Reports active backup destinations, covered/excluded folders, last run/status when known, and backup coverage overlaps. Runs stored backup commands, with dry-run-first agent behavior for syncs.
 ---
 
 # Dots Backup
@@ -19,7 +19,7 @@ ruby .agents/skills/dots-backup/scripts/dots_backup.rb --inventory path/to/inven
 # Public-safe template; real inventory is config/inventory.yml and is gitignored
 .agents/skills/dots-backup/config/inventory.example.yml
 
-# Run a stored command after explicit confirmation
+# Run a stored command
 ruby .agents/skills/dots-backup/scripts/dots_backup.rb --run dots-to-extreme --type dry-run
 ruby .agents/skills/dots-backup/scripts/dots_backup.rb --run dots-to-extreme --type backup
 ruby .agents/skills/dots-backup/scripts/dots_backup.rb --run dots-to-extreme --type check
@@ -30,8 +30,8 @@ ruby .agents/skills/dots-backup/scripts/dots_backup.rb --status-dir path/to/stat
 
 Exit codes:
 
-- `0` = report completed without findings, or confirmed run succeeded
-- `1` = report completed with findings such as coverage overlaps, run was cancelled, or confirmed run failed
+- `0` = report completed without findings, or run was launched into a sibling tmux pane
+- `1` = report completed with findings such as coverage overlaps
 - `2` = usage or fatal error
 
 ## Current behavior
@@ -41,9 +41,15 @@ Exit codes:
 - Prints active backup entries with included folders, excluded folders, last run, and status
 - Prints `unknown` when data is not available instead of guessing
 - Reports coverage overlaps between active backup entries
-- Runs stored `dry-run`, `backup`, and `check` commands only after printing the exact command and receiving explicit `yes` confirmation
-- Stores run status/logs under `.agents/skills/dots-backup/state/runs` by default; generated state is gitignored
+- Launches stored `dry-run`, `backup`, and `check` commands into a sibling tmux pane after printing the exact command
+- Aborts if no sibling tmux pane is available; backup commands must not run hidden inside the agent tool call
+- Stores generated pane runner scripts and run status/logs under `.agents/skills/dots-backup/state/runs` by default; generated state is gitignored
+- Streams visible command output through `tee` in the sibling pane and writes JSON status when the command finishes
 - Uses skill-managed run status files for future report `last run` and `status` values
+
+## Agent run rule
+
+When the user asks to run a backup/sync and that inventory entry has a `dry-run` command, launch the `dry-run` first in a sibling tmux pane, then stop. After it finishes, summarize the stored status/log if asked. Do not launch the real `backup` command until the user replies `go`.
 
 ## Invocation
 

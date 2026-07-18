@@ -186,57 +186,58 @@ class DotsBackupSpec < Minitest::Test
     FileUtils.remove_entry(dir) if dir && Dir.exist?(dir)
   end
 
-  def test_run_mode_prints_command_and_does_not_execute_without_confirmation
+  def test_run_mode_aborts_without_tmux_pane
     dir = Dir.mktmpdir("dots-backup-run-")
-    marker_path = File.join(dir, "marker")
     status_dir = File.join(dir, "status")
-    command = ruby_command(%Q{File.write(#{marker_path.inspect}, "ran")})
-    inventory_path = inventory_with_command(dir, "higr", "dry-run", command)
+    inventory_path = inventory_with_command(dir, "higr", "dry-run", "echo run")
 
-    stdout, stderr, status = Open3.capture3(
+    _stdout, stderr, status = Open3.capture3(
+      { "TMUX" => nil, "TMUX_PANE" => nil },
       SCRIPT,
       "--inventory", inventory_path,
       "--status-dir", status_dir,
       "--run", "higr",
-      "--type", "dry-run",
-      stdin_data: "no\n"
+      "--type", "dry-run"
     )
 
-    assert_equal 1, status.exitstatus, stderr
-    assert_match(/Command: #{Regexp.escape(command)}/, stdout)
-    assert_match(/Run cancelled/, stdout)
-    refute File.exist?(marker_path)
+    assert_equal 2, status.exitstatus
+    assert_match(/no sibling tmux pane available/, stderr)
     refute Dir.exist?(status_dir)
   ensure
     FileUtils.remove_entry(dir) if dir && Dir.exist?(dir)
   end
 
-  def test_run_mode_executes_confirmed_command_and_writes_status
+  def test_run_mode_launches_command_in_sibling_tmux_pane
     dir = Dir.mktmpdir("dots-backup-run-")
-    marker_path = File.join(dir, "marker")
     status_dir = File.join(dir, "status")
-    command = ruby_command(%Q{File.write(#{marker_path.inspect}, "ran"); puts "run-ok"})
+    tmux_dir = File.join(dir, "bin")
+    capture_path = File.join(dir, "tmux-args.txt")
+    command = ruby_command('puts "run-ok"')
     inventory_path = inventory_with_command(dir, "higr", "dry-run", command)
+    write_fake_tmux(tmux_dir)
 
     stdout, stderr, status = Open3.capture3(
+      { "PATH" => "#{tmux_dir}:#{ENV.fetch("PATH")}", "TMUX" => "fake", "TMUX_PANE" => "%1", "TMUX_CAPTURE" => capture_path },
       SCRIPT,
       "--inventory", inventory_path,
       "--status-dir", status_dir,
       "--run", "higr",
-      "--type", "dry-run",
-      stdin_data: "yes\n"
+      "--type", "dry-run"
     )
-    status_payload = JSON.parse(File.read(File.join(status_dir, "higr-dry-run.json")))
+    script_path = File.join(status_dir, "higr-dry-run.run.sh")
 
     assert_equal 0, status.exitstatus, stderr
-    assert_match(/Command: #{Regexp.escape(command)}/, stdout)
-    assert_equal "ran", File.read(marker_path)
-    assert_equal "higr", status_payload.fetch("name")
-    assert_equal "dry-run", status_payload.fetch("run_type")
-    assert_equal command, status_payload.fetch("command")
-    assert_equal 0, status_payload.fetch("exit_status")
-    assert_equal "success", status_payload.fetch("status")
-    assert_match(/run-ok/, File.read(status_payload.fetch("stdout_log")))
+    script = File.read(script_path)
+
+    assert_match(/Launching in tmux pane %2/, stdout)
+    assert_match(/bash #{Regexp.escape(script_path)}/, File.read(capture_path))
+    assert_match(/backup_command=#{Regexp.escape(command.shellescape)}/, script)
+    assert_match(/combined_log/, script)
+    assert_match(/tee "\$combined_log"/, script)
+    assert_match(/tee -a "\$combined_log"/, script)
+    assert_match(/\[dots-backup\] status:/, script)
+    assert_match(/JSON.pretty_generate/, script)
+    refute File.exist?(File.join(status_dir, "higr-dry-run.json"))
   ensure
     FileUtils.remove_entry(dir) if dir && Dir.exist?(dir)
   end
@@ -268,6 +269,25 @@ class DotsBackupSpec < Minitest::Test
 
   def ruby_command(code)
     "#{RbConfig.ruby.shellescape} -e #{code.shellescape}"
+  end
+
+  def write_fake_tmux(tmux_dir)
+    FileUtils.mkdir_p(tmux_dir)
+    path = File.join(tmux_dir, "tmux")
+    File.write(path, <<~RUBY)
+      #!/usr/bin/env ruby
+      case ARGV[0]
+      when "list-panes"
+        puts "%1 0"
+        puts "%2 1"
+      when "send-keys"
+        File.write(ENV.fetch("TMUX_CAPTURE"), ARGV.join("\\n"))
+      else
+        warn "unexpected tmux args: \\#{ARGV.inspect}"
+        exit 1
+      end
+    RUBY
+    FileUtils.chmod(0o700, path)
   end
 
   def inventory_with_command(dir, name, run_type, command)
