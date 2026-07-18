@@ -11,7 +11,7 @@ When the user asks about a Pi "skill" or `/command`, treat that as any Pi slash 
 - Never mutate git history, branches, tags, stashes, remotes, or commit state without explicit user approval for that exact action. This includes `commit`, `commit --amend`, `reset`, `rebase`, `merge`, `cherry-pick`, `revert`, `switch`/`checkout` that changes branches, branch create/delete/rename, tag create/delete, stash create/apply/pop/drop, force-push, and remote changes.
 - Reading git state is allowed: `status`, `diff`, `log`, `show`, `branch --show-current`, and similar read-only commands.
 - Staging files (`git add`) is also a git state mutation. Ask first unless the user explicitly asked to commit or prepare a commit.
-- If approval is ambiguous, stop and ask. Do not infer approval from words like "go", "fix it", or "next".
+- If approval is ambiguous, stop and ask.
 
 ## Dotfiles stow safety
 
