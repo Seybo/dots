@@ -982,11 +982,14 @@ module Autowork
               "body": "What is wrong and why it matters",
               "recommendation": "Concrete suggested fix"
             }
+          ],
+          "followups": [
+            "Non-actionable advisory to carry into final_summary.md"
           ]
         }
         ```
 
-        Map Critical/High super-review findings to `BLOCKER` in status JSON. Map actionable Medium findings to `MINOR`. Use an empty `findings` array when there are no actionable findings. Keep full Critical/High/Medium labels in the human-readable report if useful.
+        Map Critical/High super-review findings to `BLOCKER` in status JSON. Map actionable Medium findings to `MINOR`. Use an empty `findings` array when there are no actionable findings. Put non-actionable report-only advisories, later-story recommendations, and deploy/smoke-test notes in `followups` so they are not lost from the final summary. Use an empty `followups` array when there are none. Keep full Critical/High/Medium labels in the human-readable report if useful.
 
         If you need user input, use `"status": "needs_user"` and include a `"question"` string.
         If review failed, use `"status": "failed"` and explain in `"summary"`.
@@ -1936,6 +1939,7 @@ module Autowork
       findings = super_review_findings(result.data)
       state['final_super_review_summary'] = result.data['summary']
       state['final_super_review_findings'] = findings
+      state['final_super_review_followups'] = Array(result.data['followups'])
       if findings.empty?
         state['final_super_reviewed'] = true
         store.write(state)
@@ -1976,7 +1980,7 @@ module Autowork
       needs_user = resolutions.select { |resolution| resolution['decision'] == 'needs_user' }
       pause_for_needs_user!(needs_user, files, store, state) unless needs_user.empty?
       state['super_review_fix_resolutions'] = resolutions
-      state['super_review_followups'] = Array(result.data['followups'])
+      state['super_review_fix_followups'] = Array(result.data['followups'])
       state['phase'] = 'ready_to_commit_super_review_fix'
       state['next_action'] = 'commit_super_review_fix'
       store.write(state)
@@ -2446,17 +2450,21 @@ module Autowork
     end
 
     def summary_super_review_followups_markdown(state)
-      followups = Array(state['super_review_followups'])
+      followups = super_review_followups(state)
       return '- None.' if followups.empty?
 
       followups.map { |followup| "- #{followup}" }.join("\n")
+    end
+
+    def super_review_followups(state)
+      (Array(state['final_super_review_followups']) + Array(state['super_review_fix_followups']) + Array(state['super_review_followups'])).uniq
     end
 
     def summary_unresolved_caveats_markdown(state)
       caveats = []
       caveats << state['paused_reason'] if state['paused_reason']
       caveats.concat(Array(state['step_review_followups']))
-      caveats.concat(Array(state['super_review_followups']))
+      caveats.concat(super_review_followups(state))
       return '- None.' if caveats.empty?
 
       caveats.map { |caveat| "- #{caveat}" }.join("\n")

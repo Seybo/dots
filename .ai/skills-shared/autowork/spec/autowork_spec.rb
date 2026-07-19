@@ -1270,6 +1270,23 @@ RSpec.describe Autowork do
       expect(File.read(files.manager_review_path)).to include('production-ready if the user does not perform another review')
     end
 
+    it 'asks final super-review to emit report-only follow-ups in status JSON' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      prompt = Autowork::PromptWriter.new(files, Autowork::TaskResolver.new(%w[env 0003], cwd: repo).resolve, Autowork::GitRepo.new(repo)).claude_final_super_review(1, 'main')
+      text = File.read(prompt)
+
+      expect(text).to include('"followups"')
+      expect(text).to include('Put non-actionable report-only advisories')
+    end
+
     it 'sends Pi a super-review fix prompt when final super-review reports findings' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
@@ -1294,7 +1311,8 @@ RSpec.describe Autowork do
         'phase' => 'super_review',
         'step' => 0,
         'summary' => 'one finding',
-        'findings' => [{ 'id' => 'SR1', 'severity' => 'BLOCKER', 'title' => 'Bug', 'body' => 'Broken', 'recommendation' => 'Fix' }]
+        'findings' => [{ 'id' => 'SR1', 'severity' => 'BLOCKER', 'title' => 'Bug', 'body' => 'Broken', 'recommendation' => 'Fix' }],
+        'followups' => ['Run a provider smoke test later']
       ))
 
       expect { described_class.new(%w[env 0003], tmux: tmux).run }
@@ -1303,6 +1321,7 @@ RSpec.describe Autowork do
       state = state_store.read
       expect(state['phase']).to eq('waiting_for_pi_super_review_fix')
       expect(state['final_super_review_findings'].first['id']).to eq('SR1')
+      expect(state['final_super_review_followups']).to include('Run a provider smoke test later')
       expect(tmux).to have_received(:send_prompt).with('%2', files.prompt_path('super_review_pi_fix1_request.md'))
     end
 
@@ -1407,6 +1426,7 @@ RSpec.describe Autowork do
       state['super_review_fix_commits'] = ['a' * 40]
       state['pending_super_review_fix_review'] = true
       state['final_checks'] = [{ 'command' => 'true', 'status' => 'passed', 'exit_status' => 0, 'stdout' => '', 'stderr' => '' }]
+      state['final_super_review_followups'] = ['Run a provider smoke test later']
       state_store.write(state)
       File.write(files.super_fix_review_path(1), "Scoped review clean\n")
       File.write(files.status_path(0, 'claude', 'super_fix_review', 1), JSON.pretty_generate(
@@ -1424,8 +1444,10 @@ RSpec.describe Autowork do
       expect(state['status']).to eq('manager_review')
       expect(state['phase']).to eq('ready_for_manager_final_review')
       expect(state['final_super_reviewed']).to eq(true)
-      expect(File.read(files.final_summary_path)).to include('Super-review fix 1')
-      expect(File.read(files.final_summary_path)).to include('Super-review fix review 1')
+      final_summary = File.read(files.final_summary_path)
+      expect(final_summary).to include('Super-review fix 1')
+      expect(final_summary).to include('Super-review fix review 1')
+      expect(final_summary).to include('Run a provider smoke test later')
       expect(File.read(files.manager_review_path)).to include('Manager-context production-readiness review')
     end
 
