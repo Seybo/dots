@@ -12,7 +12,7 @@ require "yaml"
 
 EXIT_USAGE = 2
 UNKNOWN = "unknown"
-SUPPORTED_RUN_TYPES = ["dry-run", "backup", "check"].freeze
+SUPPORTED_RUN_TYPES = ["dry-run", "backup", "check", "restore-dry-run", "restore"].freeze
 
 BackupEntry = Struct.new(:name, :tool, :included, :excluded, :last_run, :status, :volume_path, keyword_init: true)
 OverlapFinding = Struct.new(:first_entry, :first_path, :second_entry, :second_path, keyword_init: true)
@@ -41,7 +41,7 @@ class BackupRunner
   def validate_run_type!
     return if SUPPORTED_RUN_TYPES.include?(@run_type)
 
-    raise ArgumentError, "supported run types are dry-run, backup, check"
+    raise ArgumentError, "supported run types are dry-run, backup, check, restore-dry-run, restore"
   end
 
   def command_for_entry
@@ -363,7 +363,7 @@ parser = OptionParser.new do |opts|
   opts.on("--inventory PATH", "Inventory YAML path") { |path| options[:inventory_path] = path }
   opts.on("--status-dir PATH", "Skill-managed run status/log directory") { |path| options[:status_dir] = path }
   opts.on("--run NAME", "Run a stored backup entry command") { |name| options[:run_name] = name }
-  opts.on("--type TYPE", "Run type: dry-run, backup, or check") { |type| options[:run_type] = type }
+  opts.on("--type TYPE", "Run type: dry-run, backup, check, restore-dry-run, or restore") { |type| options[:run_type] = type }
   opts.on("-h", "--help", "Show help") do
     puts opts
     exit 0

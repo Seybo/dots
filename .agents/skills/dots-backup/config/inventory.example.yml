@@ -16,4 +16,6 @@ active_backups:
       dry-run: rclone sync /path/to/local/folder remote:example --dry-run
       backup: rclone sync /path/to/local/folder remote:example
       check: rclone check /path/to/local/folder remote:example
+      restore-dry-run: rclone sync remote:example /path/to/local/folder --dry-run
+      restore: rclone sync remote:example /path/to/local/folder
     related_commands: []

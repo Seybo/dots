@@ -23,6 +23,8 @@ ruby .agents/skills/dots-backup/scripts/dots_backup.rb --inventory path/to/inven
 ruby .agents/skills/dots-backup/scripts/dots_backup.rb --run dots-to-extreme --type dry-run
 ruby .agents/skills/dots-backup/scripts/dots_backup.rb --run dots-to-extreme --type backup
 ruby .agents/skills/dots-backup/scripts/dots_backup.rb --run dots-to-extreme --type check
+ruby .agents/skills/dots-backup/scripts/dots_backup.rb --run music --type restore-dry-run
+ruby .agents/skills/dots-backup/scripts/dots_backup.rb --run music --type restore
 
 # Use a custom status/log directory
 ruby .agents/skills/dots-backup/scripts/dots_backup.rb --status-dir path/to/status
@@ -41,7 +43,7 @@ Exit codes:
 - Prints active backup entries with included folders, excluded folders, last run, and status
 - Prints `unknown` when data is not available instead of guessing
 - Reports coverage overlaps between active backup entries
-- Launches stored `dry-run`, `backup`, and `check` commands into a sibling tmux pane after printing the exact command
+- Launches stored `dry-run`, `backup`, `check`, `restore-dry-run`, and `restore` commands into a sibling tmux pane after printing the exact command
 - Aborts if no sibling tmux pane is available; backup commands must not run hidden inside the agent tool call
 - Stores generated pane runner scripts and run status/logs under `.agents/skills/dots-backup/state/runs` by default; generated state is gitignored
 - Streams visible command output through `tee` in the sibling pane and writes JSON status when the command finishes
@@ -49,7 +51,7 @@ Exit codes:
 
 ## Agent run rule
 
-When the user asks to run a backup/sync and that inventory entry has a `dry-run` command, launch the `dry-run` first in a sibling tmux pane, then stop. After it finishes, summarize the stored status/log if asked. Do not launch the real `backup` command until the user replies `go`.
+When the user asks to run a backup/sync and that inventory entry has a `dry-run` command, launch the `dry-run` first in a sibling tmux pane, then stop. When the user asks to restore/pull and that inventory entry has a `restore-dry-run` command, launch `restore-dry-run` first, then stop. After it finishes, summarize the stored status/log if asked. Do not launch the real `backup` or `restore` command until the user replies `go`.
 
 ## Invocation
 

@@ -178,10 +178,10 @@ class DotsBackupSpec < Minitest::Test
     dir = Dir.mktmpdir("dots-backup-run-")
     inventory_path = inventory_with_command(dir, "higr", "backup", "echo backup")
 
-    _stdout, stderr, status = Open3.capture3(SCRIPT, "--inventory", inventory_path, "--run", "higr", "--type", "restore")
+    _stdout, stderr, status = Open3.capture3(SCRIPT, "--inventory", inventory_path, "--run", "higr", "--type", "push")
 
     assert_equal 2, status.exitstatus
-    assert_match(/supported run types are dry-run, backup, check/, stderr)
+    assert_match(/supported run types are dry-run, backup, check, restore-dry-run, restore/, stderr)
   ensure
     FileUtils.remove_entry(dir) if dir && Dir.exist?(dir)
   end
@@ -203,6 +203,32 @@ class DotsBackupSpec < Minitest::Test
     assert_equal 2, status.exitstatus
     assert_match(/no sibling tmux pane available/, stderr)
     refute Dir.exist?(status_dir)
+  ensure
+    FileUtils.remove_entry(dir) if dir && Dir.exist?(dir)
+  end
+
+  def test_run_mode_supports_restore_commands
+    dir = Dir.mktmpdir("dots-backup-run-")
+    status_dir = File.join(dir, "status")
+    tmux_dir = File.join(dir, "bin")
+    capture_path = File.join(dir, "tmux-args.txt")
+    command = ruby_command('puts "restore-ok"')
+    inventory_path = inventory_with_command(dir, "music", "restore", command)
+    write_fake_tmux(tmux_dir)
+
+    stdout, stderr, status = Open3.capture3(
+      { "PATH" => "#{tmux_dir}:#{ENV.fetch("PATH")}", "TMUX" => "fake", "TMUX_PANE" => "%1", "TMUX_CAPTURE" => capture_path },
+      SCRIPT,
+      "--inventory", inventory_path,
+      "--status-dir", status_dir,
+      "--run", "music",
+      "--type", "restore"
+    )
+    script_path = File.join(status_dir, "music-restore.run.sh")
+
+    assert_equal 0, status.exitstatus, stderr
+    assert_match(/Launching in tmux pane %2/, stdout)
+    assert_match(/backup_command=#{Regexp.escape(command.shellescape)}/, File.read(script_path))
   ensure
     FileUtils.remove_entry(dir) if dir && Dir.exist?(dir)
   end
