@@ -28,5 +28,8 @@ When a command would trigger avoidable permission prompts, prefer an already-saf
   - Prefer `ls -1 DIR | sort` when first-level non-hidden names are enough.
   - Prefer `ls -1A DIR | sort` when hidden names should be included too.
   - Prefer `find DIR -maxdepth 1 -type d -print | xargs -n1 basename | sort` when the command specifically needs directories only.
+- Avoid `cat $(find app -name 'foo.rb' | head -1)`.
+  - Prefer `find app -name 'foo.rb' -print -quit`, then read the discovered path with the read tool.
+  - Prefer `rg --files app | rg 'foo\.rb$'` when filename search is enough, then use the read tool.
 - Avoid cosmetic `sed` cleanup when the agent can read raw paths directly.
 - Avoid multiline bash payloads; use one-line commands split with `;` / `&&` only when each segment is safe, or use separate tool calls.
