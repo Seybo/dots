@@ -1,0 +1,123 @@
+#!/usr/bin/env ruby
+# Watches a tmux pane for common agent approval/input prompts and sends a macOS
+# notification. Prefer --pane mode for full-screen TUIs such as Claude Code,
+# because tmux pipe-pane can miss or mangle redraw-only prompt screens.
+
+require 'fileutils'
+require 'shellwords'
+require 'tmpdir'
+
+PATTERNS = [
+  /Agent wants to run shell command\./,
+  /Choose Review to inspect or modify the full command before running\./,
+  /requires confirmation for this command:/,
+  /Do you want to [^?]{1,200}\?/
+].freeze
+
+COOLDOWN_SECONDS = Integer(ENV.fetch('TMUX_AGENT_NOTIFY_COOLDOWN', '60'))
+POLL_SECONDS = Float(ENV.fetch('TMUX_AGENT_NOTIFY_POLL_SECONDS', '1.5'))
+MAX_RUNTIME_SECONDS = Integer(ENV.fetch('TMUX_AGENT_NOTIFY_MAX_RUNTIME_SECONDS', (12 * 60 * 60).to_s))
+
+def notify(pane_label)
+  message = "Approval or input requested in #{pane_label}"
+  system(
+    '/usr/bin/osascript',
+    '-e', 'on run argv',
+    '-e', 'display notification (item 1 of argv) with title "tmux agent needs attention"',
+    '-e', 'end run',
+    message,
+    out: File::NULL,
+    err: File::NULL
+  )
+end
+
+def clean(text)
+  text = text.dup.force_encoding(Encoding::UTF_8).scrub
+  text.gsub(/\e\[[0-9;?]*[ -\/]*[@-~]/, '').gsub(/[[:cntrl:]]/, '')
+end
+
+def watched_text_matches?(text)
+  cleaned = clean(text)
+  PATTERNS.any? { |pattern| cleaned.match?(pattern) }
+end
+
+def pane_label(pane_id)
+  format = '#{session_name}:#{window_index}.#{pane_index}'
+  label = `tmux display-message -p -t #{Shellwords.escape(pane_id)} #{Shellwords.escape(format)} 2>/dev/null`.strip
+  label.empty? ? pane_id : label
+end
+
+def pane_exists?(pane_id)
+  system('tmux', 'display-message', '-p', '-t', pane_id, '#{pane_id}', out: File::NULL, err: File::NULL)
+end
+
+def run_pane_watcher(pane_id)
+  safe_id = pane_id.gsub(/[^A-Za-z0-9_.-]/, '_')
+  lock_dir = File.join(Dir.tmpdir, "tmux-agent-attention-#{safe_id}.lock")
+  pid_path = File.join(lock_dir, 'pid')
+
+  if Dir.exist?(lock_dir)
+    existing_pid = File.read(pid_path).to_i rescue nil
+    if existing_pid && existing_pid.positive?
+      begin
+        Process.kill(0, existing_pid)
+        exit 0
+      rescue Errno::ESRCH
+        FileUtils.rm_rf(lock_dir)
+      rescue Errno::EPERM
+        exit 0
+      end
+    else
+      FileUtils.rm_rf(lock_dir)
+    end
+  end
+
+  FileUtils.mkdir_p(lock_dir)
+  File.write(pid_path, Process.pid)
+
+  label = pane_label(pane_id)
+  started_at = Time.now
+  last_notification_at = Time.at(0)
+
+  loop do
+    break if Time.now - started_at > MAX_RUNTIME_SECONDS
+    break unless pane_exists?(pane_id)
+
+    screen = `tmux capture-pane -p -t #{Shellwords.escape(pane_id)} 2>/dev/null`
+
+    if watched_text_matches?(screen) && Time.now - last_notification_at >= COOLDOWN_SECONDS
+      last_notification_at = Time.now
+      notify(label)
+    end
+
+    sleep POLL_SECONDS
+  end
+ensure
+  FileUtils.rm_rf(lock_dir) if lock_dir && File.exist?(pid_path) && File.read(pid_path).to_i == Process.pid rescue nil
+end
+
+if ARGV[0] == '--pane'
+  pane_id = ARGV[1] || ENV['TMUX_PANE']
+  exit 0 if pane_id.nil? || pane_id.empty?
+
+  run_pane_watcher(pane_id)
+  exit 0
+end
+
+# Backward-compatible stdin mode for any existing pipe-pane users.
+pane_label = ARGV[0] || 'tmux pane'
+last_notification_at = Time.at(0)
+buffer = +''
+
+loop do
+  chunk = STDIN.readpartial(4096)
+  buffer << chunk
+  buffer = buffer.bytes.last(20_000).pack('C*') if buffer.bytesize > 20_000
+
+  if watched_text_matches?(buffer) && Time.now - last_notification_at >= COOLDOWN_SECONDS
+    last_notification_at = Time.now
+    notify(pane_label)
+  end
+rescue EOFError
+  exit 0
+end

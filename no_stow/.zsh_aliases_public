@@ -80,12 +80,27 @@ alias rdr='rails db:rollback:primary'
 alias v='nvim'
 alias vim='nvim'
 
-### pi ###
+### AI agents ###
+_agent_attention_notify_for_current_tmux_pane() {
+  local watcher="$STOW_DIR/no_stow/bin/tmux/agent-attention-notify"
+
+  if [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && [ -x "$watcher" ]; then
+    "$watcher" --pane "$TMUX_PANE" >/dev/null 2>&1 &!
+  fi
+}
+
+claude() {
+  _agent_attention_notify_for_current_tmux_pane
+  command claude "$@"
+}
+
 pi-p() {
   ln -sfn ~/.pi/agent/auth-personal.json ~/.pi/agent/auth.json
-  pi "$@"
+  _agent_attention_notify_for_current_tmux_pane
+  command pi "$@"
 }
 pi-w() {
   ln -sfn ~/.pi/agent/auth-work.json ~/.pi/agent/auth.json
-  pi "$@"
+  _agent_attention_notify_for_current_tmux_pane
+  command pi "$@"
 }
