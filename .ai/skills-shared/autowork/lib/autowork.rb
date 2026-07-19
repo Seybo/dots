@@ -557,6 +557,10 @@ module Autowork
       @repo = repo
     end
 
+    def final_status_action_note
+      'After writing the status JSON, stop immediately. Do not run any more commands, inspect git status, edit files, or print an additional completion summary; `/autowork` may commit as soon as the status file appears.'
+    end
+
     def pi_implement(step)
       path = @files.prompt_path("step#{step}_pi_implement_request.md")
       FileUtils.rm_f(@files.status_path(step, 'pi', 'implement'))
@@ -587,6 +591,7 @@ module Autowork
         - For exact text checks, avoid literal multiline expected strings. Prefer one argument per expected line: `printf '%s\\n' 'line 1' 'line 2' | cmp -s - path/to/file`.
         - When done, write valid JSON status to:
           #{@files.status_path(step, 'pi', 'implement')}
+        - #{final_status_action_note}
 
         Required status JSON shape:
 
@@ -629,7 +634,7 @@ module Autowork
         - Do not edit repo files.
         - Scope findings to the current Step #{step}; do not require future-step behavior unless the current commit blocks or contradicts it.
         - Use `/gtm-revit`-style review depth.
-        - Do not run full RuboCop or full RSpec during normal step review. `/gtm-revit` does not require that, Pi may already have run targeted checks, and `/autowork` runs full final checks after all planned steps are accepted.
+        - Do not run RSpec, RuboCop, linters, formatters, or any other test/check command during normal step review — not full-suite and not targeted. Inspect the diff/files and Pi's reported `checks_run`; `/autowork` runs full final checks after all planned steps are accepted.
         - Classify checklist items with `PASS`, `MINOR`, or `BLOCKER`.
         - Prefer simple read-only checks such as `test -f`, `cmp`, `git show`, `git diff --exit-code`, `git diff-tree --no-commit-id --name-only -r HEAD`, and `git status --short`.
         - Avoid heredoc interpreters such as `python3 - <<'PY'`, `ruby <<'RUBY'`, or `node <<'JS'` for routine content checks.
@@ -642,12 +647,13 @@ module Autowork
         - Write the status JSON last. `/autowork` treats status JSON as the signal that all required artifacts for this turn are complete.
         - When done, write valid JSON status to:
           #{status_path}
+        - #{final_status_action_note}
 
         Required review summary shape:
 
         ```text
         Summary: <N> BLOCKER / <M> MINOR / <K> PASS
-        Recommendation: merge | amend | split
+        Recommendation: accept | fix | split
         ```
 
         Required status JSON shape:
@@ -719,6 +725,8 @@ module Autowork
         Then write valid JSON status to:
         #{status_path}
 
+        #{final_status_action_note}
+
         Required status JSON shape:
 
         ```json
@@ -776,6 +784,7 @@ module Autowork
         - For exact text checks, avoid literal multiline expected strings. Prefer one argument per expected line: `printf '%s\\n' 'line 1' 'line 2' | cmp -s - path/to/file`.
         - When done, write valid JSON status to:
           #{status_path}
+        - #{final_status_action_note}
 
         Required status JSON shape:
 
@@ -828,6 +837,7 @@ module Autowork
         - Run targeted checks if useful.
         - When done, write valid JSON status to:
           #{status_path}
+        - #{final_status_action_note}
 
         Required status JSON shape:
 
@@ -874,13 +884,14 @@ module Autowork
         - Work in repo: #{@repo.root}
         - Do not edit repo files.
         - Scope findings to the final-check fix commits only.
-        - Do not rerun full RuboCop or full RSpec here. `/autowork` already reran final checks before sending this review; inspect `final_checks.md` and the fix commits.
+        - Do not run RSpec, RuboCop, linters, formatters, or any other test/check command here — not full-suite and not targeted. `/autowork` already reran final checks before sending this review; inspect `final_checks.md` and the fix commits.
         - Classify checklist items with `PASS`, `MINOR`, or `BLOCKER`.
         - Write the human-readable review to:
           #{review_path}
         - Write the review file before status JSON.
         - Write valid JSON status last to:
           #{status_path}
+        - #{final_status_action_note}
 
         Required status JSON shape:
 
@@ -931,12 +942,14 @@ module Autowork
         - Do not create pending GitHub comments.
         - Stop after the Phase 3/3.5 report.
         - Do not edit repo files.
+        - Do not run RSpec, RuboCop, linters, formatters, or any other test/check command — not full-suite and not targeted. Inspect `final_checks.md` for already-run checks.
         - Save the human-readable report to:
           #{@files.super_review_path}
         - The report must include `Diff base: #{review_base_ref}`.
         - Write the report before status JSON.
         - Write valid JSON status last to:
           #{status_path}
+        - #{final_status_action_note}
 
         Required status JSON shape:
 
@@ -1015,6 +1028,7 @@ module Autowork
         - Write the result file before status JSON.
         - Write valid JSON status last to:
           #{status_path}
+        - #{final_status_action_note}
 
         Required status JSON shape:
 
@@ -1067,7 +1081,7 @@ module Autowork
         - Work in repo: #{@repo.root}
         - Do not edit repo files.
         - Do not rerun full super-review.
-        - Do not rerun full RuboCop or full RSpec; `/autowork` already reran final checks after the fix.
+        - Do not run RSpec, RuboCop, linters, formatters, or any other test/check command — not full-suite and not targeted. `/autowork` already reran final checks after the fix.
         - Verify accepted findings were fixed.
         - Verify Pi's disagreements/skips/follow-ups are reasonable from `task.md`, `steps.md`, and repo evidence.
         - Classify unresolved or incorrect decisions as `BLOCKER` or `MINOR` findings.
@@ -1076,6 +1090,7 @@ module Autowork
         - Write the review file before status JSON.
         - Write valid JSON status last to:
           #{status_path}
+        - #{final_status_action_note}
 
         Required status JSON shape:
 
@@ -1131,6 +1146,7 @@ module Autowork
         - Write the response file before status JSON.
         - Write valid JSON status last to:
           #{status_path}
+        - #{final_status_action_note}
 
         Required status JSON shape:
 
@@ -1190,6 +1206,7 @@ module Autowork
         - Write the response file before status JSON.
         - Write valid JSON status last to:
           #{status_path}
+        - #{final_status_action_note}
 
         Required status JSON shape:
 
@@ -1772,8 +1789,8 @@ module Autowork
       commands = Array(config.fetch('final_check_commands', []))
       results = commands.empty? ? skipped_final_check_results : execute_final_check_commands(repo, commands)
       write_final_checks(files, results)
-      state['final_checks'] = results
-      failures = results.reject { |result| result.fetch('status') == 'passed' || result.fetch('status') == 'skipped' }
+      state['final_checks'] = compact_final_check_results(results)
+      failures = compact_final_check_results(results.reject { |result| result.fetch('status') == 'passed' || result.fetch('status') == 'skipped' })
       if failures.empty?
         if !final_check_fix_commits(state).empty? && !state['final_check_reviewed']
           state['phase'] = 'ready_to_send_claude_final_check_review'
@@ -2164,6 +2181,33 @@ module Autowork
       }]
     end
 
+    def compact_final_check_results(results)
+      results.map { |result| compact_final_check_result(result) }
+    end
+
+    def compact_final_check_result(result)
+      return result.dup if result.fetch('status') == 'skipped'
+
+      compact = {
+        'command' => result.fetch('command'),
+        'status' => result.fetch('status'),
+        'exit_status' => result.fetch('exit_status')
+      }
+      stdout = result.fetch('stdout', '').to_s
+      stderr = result.fetch('stderr', '').to_s
+      compact['stdout_bytes'] = stdout.bytesize
+      compact['stderr_bytes'] = stderr.bytesize
+      compact['stdout_tail'] = tail_text(stdout) unless stdout.empty?
+      compact['stderr_tail'] = tail_text(stderr) unless stderr.empty?
+      compact
+    end
+
+    def tail_text(text, max_bytes = 4_000)
+      return text if text.bytesize <= max_bytes
+
+      "... output truncated; see autowork-log/final_checks.md for full output ...\n#{text.byteslice(-max_bytes, max_bytes)}"
+    end
+
     def execute_final_check_commands(repo, commands)
       commands.map do |command|
         result = Shell.capture('bash', '-c', command, chdir: repo.root)
@@ -2253,7 +2297,7 @@ module Autowork
 
         ## Unresolved caveats
 
-        - `/autowork` facilitates bounded Pi/Claude debate, but unresolved disagreement after the configured round limit requires operator arbitration.
+        #{summary_unresolved_caveats_markdown(state)}
       MD
     end
 
@@ -2319,6 +2363,15 @@ module Autowork
       return '- None.' if followups.empty?
 
       followups.map { |followup| "- #{followup}" }.join("\n")
+    end
+
+    def summary_unresolved_caveats_markdown(state)
+      caveats = []
+      caveats << state['paused_reason'] if state['paused_reason']
+      caveats.concat(Array(state['super_review_followups']))
+      return '- None.' if caveats.empty?
+
+      caveats.map { |caveat| "- #{caveat}" }.join("\n")
     end
 
     def wait_for_status(path, expected:, config:, timeout_seconds: nil)

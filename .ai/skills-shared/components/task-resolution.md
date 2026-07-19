@@ -93,6 +93,27 @@ checkout in this order:
 3. else if the current working directory is inside one of the three checkouts, use it;
 4. otherwise ask the user which checkout to use: `1st`, `2nd`, or `3rd`.
 
+## Optional base branch/ref for stacked task branches
+
+Task-workflow skills that create or verify task branches (`taskit`, `workit`, and
+`autowork` preflight through `workit`) may accept an explicit full base branch/ref
+for stacked work.
+
+Rules:
+
+- The base branch/ref is a full Git ref string such as
+  `origin/team/sc-111/parent-task` or `team/sc-111/parent-task`.
+- Do not infer a base from a numeric task/story ID. If the base is not `main` or
+  `master`, the user must pass the whole branch/ref.
+- The base branch/ref is used for branch creation/verification and, for
+  `/autowork`, for final super-review diff scope.
+- Do not rely on Git upstream/tracking branch as the task's base. Upstream is
+  normally the branch's push/pull target and can change after `git push -u`.
+- If an explicit base branch/ref is given and existing branch state contradicts it,
+  stop and report the mismatch instead of silently switching bases.
+- If the parent/base branch has advanced and the task branch needs a rebase, stop
+  and ask for explicit approval before rebasing; rebase rewrites commit history.
+
 ## Fallbacks
 
 - If a required project or story ID cannot be inferred, ask the user to pass it

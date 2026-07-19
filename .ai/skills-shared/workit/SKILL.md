@@ -19,7 +19,9 @@ Use only:
 ```text
 /workit
 /workit <project-or-gtm-session> [task_id]
+/workit <project-or-gtm-session> [task_id] --base <full-base-branch-or-ref>
 /workit <project-or-gtm-session> [task_id] create-steps-only
+/workit <project-or-gtm-session> [task_id] --base <full-base-branch-or-ref> create-steps-only
 /workit <project-or-gtm-session> [task_id] step <step_number>
 ```
 
@@ -31,6 +33,8 @@ With `<project-or-gtm-session> <task_id>`, treat the first token after `/workit`
 - a **local sequential task ID** (e.g. `0003`)
 
 The identifier is matched as a prefix of the task folder name. Passing `147831` finds a folder like `147831-toast-prepare-by-time`. Passing `0003` finds `0003-bootstrap-ruby-sqlite-app`.
+
+`--base <full-base-branch-or-ref>` is an optional stacked-branch setup argument. It tells `/workit` to create or verify the task branch from that exact base branch/ref. Do not infer a base from a numeric parent task/story ID.
 
 `create-steps-only` mode adds a trailing `create-steps-only` clause. It resolves the task, performs the normal branch setup/verification, creates or updates `steps.md`, then stops without implementing any step.
 
@@ -46,6 +50,7 @@ Examples:
 /workit my_health 0003
 /workit 0003      # project inferred from cwd when possible
 /workit shaka_gtm1 147831 create-steps-only
+/workit shaka_gtm2 22222 --base origin/mikhail/sc-11111/parent-task create-steps-only
 /workit 0003 create-steps-only
 /workit shaka_gtm1 147831 step 2
 /workit 0003 step 1
@@ -78,6 +83,7 @@ and select checkout `1st`, `2nd`, or `3rd`. Applied to `/workit`:
 - With `/workit <project-or-gtm-session>`, infer only the task/story ID from the current branch
   when possible; if none can be inferred, keep the normal recent-task picker.
 - With `/workit <task_id>`, when the token is not an existing task project or GTM session alias, infer `<project>` from the current working directory and use the token as the task/story ID.
+- With `--base <full-base-branch-or-ref>`, preserve the base ref exactly for branch setup/verification. Do not treat it as a task selector.
 - An inferred story ID is used as the same prefix-matched task identifier as an
   explicit `<task_id>`.
 - If `/workit` has no arguments and the project cannot be inferred, ask the user to pass it explicitly.
@@ -85,6 +91,7 @@ and select checkout `1st`, `2nd`, or `3rd`. Applied to `/workit`:
 ## Instructions
 
 1. **Parse command arguments:**
+   - detect and remove an optional `--base <full-base-branch-or-ref>` pair before resolving `<project>` / `<task_id>`; call the value `base_ref` when present; reject `--base` without a following value
    - detect and remove an optional trailing `create-steps-only` clause before resolving `<project>` / `<task_id>`; call this `create_steps_only_mode` when present
    - detect and remove an optional trailing `step <step_number>` clause before resolving `<project>` / `<task_id>`; validate `<step_number>` with `^[0-9]+$`; call this `step_mode` when present
    - reject commands that combine `create-steps-only` with `step <step_number>`; these modes are mutually exclusive
@@ -102,6 +109,7 @@ and select checkout `1st`, `2nd`, or `3rd`. Applied to `/workit`:
      ```
    - if `<task_id>` is present, validate that it matches `^\d+$` (digits only); otherwise ask the user to pass a Shortcut story ID or local sequential task ID such as `0003`
    - if `<task_id>` is missing, continue through project validation, then list recent tasks as described below
+   - if `base_ref` is present, keep it as a full Git branch/ref string for branch setup; do not resolve it through task folders or Shortcut
 
 2. **Resolve and validate project:**
    - first normalize any GTM session alias using the shared task-resolution rules:
@@ -157,8 +165,35 @@ and select checkout `1st`, `2nd`, or `3rd`. Applied to `/workit`:
      ```
    - **Never work on `main` except for the `env` project (`/Users/inseybo/.dots`).** If the current branch is `main` and the resolved project is not `env`, stop before editing and switch to a task branch. For `env`, working on `main` is allowed.
    - **Never work on `master` for non-`my_*` projects.** If the current branch is `master` and the resolved project does not start with `my_`, stop before editing and switch to a task branch. For `my_*` projects, working on `master` is allowed.
-   - For GTM Shortcut tasks, follow the branch setup rules from [`taskit` step 8: Set up the development branch](../taskit/SKILL.md#set-up-the-development-branch-gtm-project-shortcut-mode-only): fetch the Shortcut story, generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from the returned story `name`, verify whether it already exists, and create it with `git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout -b <branch-name>` when safe. Do not use the task folder suffix as the branch slug; existing task folders can have local/draft slugs that differ from Shortcut's Git Helper slug.
-   - If a task branch already exists, ask the user whether to switch to it unless the current branch already contains `sc-{task_id}` as a path segment. When running as `/autowork` preflight, stop and report the needed branch decision instead of continuing on the wrong branch.
+   - For GTM Shortcut tasks, follow the branch setup rules from [`taskit` step 8: Set up the development branch](../taskit/SKILL.md#set-up-the-development-branch-gtm-project-shortcut-mode-only): fetch the Shortcut story, generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from the returned story `name`, verify whether it already exists, and create it when safe. Do not use the task folder suffix as the branch slug; existing task folders can have local/draft slugs that differ from Shortcut's Git Helper slug.
+   - If `base_ref` is present for a GTM Shortcut task:
+     - require a clean worktree before any checkout/branch creation:
+       ```bash
+       git -C /Volumes/dev/projects/shaka/gtm/<checkout> status --short
+       ```
+       If dirty, stop and ask the user to clean/commit/stash manually; do not stash automatically.
+     - fetch remote refs so remote base branches are available:
+       ```bash
+       git -C /Volumes/dev/projects/shaka/gtm/<checkout> fetch origin
+       ```
+     - verify the exact base ref resolves to a commit:
+       ```bash
+       git -C /Volumes/dev/projects/shaka/gtm/<checkout> rev-parse --verify --quiet <base_ref>^{commit}
+       ```
+       If it does not resolve, stop and ask for a valid full branch/ref.
+     - if the generated task branch does not exist, create it from the exact base ref:
+       ```bash
+       git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout -b <branch-name> <base_ref>
+       ```
+       Report that `<branch-name>` was created from `<base_ref>`.
+     - if the generated task branch already exists and the current branch is not that branch, stop and ask before switching. When running as `/autowork` preflight, stop and report the needed branch decision instead of switching.
+     - if the generated task branch already exists and the current branch is that branch, verify the base ref is already contained in the task branch:
+       ```bash
+       git -C /Volumes/dev/projects/shaka/gtm/<checkout> merge-base --is-ancestor <base_ref> HEAD
+       ```
+       If this fails, the parent/base branch likely advanced or the branch was created from a different base. Stop and ask for explicit rebase or base-change instructions; do not rebase automatically.
+   - If `base_ref` is not present and a task branch already exists, ask the user whether to switch to it unless the current branch already contains `sc-{task_id}` as a path segment. When running as `/autowork` preflight, stop and report the needed branch decision instead of continuing on the wrong branch.
+   - If `base_ref` is not present and the generated task branch does not exist, create it from the current HEAD using the existing taskit branch rules.
    - If the task is manual or the correct branch name is unclear, ask the user for the branch name. Do not guess and do not continue on `master` or `main`, except that `main` is allowed for the `env` project (`/Users/inseybo/.dots`). When running as `/autowork` preflight, stop and report that a branch decision is required.
 
 7. **Create or load the steps plan before implementation:**

@@ -121,16 +121,19 @@ Use the shared task-resolution rules from:
 
 Preflight before running the Ruby helper:
 
-1. resolve the same `<project-or-gtm-session> [task_id]` arguments that `/autowork` will pass to the helper
-2. if `<task_folder>/steps.md` is missing, invoke:
+1. resolve the same `<project-or-gtm-session> [task_id] [full-base-branch-or-ref]` arguments that `/autowork` will pass to the helper
+2. if a full base branch/ref was supplied, preserve it exactly; do not infer it from a numeric task/story ID
+3. if `<task_folder>/steps.md` is missing, a base branch/ref was supplied, or branch setup/verification is needed, invoke `/workit ... create-steps-only` before the Ruby helper:
    ```text
    /workit <project-or-gtm-session> [task_id] create-steps-only
+   /workit <project-or-gtm-session> [task_id] --base <full-base-branch-or-ref> create-steps-only
    ```
-3. if branch setup/verification is needed, rely on `/workit create-steps-only` to use the documented `/workit`/`/taskit` branch rules; for GTM Shortcut tasks this means the branch slug comes from the current Shortcut story `name`, fetched through the shared Shortcut CLI, not from the task folder suffix
-4. if `/workit create-steps-only` stops for a branch decision or plan problem, stop `/autowork` before running the helper and surface that decision to the user
-5. after preflight succeeds, run the Ruby helper normally
+   Use the `--base` form when `/autowork` was invoked with a full base branch/ref. If project is inferred, pass the inferred task selector with `--base`, e.g. `/workit <task_id> --base <full-base-branch-or-ref> create-steps-only`.
+4. rely on `/workit create-steps-only` to use the documented `/workit`/`/taskit` branch rules; for GTM Shortcut tasks this means the branch slug comes from the current Shortcut story `name`, fetched through the shared Shortcut CLI, not from the task folder suffix
+5. if `/workit create-steps-only` stops for a branch decision, base-branch mismatch, rebase requirement, or plan problem, stop `/autowork` before running the helper and surface that decision to the user
+6. after preflight succeeds, run the Ruby helper normally; the helper stores the same base as `review_base_ref` for final super-review
 
-If `steps.md` already exists, `/autowork` may skip plan creation, but it must still not proceed on a forbidden branch. The Ruby helper also requires `steps.md` and will fail fast if the preflight did not create it.
+If `steps.md` already exists, `/autowork` may skip plan creation, but it must still not skip `/workit` branch setup/verification when a full base branch/ref was supplied. The Ruby helper also requires `steps.md` and will fail fast if the preflight did not create it.
 
 ## Required workit support
 
@@ -456,7 +459,7 @@ Because `/autowork` owns commits, this means every `/autowork` code-changing com
 
 Claude reviews should follow `/gtm-revit`-style rules, not a minimal blocker-only review.
 
-Important: `/gtm-revit` does not require running RuboCop or RSpec. During normal step reviews, Claude should not run full RuboCop or full RSpec. Pi may run targeted checks during implementation/fix turns, and `/autowork` runs configured full final checks after all planned steps are accepted.
+Important: `/gtm-revit` does not require running RuboCop or RSpec. During normal step reviews, Claude should not run RSpec, RuboCop, linters, formatters, or any other test/check command — not full-suite and not targeted. Claude should inspect the diff/files and Pi's reported `checks_run`. Pi may run targeted checks during implementation/fix turns, and `/autowork` runs configured full final checks after all planned steps are accepted.
 
 Claude should suggest everything that makes sense according to `/gtm-revit` rules and classify checklist items with:
 
@@ -470,7 +473,7 @@ Expected summary shape:
 
 ```text
 Summary: <N> BLOCKER / <M> MINOR / <K> PASS
-Recommendation: merge | amend | split
+Recommendation: accept | fix | split
 ```
 
 `/autowork` prompt should ask Claude to review the last commit against the current step only:
@@ -481,7 +484,7 @@ Recommendation: merge | amend | split
 - scope findings to current `Step N`
 - do not require future-step behavior unless current changes block or contradict future work
 - do not edit repo files
-- do not run full RuboCop or full RSpec during step review
+- do not run RSpec, RuboCop, linters, formatters, or any other test/check command during step review — not full-suite and not targeted
 - write review to the assigned `autowork-log/reviews/...` file
 - write status JSON when done
 
@@ -592,7 +595,7 @@ If final checks fail:
 4. if Pi changed repo files, `/autowork` commits `Final checks fix M`
 5. if Pi made no repo changes, `/autowork` reruns final checks without creating an empty commit
 6. when checks pass, send any final-check fix commits to Claude for review
-7. Claude reviews final-check fix commits without rerunning full RuboCop/RSpec; it reads `final_checks.md` and inspects the fix commits
+7. Claude reviews final-check fix commits without running RSpec, RuboCop, linters, formatters, or any other test/check command; it reads `final_checks.md` and inspects the fix commits
 8. if Claude finds issues, send them to Pi as another final-check fix iteration
 9. repeat until checks pass and Claude accepts, or until `max_final_check_fix_iterations` is hit
 

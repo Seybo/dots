@@ -803,7 +803,7 @@ RSpec.describe Autowork do
       expect(state['paused_reason']).to include('after 1 debate round')
     end
 
-    it 'tells Claude step reviewers not to run full RuboCop or RSpec' do
+    it 'tells Claude step reviewers not to run test or lint commands' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
       tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
@@ -816,11 +816,12 @@ RSpec.describe Autowork do
       prompt = Autowork::PromptWriter.new(files, Autowork::TaskResolver.new(%w[env 0003], cwd: repo).resolve, Autowork::GitRepo.new(repo)).claude_review(1, 1, 'a' * 40)
       text = File.read(prompt)
 
-      expect(text).to include('Do not run full RuboCop or full RSpec during normal step review')
+      expect(text).to include('Do not run RSpec, RuboCop, linters, formatters, or any other test/check command during normal step review')
+      expect(text).to include('not full-suite and not targeted')
       expect(text).to include('`/autowork` runs full final checks after all planned steps are accepted')
     end
 
-    it 'tells Claude final-check reviewers not to rerun full checks' do
+    it 'tells Claude final-check reviewers not to run test or lint commands' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
       tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
@@ -833,7 +834,8 @@ RSpec.describe Autowork do
       prompt = Autowork::PromptWriter.new(files, Autowork::TaskResolver.new(%w[env 0003], cwd: repo).resolve, Autowork::GitRepo.new(repo)).claude_final_check_review(1, ['a' * 40])
       text = File.read(prompt)
 
-      expect(text).to include('Do not rerun full RuboCop or full RSpec here')
+      expect(text).to include('Do not run RSpec, RuboCop, linters, formatters, or any other test/check command here')
+      expect(text).to include('not full-suite and not targeted')
       expect(text).to include('inspect `final_checks.md` and the fix commits')
     end
 
@@ -899,6 +901,38 @@ RSpec.describe Autowork do
       expect(state['phase']).to eq('waiting_for_pi_final_check_fix')
       expect(state['final_check_fix_iteration']).to eq(1)
       expect(File.read(files.final_checks_path)).to include('test -f fixed.txt')
+    end
+
+    it 'keeps final-check stdout and stderr compact in state while writing full output to final_checks.md' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      config = YAML.safe_load(File.read(files.config_path))
+      config['final_check_commands'] = ["printf '%s\\n' full-stdout; printf '%s\\n' full-stderr >&2; exit 1"]
+      File.write(files.config_path, config.to_yaml)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'ready_to_run_final_checks'
+      state_store.write(state)
+
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
+
+      state = state_store.read
+      final_check = state.fetch('final_checks').first
+      failure = state.fetch('final_check_failures').first
+      expect(final_check).not_to have_key('stdout')
+      expect(final_check).not_to have_key('stderr')
+      expect(final_check['stdout_tail']).to include('full-stdout')
+      expect(failure['stderr_tail']).to include('full-stderr')
+      expect(File.read(files.final_checks_path)).to include('full-stdout', 'full-stderr')
     end
 
     it 'reruns final checks without committing when Pi final-check fix makes no repo changes' do
@@ -1050,8 +1084,12 @@ RSpec.describe Autowork do
       expect(state['status']).to eq('manager_review')
       expect(state['phase']).to eq('ready_for_manager_final_review')
       expect(state['final_super_reviewed']).to eq(true)
-      expect(File.read(files.final_summary_path)).to include('Final super-review')
-      expect(File.read(files.final_summary_path)).to include('Final status: manager_review')
+      final_summary = File.read(files.final_summary_path)
+      expect(final_summary).to include('Final super-review')
+      expect(final_summary).to include('Final status: manager_review')
+      expect(final_summary).to include('## Unresolved caveats')
+      expect(final_summary).to include('- None.')
+      expect(final_summary).not_to include('unresolved disagreement after the configured round limit')
       expect(File.read(files.manager_review_path)).to include('production-ready if the user does not perform another review')
     end
 

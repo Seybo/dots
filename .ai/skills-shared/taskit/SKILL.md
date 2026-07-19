@@ -21,6 +21,7 @@ Use only:
 /taskit <project>
 /taskit <project> <task name>
 /taskit <project> <story_id>
+/taskit <project> <story_id> --base <full-base-branch-or-ref>
 /taskit <project> <path-to-task.md>
 /taskit <project> draftNN
 ```
@@ -28,6 +29,8 @@ Use only:
 With no arguments, infer both the project and Shortcut story ID from the current git checkout and branch.
 With one token, treat it as `<project>` only when it matches an existing task project; otherwise infer `<project>` from the current working directory and treat the token as the selector/task name.
 With two or more tokens, treat the first token as `<project>` only when it matches an existing task project; otherwise infer `<project>` from the current working directory and treat all tokens as the selector/task name.
+`--base <full-base-branch-or-ref>` is optional for GTM Shortcut mode. It tells `/taskit` to create the generated task branch from that exact base branch/ref. Do not infer a base from a numeric parent task/story ID.
+
 The selector/task name is interpreted as either:
 
 - a **Shortcut story ID** if it is a single token of digits only (e.g. `12345`)
@@ -43,6 +46,7 @@ Examples:
 /taskit my_budget_app Create budget tracking app
 /taskit misc_notes Set up notes sync
 /taskit shaka_gtm 147831
+/taskit shaka_gtm 22222 --base origin/mikhail/sc-11111/parent-task
 /taskit shaka_gtm /Volumes/dev/_tasks/shaka_gtm/123-foo/task.md
 /taskit shaka_gtm draft01
 /taskit my_budget_app draft01   # local conversion if task.md has no complete Story details
@@ -70,6 +74,7 @@ Read that file whenever any of these must be inferred. In short:
 - `<project>` must match a first-level folder under `/Volumes/dev/_tasks/`.
 - When the first token is not an existing task project, infer `<project>` from the current working directory and treat the whole input as the selector/task name.
 - Infer the Shortcut story ID from the current branch's `sc-<digits>` segment.
+- Preserve an optional `--base <full-base-branch-or-ref>` exactly for GTM Shortcut branch creation; do not interpret it as part of the selector/task name.
 - An inferred story ID is handled exactly like Shortcut mode.
 - If a needed project cannot be inferred, ask the user to pass it explicitly. A story ID is needed only for no-argument or one-project Shortcut inference.
 
@@ -79,6 +84,7 @@ creates project roots or code checkouts.
 ## Instructions
 
 1. **Parse command arguments:**
+   - detect and remove an optional `--base <full-base-branch-or-ref>` pair before resolving `<project>` / selector; call the value `base_ref` when present; reject `--base` without a following value
    - if there are no tokens after `/taskit`, infer `<project>` and `<story_id>` from the current checkout and branch; if successful, use Shortcut mode
    - if there is exactly one token after `/taskit`:
      - if the token matches an existing task project, treat it as `<project>` and infer `<story_id>` from the current branch; if successful, use Shortcut mode; if no story ID can be inferred, ask the user for a task name, story ID, `draftNN`, or task markdown path
@@ -97,6 +103,7 @@ creates project roots or code checkouts.
      /taskit <project>
      /taskit <project> <task name>
      /taskit <project> <story_id>
+     /taskit <project> <story_id> --base <full-base-branch-or-ref>
      /taskit <project> <path-to-task.md>
      /taskit <project> draftNN
      ```
@@ -193,16 +200,39 @@ creates project roots or code checkouts.
    - Check the current branch in the selected checkout with `git -C /Volumes/dev/projects/shaka/gtm/<checkout> branch --show-current`.
      - If the current branch contains `sc-{story_id}` as a path segment, treat branch setup as already done and do not create or switch branches.
      - If the current branch differs from the generated branch name, report both the current branch and generated branch name.
-   - Otherwise, verify the generated branch does not already exist in the selected checkout:
+   - If `base_ref` is present:
+     - require a clean worktree before any checkout/branch creation:
+       ```bash
+       git -C /Volumes/dev/projects/shaka/gtm/<checkout> status --short
+       ```
+       If dirty, stop and ask the user to clean/commit/stash manually; do not stash automatically.
+     - fetch remote refs so remote base branches are available:
+       ```bash
+       git -C /Volumes/dev/projects/shaka/gtm/<checkout> fetch origin
+       ```
+     - verify the exact base ref resolves to a commit:
+       ```bash
+       git -C /Volumes/dev/projects/shaka/gtm/<checkout> rev-parse --verify --quiet <base_ref>^{commit}
+       ```
+       If it does not resolve, stop and ask for a valid full branch/ref.
+   - Verify whether the generated branch already exists in the selected checkout:
      ```bash
      git -C /Volumes/dev/projects/shaka/gtm/<checkout> rev-parse --verify --quiet <branch-name>
      ```
-   - If it exists (exit 0), stop and ask the user how to proceed.
-   - Otherwise (exit 1), create and check out the branch with exactly this form — `-C` flag required, no `cd`, no bare `git`:
+   - If the generated branch exists (exit 0):
+     - If the current branch is not the generated branch, stop and ask the user how to proceed; do not switch silently.
+     - If the current branch is the generated branch and `base_ref` is present, verify the base ref is contained in the task branch:
+       ```bash
+       git -C /Volumes/dev/projects/shaka/gtm/<checkout> merge-base --is-ancestor <base_ref> HEAD
+       ```
+       If that fails, stop and ask for explicit rebase or base-change instructions; do not rebase automatically.
+   - If the generated branch does not exist (exit 1), create and check it out with exactly one of these forms — `-C` flag required, no `cd`, no bare `git`:
      ```bash
+     git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout -b <branch-name> <base_ref>
      git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout -b <branch-name>
      ```
-   - Report the selected checkout and branch name alongside the created paths from step 7.
+     Use the first form when `base_ref` is present; use the second form only when `base_ref` is absent.
+   - Report the selected checkout, branch name, and base ref (when present) alongside the created paths from step 7.
 
 ## Task markdown path mode
 
