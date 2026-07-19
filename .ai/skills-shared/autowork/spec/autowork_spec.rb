@@ -144,6 +144,32 @@ RSpec.describe Autowork do
       expect(context.code_dir).to eq('/Volumes/dev/projects/shaka/gtm/1st')
     end
 
+    it 'accepts a full base branch/ref as the second argument when project is inferred' do
+      task_root, task_folder = make_env_task(task_id: '1234')
+      dots_repo = make_git_repo
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', dots_repo)
+
+      context = described_class.new(%w[1234 mikhail/sc-1233/parent-branch], cwd: dots_repo).resolve
+
+      expect(context.task_folder).to eq(task_folder)
+      expect(context.review_base_ref).to eq('mikhail/sc-1233/parent-branch')
+    end
+
+    it 'accepts a full base branch/ref as the third argument when project is explicit' do
+      task_root, = make_env_task(task_id: '1234')
+      dots_repo = make_git_repo
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', dots_repo)
+
+      context = described_class.new(%w[env 1234 parent/feature], cwd: dots_repo).resolve
+
+      expect(context.project).to eq('env')
+      expect(context.review_base_ref).to eq('parent/feature')
+    end
+
     it 'fails when a task id prefix is ambiguous' do
       task_root = File.join(@tmpdir, '_tasks')
       dots_repo = make_git_repo
@@ -384,20 +410,41 @@ RSpec.describe Autowork do
       expect(config['pi_manager_target']).to eq('%1')
       expect(config['pi_worker_target']).to eq('%2')
       expect(config['claude_worker_target']).to eq('%3')
+      expect(config['super_review_status_timeout_minutes']).to eq(20)
+      expect(config['run_final_super_review']).to eq(true)
+      expect(%w[main master]).to include(config['review_base_ref'])
       expect(state['status']).to eq('initialized')
       expect(state['current_step']).to eq(1)
       expect(prompt).to include('as `pi-worker`')
       expect(prompt).to include('Implement only `## Step 1`')
+    end
+
+    it 'stores an explicit final super-review base ref in config' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      allow(Autowork::Tmux).to receive(:new).and_return(tmux)
+
+      described_class.new(%w[env 0003 parent/feature]).run
+
+      config = YAML.safe_load(File.read(Autowork::RunFiles.new(task_folder).config_path))
+      expect(config['review_base_ref']).to eq('parent/feature')
     end
   end
 
   describe Autowork::Orchestrator do
     around do |example|
       previous = ENV['AUTOWORK_WORKER_STATUS_TIMEOUT_SECONDS']
+      previous_super = ENV['AUTOWORK_SUPER_REVIEW_STATUS_TIMEOUT_SECONDS']
       ENV['AUTOWORK_WORKER_STATUS_TIMEOUT_SECONDS'] = '0'
+      ENV['AUTOWORK_SUPER_REVIEW_STATUS_TIMEOUT_SECONDS'] = '0'
       example.run
     ensure
       ENV['AUTOWORK_WORKER_STATUS_TIMEOUT_SECONDS'] = previous
+      ENV['AUTOWORK_SUPER_REVIEW_STATUS_TIMEOUT_SECONDS'] = previous_super
     end
 
     it 'initializes, sends the pi-worker prompt, and records the waiting phase' do
@@ -520,15 +567,15 @@ RSpec.describe Autowork do
       ))
       File.write(files.review_path(1, 1), "Summary: 0 BLOCKER / 0 MINOR / 1 PASS\n")
 
-      described_class.new(%w[env 0003], tmux: tmux).run
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
 
       state = state_store.read
-      expect(state['status']).to eq('done')
-      expect(state['phase']).to eq('complete')
-      expect(state['next_action']).to eq('none')
+      expect(state['status']).to eq('running')
+      expect(state['phase']).to eq('waiting_for_final_super_review')
       expect(state.dig('steps', '1', 'status')).to eq('accepted')
       expect(File.read(files.final_checks_path)).to include('skipped')
-      expect(File.read(files.final_summary_path)).to include('# Autowork final summary')
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('final_super_review1_request.md'))
     end
 
     it 'does not advance when Claude writes status before the review artifact' do
@@ -671,12 +718,13 @@ RSpec.describe Autowork do
         'debate' => { 'finding_id' => 'B1', 'round' => 1, 'decision' => 'agree_with_pi' }
       ))
 
-      described_class.new(%w[env 0003], tmux: tmux).run
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
 
       state = state_store.read
-      expect(state['phase']).to eq('complete')
+      expect(state['phase']).to eq('waiting_for_final_super_review')
       expect(state.dig('steps', '1', 'status')).to eq('accepted')
-      expect(File.read(files.final_summary_path)).to include('Autowork final summary')
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('final_super_review1_request.md'))
     end
 
     it 'sends a Pi debate prompt when Claude still disagrees' do
@@ -881,13 +929,15 @@ RSpec.describe Autowork do
         'summary' => 'no repo fix needed'
       ))
 
-      described_class.new(%w[env 0003], tmux: tmux).run
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
 
       state = state_store.read
-      expect(state['phase']).to eq('complete')
+      expect(state['phase']).to eq('waiting_for_final_super_review')
       expect(state['final_check_fix_commits']).to be_nil
       expect(`git -C #{repo} log --oneline 2>/dev/null`.strip).to be_empty
       expect(File.read(files.final_checks_path)).to include('Status: passed')
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('final_super_review1_request.md'))
     end
 
     it 'commits a final-check fix, reruns checks, and sends Claude final-check review' do
@@ -958,13 +1008,210 @@ RSpec.describe Autowork do
         'findings' => []
       ))
 
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
+
+      state = state_store.read
+      expect(state['phase']).to eq('waiting_for_final_super_review')
+      expect(state['final_check_reviewed']).to be(true)
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('final_super_review1_request.md'))
+    end
+
+    it 'stops for manager-context review when final super-review reports no actionable findings' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_final_super_review'
+      state['final_super_review_iteration'] = 1
+      state['final_checks'] = [{ 'command' => nil, 'status' => 'skipped', 'summary' => 'none' }]
+      state_store.write(state)
+      File.write(files.super_review_path, "# Super review\n\nDiff base: main\n")
+      File.write(files.status_path(0, 'claude', 'super_review', 1), JSON.pretty_generate(
+        'status' => 'done',
+        'agent' => 'claude',
+        'phase' => 'super_review',
+        'step' => 0,
+        'summary' => 'clean',
+        'findings' => []
+      ))
+
       described_class.new(%w[env 0003], tmux: tmux).run
 
       state = state_store.read
-      expect(state['phase']).to eq('complete')
-      expect(state['final_check_reviewed']).to be(true)
-      expect(File.read(files.final_summary_path)).to include('Final checks fix 1')
-      expect(File.read(files.final_summary_path)).to include('Final checks review 1')
+      expect(state['status']).to eq('manager_review')
+      expect(state['phase']).to eq('ready_for_manager_final_review')
+      expect(state['final_super_reviewed']).to eq(true)
+      expect(File.read(files.final_summary_path)).to include('Final super-review')
+      expect(File.read(files.final_summary_path)).to include('Final status: manager_review')
+      expect(File.read(files.manager_review_path)).to include('production-ready if the user does not perform another review')
+    end
+
+    it 'sends Pi a super-review fix prompt when final super-review reports findings' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_final_super_review'
+      state['final_super_review_iteration'] = 1
+      state['final_checks'] = [{ 'command' => nil, 'status' => 'skipped', 'summary' => 'none' }]
+      state_store.write(state)
+      File.write(files.super_review_path, "# Super review\n\nDiff base: main\n")
+      File.write(files.status_path(0, 'claude', 'super_review', 1), JSON.pretty_generate(
+        'status' => 'done',
+        'agent' => 'claude',
+        'phase' => 'super_review',
+        'step' => 0,
+        'summary' => 'one finding',
+        'findings' => [{ 'id' => 'SR1', 'severity' => 'BLOCKER', 'title' => 'Bug', 'body' => 'Broken', 'recommendation' => 'Fix' }]
+      ))
+
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
+
+      state = state_store.read
+      expect(state['phase']).to eq('waiting_for_pi_super_review_fix')
+      expect(state['final_super_review_findings'].first['id']).to eq('SR1')
+      expect(tmux).to have_received(:send_prompt).with('%2', files.prompt_path('super_review_pi_fix1_request.md'))
+    end
+
+    it 'sends Pi super-review disagreements to Claude for scoped review without committing' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_pi_super_review_fix'
+      state['super_review_fix_iteration'] = 1
+      state['final_super_review_findings'] = [{ 'id' => 'SR1', 'severity' => 'BLOCKER', 'title' => 'Bug', 'body' => 'Broken' }]
+      state_store.write(state)
+      File.write(files.super_fix_result_path(1), "SR1 disputed\n")
+      File.write(files.status_path(0, 'pi', 'super_fix', 1), JSON.pretty_generate(
+        'status' => 'done',
+        'agent' => 'pi',
+        'phase' => 'super_fix',
+        'step' => 0,
+        'summary' => 'disputed SR1',
+        'resolutions' => [{ 'finding_id' => 'SR1', 'decision' => 'dispute', 'rationale' => 'task explicitly excludes it' }],
+        'checks_run' => [],
+        'followups' => []
+      ))
+
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
+
+      state = state_store.read
+      expect(state['phase']).to eq('waiting_for_claude_super_review_fix_review')
+      expect(state['super_review_fix_commits']).to be_nil
+      expect(`git -C #{repo} log --oneline 2>/dev/null`.strip).to be_empty
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('super_review_claude_fix_review1_request.md'))
+    end
+
+    it 'commits a super-review fix, reruns final checks, and sends a scoped Claude review' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      config = YAML.safe_load(File.read(files.config_path))
+      config['final_check_commands'] = ['test -f super-fixed.txt']
+      File.write(files.config_path, config.to_yaml)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_pi_super_review_fix'
+      state['super_review_fix_iteration'] = 1
+      state['final_super_review_findings'] = [{ 'id' => 'SR1', 'severity' => 'BLOCKER', 'title' => 'Bug', 'body' => 'Broken' }]
+      state_store.write(state)
+      File.write(files.super_fix_result_path(1), "Fixed SR1\n")
+      File.write(files.status_path(0, 'pi', 'super_fix', 1), JSON.pretty_generate(
+        'status' => 'done',
+        'agent' => 'pi',
+        'phase' => 'super_fix',
+        'step' => 0,
+        'summary' => 'fixed SR1',
+        'resolutions' => [{ 'finding_id' => 'SR1', 'decision' => 'accept', 'rationale' => 'real bug' }],
+        'checks_run' => [],
+        'followups' => []
+      ))
+      File.write(File.join(repo, 'super-fixed.txt'), "fixed\n")
+
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
+
+      state = state_store.read
+      expect(`git -C #{repo} log -1 --pretty=%s`.strip).to eq('Super-review fix 1')
+      expect(state['super_review_fix_commits'].first).to match(/\A[0-9a-f]{40}\z/)
+      expect(state['phase']).to eq('waiting_for_claude_super_review_fix_review')
+      expect(File.read(files.final_checks_path)).to include('Status: passed')
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('super_review_claude_fix_review1_request.md'))
+    end
+
+    it 'stops for manager-context review when Claude accepts the scoped super-review fix review' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_claude_super_review_fix_review'
+      state['super_review_fix_iteration'] = 1
+      state['super_review_fix_commits'] = ['a' * 40]
+      state['pending_super_review_fix_review'] = true
+      state['final_checks'] = [{ 'command' => 'true', 'status' => 'passed', 'exit_status' => 0, 'stdout' => '', 'stderr' => '' }]
+      state_store.write(state)
+      File.write(files.super_fix_review_path(1), "Scoped review clean\n")
+      File.write(files.status_path(0, 'claude', 'super_fix_review', 1), JSON.pretty_generate(
+        'status' => 'done',
+        'agent' => 'claude',
+        'phase' => 'super_fix_review',
+        'step' => 0,
+        'summary' => 'accepted',
+        'findings' => []
+      ))
+
+      described_class.new(%w[env 0003], tmux: tmux).run
+
+      state = state_store.read
+      expect(state['status']).to eq('manager_review')
+      expect(state['phase']).to eq('ready_for_manager_final_review')
+      expect(state['final_super_reviewed']).to eq(true)
+      expect(File.read(files.final_summary_path)).to include('Super-review fix 1')
+      expect(File.read(files.final_summary_path)).to include('Super-review fix review 1')
+      expect(File.read(files.manager_review_path)).to include('Manager-context production-readiness review')
     end
 
     it 'commits accepted fixes and sends a follow-up Claude review' do
@@ -1004,6 +1251,38 @@ RSpec.describe Autowork do
       expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('step1_claude_review2_request.md'))
       expect(state['phase']).to eq('waiting_for_claude_review')
       expect(state['review_iteration']).to eq(2)
+    end
+  end
+
+  describe Autowork::ManagerReviewPass do
+    it 'marks a pending manager-context review as complete' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['status'] = 'manager_review'
+      state['phase'] = 'ready_for_manager_final_review'
+      state['next_action'] = 'manager_context_production_readiness_review'
+      state_store.write(state)
+      File.write(files.final_summary_path, "# Summary\n\n- Final status: manager_review\n- Final phase: ready_for_manager_final_review\n")
+      File.write(files.manager_review_path, "# Manager-context production-readiness review\n\n## Manager review result\n\n- Pending.\n")
+
+      described_class.new([task_folder]).run
+
+      state = state_store.read
+      expect(state['status']).to eq('done')
+      expect(state['phase']).to eq('complete')
+      expect(state['manager_context_reviewed']).to eq(true)
+      expect(File.read(files.final_summary_path)).to include('Final status: done')
+      expect(File.read(files.final_summary_path)).to include('Manager-context production-readiness review')
+      expect(File.read(files.manager_review_path)).to include('production-ready if the user does not perform another review')
     end
   end
 

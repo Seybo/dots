@@ -18,8 +18,23 @@
 - run configured final checks, defaulting to RuboCop/RSpec when a Gemfile exists
 - commit automated final-check fixes as `Final checks fix M`
 - send final-check fix commits to Claude for review
-- write `final_checks.md` and `final_summary.md`
-- deterministic specs for task resolution, state, status JSON, locks, pane discovery, doctor, first-cycle send/commit/review prompt flow, accepted-fix flow, debate flow, final-check fix flow, and final summary
+- write `final_checks.md`, `super-review.md`, super-fix artifacts, `manager_review.md`, and `final_summary.md`
+- final whole-branch super-review gate after final checks pass:
+  - send `/claude-super-review` to `claude-worker` once, scoped to `review_base_ref...HEAD`
+  - accept optional full base branch/ref through `/autowork <task_id> <full-base-branch-or-ref>` or `/autowork <project-or-gtm-session> <task_id> <full-base-branch-or-ref>`
+  - store `review_base_ref` and `super_review_status_timeout_minutes: 20` in `autowork-log/config.yml`
+  - save the report under `autowork-log/super-review.md` and require the report to state the exact diff base used
+  - send findings to `pi-worker` for `/claude-super-fix`-style adjudication with room to disagree: `accept`, `accept_with_alternative_fix`, `dispute`, `skip`, `already_fixed`, `out_of_scope`, `follow_up`, `needs_user`
+  - commit accepted code changes as `Super-review fix N`
+  - rerun final checks after super-review fixes
+  - send super-review fix commits to Claude for a normal scoped review, not another full super-review
+  - do not rerun full super-review by default
+- final manager-context production-readiness review gate:
+  - stop at `ready_for_manager_final_review` after final checks, super-review, and scoped fix review pass
+  - write `manager_review.md` with the manager-only context checklist
+  - require pi-manager to decide whether the result is production-ready if the user does not perform another review
+  - mark complete only through `autowork manager-review-pass <task_folder>`
+- deterministic specs for task resolution, state, status JSON, locks, pane discovery, doctor, first-cycle send/commit/review prompt flow, accepted-fix flow, debate flow, final-check fix flow, final super-review flow, super-review fix flow, manager-context final review, and final summary
 
 ## Intentional workflow boundaries
 

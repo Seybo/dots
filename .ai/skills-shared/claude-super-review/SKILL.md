@@ -63,10 +63,12 @@ PHASE 5 - Cleanup worktree
 ## Step 1 - Determine scope
 
 Priority:
-1. **User stated explicitly** (PR number/URL, branch, commit SHA) - use what they said.
-2. **On a feature branch** - `git diff main...HEAD` (or `master`, auto-detected via `gh repo view`).
+1. **User stated explicitly** (PR number/URL, branch, commit SHA, or full base branch/ref) - use what they said.
+2. **On a feature branch** - if the user provided a full base branch/ref, review `git diff <base>...HEAD`; otherwise use `git diff main...HEAD` (or `master`, auto-detected via `gh repo view`).
 3. **On main with staged changes** - `git diff --staged`.
 4. **On main with no staged changes** - `git show HEAD`.
+
+When reviewing a local feature branch, record the exact diff base you used. For stacked branches, do not infer a parent from a task/story ID; only use a non-main parent when the user provided the full branch/ref, and use that exact parent as the base.
 
 If a PR URL is provided:
 ```bash
@@ -589,6 +591,7 @@ Decision tree per finding:
 <One sentence on what to do next.>
 
 Reviewers: 6 Claude subagents (3 generic + Architecture + Security + Deployment) + Codex.
+Diff base: `<base/ref used for the review, or staged/HEAD for non-branch scopes>`.
 Convergence: <X findings caught by 2+ agents, Y by 1 agent + Codex>.
 
 ---
