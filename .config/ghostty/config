@@ -66,6 +66,11 @@ keybind = cmd+h=text:
 keybind = cmd+j=text:
 keybind = cmd+k=text:
 keybind = cmd+l=text:
+# cmd+shift+h/j/k/l => resize pane left/down/up/right
+keybind = cmd+shift+h=text:
+keybind = cmd+shift+j=text:
+keybind = cmd+shift+k=text:
+keybind = cmd+shift+l=text:
 
 # Zellij direct session switch
 # cmd+0 => switch to last session
