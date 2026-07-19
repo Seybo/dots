@@ -204,6 +204,14 @@ module Autowork
     def ref_exists?(ref)
       Shell.capture('git', '-C', root, 'rev-parse', '--verify', '--quiet', ref).success?
     end
+
+    def ref_commit(ref)
+      Shell.capture!('git', '-C', root, 'rev-parse', '--verify', "#{ref}^{commit}").strip
+    end
+
+    def ancestor?(ancestor_ref, descendant_ref)
+      Shell.capture('git', '-C', root, 'merge-base', '--is-ancestor', ancestor_ref, descendant_ref).success?
+    end
   end
 
   class StatusValidator
@@ -314,7 +322,7 @@ module Autowork
         %w[finding_id decision rationale].each do |key|
           errors << "resolutions[#{index}].#{key} must be a non-empty string" unless resolution[key].is_a?(String) && !resolution[key].strip.empty?
         end
-        allowed_decisions = data['phase'] == 'super_fix' ? %w[accept accept_with_alternative_fix dispute skip already_fixed out_of_scope follow_up needs_user] : %w[accept accept_with_alternative_fix dispute defer_minor needs_user]
+        allowed_decisions = data['phase'] == 'super_fix' ? %w[accept accept_with_alternative_fix dispute skip already_fixed out_of_scope follow_up needs_user] : %w[accept accept_with_alternative_fix dispute follow_up needs_user]
         unless allowed_decisions.include?(resolution['decision'])
           errors << "resolutions[#{index}].decision is invalid"
         end
@@ -713,8 +721,14 @@ module Autowork
         - `accept`: Claude is right; fix exactly this finding.
         - `accept_with_alternative_fix`: Claude is right, but use a different safe/local fix.
         - `dispute`: the finding is invalid or not reachable.
-        - `defer_minor`: the finding is MINOR and larger/riskier/out of scope for this step.
+        - `follow_up`: the finding is valid, non-minor, and outside this task's scope; record it for the final summary instead of fixing now.
         - `needs_user`: user decision is required.
+
+        Classification policy:
+        - If the finding is clearly in scope of this task but outside the current step, choose `accept` or `accept_with_alternative_fix` and fix it now.
+        - If the finding is `MINOR`, choose `accept` or `accept_with_alternative_fix` and fix it now, even when it is outside this task's original scope.
+        - Use `follow_up` only for valid non-minor findings that are outside this task's scope.
+        - Do not defer valid task-scope findings to a later step.
 
         Write human-readable rationale to:
         #{resolution_path}
@@ -1018,9 +1032,12 @@ module Autowork
         - Do not stage, commit, push, switch branches, stash, or edit PR/MR metadata.
         - You have room to disagree with Claude. Do not blindly apply findings.
         - For every original finding, choose one decision: `accept`, `accept_with_alternative_fix`, `dispute`, `skip`, `already_fixed`, `out_of_scope`, `follow_up`, or `needs_user`.
+        - If a valid finding is clearly in this task's scope, fix it now even when it was discovered late.
+        - If a valid finding is `MINOR` or `MEDIUM`, fix it now even when it is outside this task's original scope, as long as it is minor/local/low-risk.
+        - Use `follow_up` or `out_of_scope` only for valid non-minor findings outside this task's scope.
         - If you choose `accept` or `accept_with_alternative_fix`, apply the code fix in this same turn.
         - If Claude's previous scoped review found missed/incorrect fixes, address those too when valid.
-        - Keep fixes narrow and inside task scope.
+        - Keep fixes narrow and safe.
         - Run focused checks if useful.
         - Print valid future cleanup as Follow-ups in the result file only; do not write issues or PR body updates.
         - Write human-readable adjudication/fix report to:
@@ -1277,10 +1294,24 @@ module Autowork
         'worker_status_timeout_minutes' => 10,
         'super_review_status_timeout_minutes' => 20,
         'run_final_super_review' => true,
-        'review_base_ref' => context.review_base_ref || default_review_base_ref,
+        'review_base_ref' => review_base_ref,
+        'review_base_ref_is_explicit' => !context.review_base_ref.nil?,
+        'review_base_commit' => recorded_review_base_commit,
+        'review_base_recorded_at' => Time.now.iso8601,
         'final_check_commands' => default_final_check_commands
       }
       File.write(files.config_path, config.to_yaml)
+    end
+
+    def review_base_ref
+      @review_base_ref ||= context.review_base_ref || default_review_base_ref
+    end
+
+    def recorded_review_base_commit
+      return repo.ref_commit(review_base_ref) if repo.ref_exists?(review_base_ref)
+      raise Error, "Explicit review base ref does not resolve to a commit: #{review_base_ref}" if context.review_base_ref
+
+      nil
     end
 
     def default_final_check_commands
@@ -1290,8 +1321,10 @@ module Autowork
     end
 
     def default_review_base_ref
-      return 'main' if repo.ref_exists?('main') || repo.ref_exists?('refs/heads/main') || repo.ref_exists?('origin/main')
-      return 'master' if repo.ref_exists?('master') || repo.ref_exists?('refs/heads/master') || repo.ref_exists?('origin/master')
+      return 'main' if repo.ref_exists?('main') || repo.ref_exists?('refs/heads/main')
+      return 'origin/main' if repo.ref_exists?('origin/main')
+      return 'master' if repo.ref_exists?('master') || repo.ref_exists?('refs/heads/master')
+      return 'origin/master' if repo.ref_exists?('origin/master')
 
       repo.branch == 'master' ? 'master' : 'main'
     end
@@ -1348,6 +1381,7 @@ module Autowork
       config = YAML.safe_load(File.read(files.config_path))
       store = StateStore.new(files.state_path)
       state = store.read
+      ensure_review_base_current!(repo, files, config, store, state) if review_base_check_phase?(state['phase'])
       case state['phase']
       when 'ready_to_send_pi_implement'
         send_pi_implement(context, repo, files, config, store, state)
@@ -1412,6 +1446,43 @@ module Autowork
       else
         raise Error, "Unknown autowork phase: #{state['phase'].inspect}"
       end
+    end
+
+    def review_base_check_phase?(phase)
+      phase && !phase.start_with?('waiting_') && phase != 'complete'
+    end
+
+    def ensure_review_base_current!(repo, files, config, store, state)
+      return unless config['review_base_ref_is_explicit']
+
+      review_base_ref = config['review_base_ref']
+      return if review_base_ref.to_s.empty?
+
+      current_commit = repo.ref_commit(review_base_ref)
+      recorded_commit = config['review_base_commit']
+      unless recorded_commit
+        config['review_base_commit'] = current_commit
+        config['review_base_recorded_at'] = Time.now.iso8601
+        File.write(files.config_path, config.to_yaml)
+        return
+      end
+      return if current_commit == recorded_commit
+
+      relationship = repo.ancestor?(recorded_commit, current_commit) ? 'advanced' : 'changed'
+      pause_with_reason!(files, store, state, <<~MSG.chomp)
+        Review base ref #{review_base_ref} #{relationship} since this autowork run recorded it.
+        Recorded base commit: #{recorded_commit}
+        Current base commit: #{current_commit}
+
+        Do not continue on the old base by default. Rebase/change the task branch only with explicit approval. After the intended base is correct, run:
+        autowork update-base #{files.task_folder} #{review_base_ref}
+        Or, if the parent was merged and this task should now be based on main/master, run:
+        autowork update-base #{files.task_folder} <new-base-ref>
+      MSG
+    rescue Error
+      raise
+    rescue StandardError => e
+      pause_with_reason!(files, store, state, "Review base ref #{review_base_ref} no longer resolves cleanly: #{e.message}")
     end
 
     def send_pi_implement(context, repo, files, config, store, state)
@@ -1522,12 +1593,16 @@ module Autowork
       require_nonempty_artifact!(files.resolution_path(step, review), 'Pi resolution')
       raise Error, "Pi classification changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
 
+      findings = state.fetch('current_findings')
       resolutions = result.data.fetch('resolutions', [])
-      validate_resolution_coverage!(state.fetch('current_findings'), resolutions)
+      validate_resolution_coverage!(findings, resolutions)
+      validate_follow_up_severity!(findings, resolutions)
       state['current_resolutions'] = resolutions
       needs_user = resolutions.select { |resolution| resolution['decision'] == 'needs_user' }
       pause_for_needs_user!(needs_user, files, store, state) unless needs_user.empty?
 
+      follow_ups = follow_up_resolutions(resolutions)
+      record_step_review_followups(state, follow_ups) unless follow_ups.empty?
       accepted = accepted_resolutions(resolutions)
       unresolved = unresolved_resolutions(resolutions)
       record_unresolved_findings(files, state, unresolved) unless unresolved.empty?
@@ -1760,6 +1835,7 @@ module Autowork
     end
 
     def advance_after_step(context, repo, files, config, store, state)
+      ensure_review_base_current!(repo, files, config, store, state)
       steps = state.fetch('steps').keys.map(&:to_i).sort
       current = state.fetch('current_step')
       next_step = steps.find { |step| step > current }
@@ -2291,6 +2367,10 @@ module Autowork
 
         #{summary_super_review_markdown(files, state)}
 
+        ## Review follow-ups
+
+        #{summary_review_followups_markdown(state)}
+
         ## Super-review follow-ups
 
         #{summary_super_review_followups_markdown(state)}
@@ -2358,6 +2438,13 @@ module Autowork
       lines.join("\n")
     end
 
+    def summary_review_followups_markdown(state)
+      followups = Array(state['step_review_followups'])
+      return '- None.' if followups.empty?
+
+      followups.map { |followup| "- #{followup}" }.join("\n")
+    end
+
     def summary_super_review_followups_markdown(state)
       followups = Array(state['super_review_followups'])
       return '- None.' if followups.empty?
@@ -2368,6 +2455,7 @@ module Autowork
     def summary_unresolved_caveats_markdown(state)
       caveats = []
       caveats << state['paused_reason'] if state['paused_reason']
+      caveats.concat(Array(state['step_review_followups']))
       caveats.concat(Array(state['super_review_followups']))
       return '- None.' if caveats.empty?
 
@@ -2417,8 +2505,12 @@ module Autowork
       resolutions.select { |resolution| %w[accept accept_with_alternative_fix].include?(resolution['decision']) }
     end
 
+    def follow_up_resolutions(resolutions)
+      resolutions.select { |resolution| resolution['decision'] == 'follow_up' }
+    end
+
     def unresolved_resolutions(resolutions)
-      resolutions.select { |resolution| %w[dispute defer_minor].include?(resolution['decision']) }
+      resolutions.select { |resolution| resolution['decision'] == 'dispute' }
     end
 
     def validate_resolution_coverage!(findings, resolutions)
@@ -2428,6 +2520,25 @@ module Autowork
       unknown = resolution_ids - finding_ids
       raise Error, "Pi classification did not cover findings: #{missing.join(', ')}" unless missing.empty?
       raise Error, "Pi classification referenced unknown findings: #{unknown.join(', ')}" unless unknown.empty?
+    end
+
+    def validate_follow_up_severity!(findings, resolutions)
+      findings_by_id = findings.to_h { |finding| [finding.fetch('id'), finding] }
+      invalid = resolutions.select do |resolution|
+        resolution['decision'] == 'follow_up' && findings_by_id.fetch(resolution.fetch('finding_id'))['severity'] == 'MINOR'
+      end
+      return if invalid.empty?
+
+      ids = invalid.map { |resolution| resolution.fetch('finding_id') }.join(', ')
+      raise Error, "MINOR findings must be fixed now, not recorded as follow-ups: #{ids}"
+    end
+
+    def record_step_review_followups(state, resolutions)
+      state['step_review_followups'] ||= []
+      resolutions.each do |resolution|
+        state['step_review_followups'] << "#{resolution['finding_id']}: #{resolution['rationale']}"
+      end
+      state['step_review_followups'].uniq!
     end
 
     def pause_for_needs_user!(resolutions, files, store, state)
@@ -2610,6 +2721,45 @@ module Autowork
     end
   end
 
+  class BaseRefUpdater
+    def initialize(argv)
+      @argv = argv
+    end
+
+    def run
+      task_folder, new_base_ref = @argv
+      raise Error, 'Usage: autowork update-base <task_folder> <new-base-ref>' unless task_folder && new_base_ref && @argv.length == 2
+
+      files = RunFiles.new(task_folder)
+      config = YAML.safe_load(File.read(files.config_path))
+      repo = GitRepo.new(config.fetch('repo_dir'))
+      new_base_commit = repo.ref_commit(new_base_ref)
+      state = StateStore.new(files.state_path).read
+
+      config['review_base_ref'] = new_base_ref
+      config['review_base_ref_is_explicit'] = true
+      config['review_base_commit'] = new_base_commit
+      config['review_base_recorded_at'] = Time.now.iso8601
+      File.write(files.config_path, config.to_yaml)
+
+      state['review_base_ref'] = new_base_ref
+      state['review_base_commit'] = new_base_commit
+      state['review_base_updated_at'] = Time.now.iso8601
+      state.delete('paused_reason')
+      state['status'] = 'running' if state['status'] == 'paused'
+      StateStore.new(files.state_path).write(state)
+      FileUtils.rm_f(files.paused_reason_path)
+
+      puts 'Updated autowork review base.'
+      puts "- task: #{task_folder}"
+      puts "- review_base_ref: #{new_base_ref}"
+      puts "- review_base_commit: #{new_base_commit}"
+      unless repo.ancestor?(new_base_ref, 'HEAD')
+        puts '- warning: new base is not an ancestor of HEAD; rebase/branch-base cleanup may still be needed before PR review.'
+      end
+    end
+  end
+
   class Initializer
     def initialize(argv)
       @argv = argv
@@ -2648,6 +2798,8 @@ module Autowork
         show_status(@argv[1..])
       when 'manager-review-pass'
         ManagerReviewPass.new(@argv[1..]).run
+      when 'update-base'
+        BaseRefUpdater.new(@argv[1..]).run
       else
         Orchestrator.new(@argv).run
       end
@@ -2667,6 +2819,7 @@ module Autowork
           autowork init [project-or-gtm-session] [task_id] [full-base-branch-or-ref]
           autowork doctor [--no-send-test]
           autowork status <task_folder>
+          autowork update-base <task_folder> <new-base-ref>
           autowork manager-review-pass <task_folder>
       USAGE
     end

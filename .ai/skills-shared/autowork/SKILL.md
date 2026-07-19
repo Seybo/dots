@@ -101,7 +101,13 @@ Base branch/ref rules:
   /autowork <task_id> <full-base-branch-or-ref>
   /autowork <project-or-gtm-session> <task_id> <full-base-branch-or-ref>
   ```
-- Store the resolved base in `<task_folder>/autowork-log/config.yml` as `review_base_ref` and run the final review against `review_base_ref...HEAD`.
+- Store the resolved base in `<task_folder>/autowork-log/config.yml` as `review_base_ref`, `review_base_ref_is_explicit`, and `review_base_commit`; run the final review against `review_base_ref...HEAD`.
+- For explicit stacked bases, `/autowork` must detect when the base ref resolves to a different commit than `review_base_commit`. If it changed, pause before starting the next step/final phase and ask for explicit rebase/base-change instructions. Do not rebase automatically.
+- After an intentional rebase or base change, update the recorded review base explicitly:
+  ```text
+  autowork update-base <task_folder> <new-base-ref>
+  ```
+  Use this when the parent branch advanced, or when the parent task merged and this task should now review against `main`/`master`.
 - The super-review report must state the exact diff base used.
 
 The final super-review wait uses `super_review_status_timeout_minutes: 20`, separate from normal `worker_status_timeout_minutes`.
@@ -504,15 +510,17 @@ For each finding, Pi chooses one:
 accept
 accept_with_alternative_fix
 dispute
-defer_minor
+follow_up
 needs_user
 ```
 
 Rules:
 
-- `BLOCKER` findings must be fixed or debated.
-- `MINOR` findings should be applied if they are cheap/local/low-risk.
-- Pi may defer a `MINOR` when it is larger, risky, out of step scope, or not worth destabilizing the step.
+- Valid findings that are clearly in this task's scope must be fixed now, even when the fix naturally belongs to a later step.
+- `MINOR` findings must be fixed now, even when they are outside this task's original scope, as long as they are minor/local/low-risk.
+- Use `follow_up` only for valid non-minor findings that are outside this task's scope; `/autowork` carries them into `final_summary.md` instead of debating/fixing them.
+- Use `dispute` only when the finding is invalid, not reachable, or contradicted by repo/task evidence.
+- `needs_user` pauses immediately when product/scope input is required.
 - Accepted fixes are implemented first.
 - `/autowork` commits accepted code changes.
 - Claude reviews the fix commit.
@@ -523,10 +531,10 @@ Rules:
 
 ## Disagreement procedure
 
-Disagreement escalation starts when Pi does not simply apply a Claude finding:
+Disagreement escalation starts when Pi disputes a Claude finding or fix requirement:
 
-- Claude says `BLOCKER`, Pi thinks it is not a blocker
-- Claude says `MINOR`, Pi wants to defer
+- Claude says `BLOCKER`, Pi thinks it is invalid or not reachable
+- Claude says `MINOR`, Pi thinks it is invalid or not reachable
 - Claude suggests fix A, Pi thinks fix B is better
 - Claude says prior fix is still wrong
 

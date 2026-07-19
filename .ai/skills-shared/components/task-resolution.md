@@ -113,6 +113,10 @@ Rules:
   stop and report the mismatch instead of silently switching bases.
 - If the parent/base branch has advanced and the task branch needs a rebase, stop
   and ask for explicit approval before rebasing; rebase rewrites commit history.
+- For `/autowork`, record the exact base commit at run setup. If the base ref later
+  resolves to a different commit, pause before starting more work. After the user
+  intentionally rebases or changes the task base, update the recorded base with
+  `autowork update-base <task_folder> <new-base-ref>`.
 
 ## Fallbacks
 

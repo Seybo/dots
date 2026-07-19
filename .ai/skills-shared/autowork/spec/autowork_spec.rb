@@ -40,6 +40,15 @@ RSpec.describe Autowork do
     repo
   end
 
+  def commit_file(repo, path, content, message)
+    full_path = File.join(repo, path)
+    FileUtils.mkdir_p(File.dirname(full_path))
+    File.write(full_path, content)
+    system('git', '-C', repo, 'add', path, out: File::NULL, err: File::NULL)
+    system('git', '-C', repo, 'commit', '-m', message, out: File::NULL, err: File::NULL)
+    `git -C #{repo} rev-parse HEAD`.strip
+  end
+
   def pane(id:, title:, path:)
     Autowork::Pane.new(
       id: id,
@@ -235,6 +244,37 @@ RSpec.describe Autowork do
       expect(result.errors).to include('question is required when status is needs_user')
     end
 
+    it 'accepts follow-up review resolutions and rejects deprecated defer_minor' do
+      valid = validator.validate_hash(
+        {
+          'status' => 'done',
+          'agent' => 'pi',
+          'phase' => 'classify',
+          'step' => 1,
+          'summary' => 'classified',
+          'resolutions' => [
+            { 'finding_id' => 'B1', 'decision' => 'follow_up', 'rationale' => 'outside this task and non-minor' }
+          ]
+        }
+      )
+      invalid = validator.validate_hash(
+        {
+          'status' => 'done',
+          'agent' => 'pi',
+          'phase' => 'classify',
+          'step' => 1,
+          'summary' => 'classified',
+          'resolutions' => [
+            { 'finding_id' => 'M1', 'decision' => 'defer_minor', 'rationale' => 'later' }
+          ]
+        }
+      )
+
+      expect(valid).to be_valid
+      expect(invalid).not_to be_valid
+      expect(invalid.errors).to include('resolutions[0].decision is invalid')
+    end
+
     it 'checks expected agent, phase, and step' do
       result = validator.validate_hash(
         {
@@ -419,19 +459,23 @@ RSpec.describe Autowork do
       expect(prompt).to include('Implement only `## Step 1`')
     end
 
-    it 'stores an explicit final super-review base ref in config' do
+    it 'stores an explicit final super-review base ref and commit in config' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
+      base_sha = commit_file(repo, 'base.txt', "base\n", 'base')
+      system('git', '-C', repo, 'branch', 'parent-feature', out: File::NULL, err: File::NULL)
       tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
       allow(Autowork::Tmux).to receive(:new).and_return(tmux)
 
-      described_class.new(%w[env 0003 parent/feature]).run
+      described_class.new(%w[env 0003 parent-feature]).run
 
       config = YAML.safe_load(File.read(Autowork::RunFiles.new(task_folder).config_path))
-      expect(config['review_base_ref']).to eq('parent/feature')
+      expect(config['review_base_ref']).to eq('parent-feature')
+      expect(config['review_base_ref_is_explicit']).to eq(true)
+      expect(config['review_base_commit']).to eq(base_sha)
     end
   end
 
@@ -464,6 +508,68 @@ RSpec.describe Autowork do
       expect(tmux).to have_received(:send_prompt).with('%2', files.prompt_path('step1_pi_implement_request.md'))
       expect(state['status']).to eq('running')
       expect(state['phase']).to eq('waiting_for_pi_implement')
+    end
+
+    it 'pauses before advancing when an explicit review base advances' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      commit_file(repo, 'base.txt', "base\n", 'base')
+      system('git', '-C', repo, 'branch', 'parent-task', out: File::NULL, err: File::NULL)
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003 parent-task], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'step_accepted'
+      state.dig('steps', '1')['status'] = 'accepted'
+      state_store.write(state)
+      commit_file(repo, 'base.txt', "base advanced\n", 'advance base')
+      system('git', '-C', repo, 'branch', '-f', 'parent-task', 'HEAD', out: File::NULL, err: File::NULL)
+
+      expect { described_class.new(%w[env 0003 parent-task], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Review base ref parent-task advanced/)
+
+      state = state_store.read
+      expect(state['status']).to eq('paused')
+      expect(state['paused_reason']).to include('autowork update-base')
+      expect(File.read(files.paused_reason_path)).to include('parent-task advanced')
+    end
+
+    it 'updates the stored review base explicitly without rebasing' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      commit_file(repo, 'base.txt', "base\n", 'base')
+      system('git', '-C', repo, 'branch', 'parent-task', out: File::NULL, err: File::NULL)
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003 parent-task], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['status'] = 'paused'
+      state['paused_reason'] = 'base advanced'
+      state_store.write(state)
+      File.write(files.paused_reason_path, "paused\n")
+      new_base_sha = commit_file(repo, 'main.txt', "main\n", 'main base')
+      system('git', '-C', repo, 'branch', 'new-base', 'HEAD', out: File::NULL, err: File::NULL)
+
+      Autowork::BaseRefUpdater.new([task_folder, 'new-base']).run
+
+      config = YAML.safe_load(File.read(files.config_path))
+      state = state_store.read
+      expect(config['review_base_ref']).to eq('new-base')
+      expect(config['review_base_commit']).to eq(new_base_sha)
+      expect(state['status']).to eq('running')
+      expect(state['review_base_ref']).to eq('new-base')
+      expect(File.file?(files.paused_reason_path)).to be(false)
     end
 
     it 'keeps waiting when a status file is temporarily invalid while being written' do
@@ -685,6 +791,77 @@ RSpec.describe Autowork do
       expect(state['phase']).to eq('waiting_for_claude_debate')
       expect(state['debate_round']).to eq(1)
       expect(File.read(files.debate_path(1))).to include('B1')
+    end
+
+    it 'records non-minor out-of-task findings as follow-ups without debate' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_pi_classify'
+      state['current_findings'] = [{ 'id' => 'B1', 'severity' => 'BLOCKER', 'title' => 'Future bug', 'body' => 'Outside task' }]
+      state['review_iteration'] = 1
+      state_store.write(state)
+      File.write(files.resolution_path(1, 1), "B1 follow-up\n")
+      File.write(files.status_path(1, 'pi', 'classify', 1), JSON.pretty_generate(
+        'status' => 'done',
+        'agent' => 'pi',
+        'phase' => 'classify',
+        'step' => 1,
+        'summary' => 'recorded follow-up',
+        'resolutions' => [
+          { 'finding_id' => 'B1', 'decision' => 'follow_up', 'rationale' => 'valid but outside this task and not minor' }
+        ]
+      ))
+
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
+
+      state = state_store.read
+      expect(state['step_review_followups']).to include('B1: valid but outside this task and not minor')
+      expect(state['phase']).to eq('waiting_for_final_super_review')
+      expect(state.dig('steps', '1', 'status')).to eq('accepted')
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('final_super_review1_request.md'))
+    end
+
+    it 'rejects MINOR findings recorded as follow-ups' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_pi_classify'
+      state['current_findings'] = [{ 'id' => 'M1', 'severity' => 'MINOR', 'title' => 'Small fix', 'body' => 'Fixable' }]
+      state['review_iteration'] = 1
+      state_store.write(state)
+      File.write(files.resolution_path(1, 1), "M1 follow-up\n")
+      File.write(files.status_path(1, 'pi', 'classify', 1), JSON.pretty_generate(
+        'status' => 'done',
+        'agent' => 'pi',
+        'phase' => 'classify',
+        'step' => 1,
+        'summary' => 'recorded follow-up',
+        'resolutions' => [
+          { 'finding_id' => 'M1', 'decision' => 'follow_up', 'rationale' => 'minor but later' }
+        ]
+      ))
+
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /MINOR findings must be fixed now/)
     end
 
     it 'accepts a disputed finding when Claude agrees with Pi in debate' do
