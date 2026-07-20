@@ -1,5 +1,12 @@
 # Dots repo context
 
+## Development style
+
+- This is a personal local-dev dotfiles repo. Prefer the simplest solution that works now.
+- KISS and YAGNI are primary rules here: do not build abstractions, generic frameworks, broad edge-case handling, or future-proofing unless the user asks for it or it is clearly needed in the near future.
+- Implement the immediate workflow first. Add complexity later only after real usage shows it is needed.
+- When a simple manual/local workflow is enough, choose it over automation.
+
 ## Path shorthands
 
 - When I say "dev-env refs", I mean `refs/dev-env` in this repo.
