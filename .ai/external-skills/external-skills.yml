@@ -1,0 +1,27 @@
+# External agent skill/plugin sources managed by skills-manager.
+# Checkouts and audits live under this directory and are intentionally gitignored.
+skills:
+  skillspector:
+    description: NVIDIA SkillSpector security scanner for agent skills.
+    origin: https://github.com/NVIDIA/skillspector.git
+    ref: main
+    checkout: checkouts/skillspector
+    auditor: true
+    adapter: skillspector
+
+  cisco-skill-scanner:
+    description: Cisco AI Defense skill-scanner security scanner for agent skills.
+    origin: https://github.com/cisco-ai-defense/skill-scanner.git
+    ref: main
+    checkout: checkouts/cisco-skill-scanner
+    auditor: true
+    adapter: cisco_skill_scanner
+
+  sentry-skill-scanner:
+    description: Sentry skill-scanner agent skill for static and behavioral skill review.
+    origin: https://github.com/getsentry/skills.git
+    ref: main
+    checkout: checkouts/sentry-skills
+    skill_path: skills/skill-scanner
+    auditor: true
+    adapter: sentry_skill_scanner
