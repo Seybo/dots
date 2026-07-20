@@ -13,14 +13,15 @@ class SkillsManagerTest < Minitest::Test
       external_root = File.join(root, '.ai', 'external-skills')
       FileUtils.mkdir_p(external_root)
       manifest = {
-        'skills' => {
+        'auditors' => {
           'skillspector' => auditor('skillspector'),
           'cisco-skill-scanner' => auditor('cisco_skill_scanner'),
-          'sentry-skill-scanner' => auditor('sentry_skill_scanner'),
+          'sentry-skill-scanner' => auditor('sentry_skill_scanner').merge('source_path' => 'skills/skill-scanner')
+        },
+        'skills' => {
           'normal-skill' => {
             'origin' => 'https://example.test/normal.git',
-            'ref' => 'main',
-            'checkout' => 'checkouts/normal-skill'
+            'ref' => 'main'
           }
         }.merge(extra_skills)
       }
@@ -34,8 +35,6 @@ class SkillsManagerTest < Minitest::Test
     {
       'origin' => "https://example.test/#{adapter}.git",
       'ref' => 'main',
-      'checkout' => "checkouts/#{adapter}",
-      'auditor' => true,
       'adapter' => adapter
     }
   end
@@ -59,7 +58,15 @@ class SkillsManagerTest < Minitest::Test
     end
   end
 
-  def test_checkout_path_must_stay_under_external_checkouts
+  def test_sentry_source_path_uses_flat_target
+    with_manager do |manager|
+      output = capture_io { manager.list('sentry-skill-scanner') }.first
+      assert_includes output, '/.ai/external-skills/sentry-skill-scanner'
+      refute_includes output, '/.ai/external-skills/.repos/sentry-skill-scanner'
+    end
+  end
+
+  def test_checkout_path_must_stay_under_external_root
     bad_skill = {
       'bad-skill' => {
         'origin' => 'https://example.test/bad.git',

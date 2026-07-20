@@ -7,10 +7,16 @@ description: Manage external Claude/Codex/Pi skills/plugins. Audits normal exter
 
 External skill content is untrusted until freshly audited.
 
+Auditors live at:
+
+- `.ai/external-skills/skillspector/`
+- `.ai/external-skills/cisco-skill-scanner/`
+- `.ai/external-skills/sentry-skill-scanner/`
+
 ## Files
 
 - Manifest: `.ai/external-skills/external-skills.yml`
-- Checkouts: `.ai/external-skills/checkouts/<name>/`
+- Managed sources: `.ai/external-skills/<name>/`
 - Audits: `.ai/external-skills/audits/<name>/<timestamp>-<head>/`
 - State: `.ai/external-skills/state.yml`
 - CLI: `.agents/skills/skills-manager/bin/skills-manager`
@@ -23,6 +29,31 @@ External skill content is untrusted until freshly audited.
 - Update auditor skills one at a time.
 - Block normal skill install/update on auditor errors, dirty/missing checkouts, High/Critical findings, or `DO_NOT_INSTALL`.
 - Warnings block unless the user explicitly approves `--allow-warnings`.
+
+## Manifest shape
+
+```yaml
+auditors:
+  skillspector:
+    origin: https://github.com/NVIDIA/skillspector.git
+    ref: main
+    adapter: skillspector
+
+  cisco-skill-scanner:
+    origin: https://github.com/cisco-ai-defense/skill-scanner.git
+    ref: main
+    adapter: cisco_skill_scanner
+
+  sentry-skill-scanner:
+    origin: https://github.com/getsentry/skills.git
+    ref: main
+    adapter: sentry_skill_scanner
+    source_path: skills/skill-scanner
+
+skills: {}
+```
+
+Paths are derived from the entry name. `source_path` is exported to `.ai/external-skills/<name>/` through a temporary clone that is removed after sync.
 
 ## Commands
 

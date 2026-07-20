@@ -69,6 +69,10 @@ module SkillsManager
           puts "  git:      #{git_branch(path)} @ #{git_head(path, short: true)}"
           puts "  remote:   #{capture_or_empty('git', '-C', path.to_s, 'remote', 'get-url', 'origin').strip}"
           puts "  dirty:    #{checkout_dirty?(path) ? 'yes' : 'no'}"
+        elsif skill['source_path'] && target_path(skill).directory?
+          synced = state.fetch('synced', {})[skill_name]
+          puts "  git:      exported @ #{synced ? synced.fetch('head', '(unknown)') : '(unknown)'}"
+          puts '  dirty:    n/a'
         else
           puts '  git:      missing checkout'
         end
@@ -131,22 +135,29 @@ module SkillsManager
         raise Error, "missing external skills manifest: #{manifest_path}" unless manifest_path.file?
 
         data = YAML.safe_load(manifest_path.read, permitted_classes: [], aliases: false)
-        data.fetch('skills')
+        normalize_manifest(data)
       end
     end
 
     def selected_skills(name)
-      return manifest if name.nil?
+      return manifest.to_h { |skill_name, skill| [skill_name, skill.merge('_name' => skill_name)] } if name.nil?
 
       { name => fetch_skill(name) }
     end
 
     def fetch_skill(name)
-      manifest.fetch(name) { raise Error, "unknown external skill: #{name}" }
+      skill = manifest.fetch(name) { raise Error, "unknown external skill: #{name}" }
+      skill.merge('_name' => name)
     end
 
     def auditors
       manifest.select { |_name, skill| skill['auditor'] }
+    end
+
+    def normalize_manifest(data)
+      auditors = data.fetch('auditors', {}).transform_values { |skill| skill.merge('auditor' => true) }
+      skills = data.fetch('skills', {}) || {}
+      auditors.merge(skills)
     end
 
     def audit_names_for(name, skill)
@@ -159,19 +170,32 @@ module SkillsManager
     end
 
     def checkout_path(skill)
-      path = external_root.join(skill.fetch('checkout')).expand_path
-      checkouts_root = external_root.join('checkouts').expand_path
-      unless inside_path?(path, checkouts_root)
-        raise Error, "checkout path must stay under #{checkouts_root}: #{path}"
-      end
-      path
+      managed_path(skill.fetch('checkout') { default_checkout(skill) }, 'checkout')
     end
 
     def target_path(skill)
-      checkout = checkout_path(skill)
-      path = checkout.join(skill.fetch('skill_path', '.')).expand_path
-      unless inside_path?(path, checkout)
-        raise Error, "skill_path must stay inside checkout #{checkout}: #{path}"
+      if skill['target'] || skill['source_path']
+        managed_path(skill.fetch('target') { skill.fetch('_name') }, 'target')
+      else
+        checkout = checkout_path(skill)
+        path = checkout.join(skill.fetch('skill_path', '.')).expand_path
+        unless inside_path?(path, checkout)
+          raise Error, "skill_path must stay inside checkout #{checkout}: #{path}"
+        end
+        path
+      end
+    end
+
+    def default_checkout(skill)
+      skill.fetch('_name')
+    end
+
+    def managed_path(relative_path, label)
+      raise Error, "#{label} path must be relative: #{relative_path}" if Pathname.new(relative_path).absolute?
+
+      path = external_root.join(relative_path).expand_path
+      unless inside_path?(path, external_root)
+        raise Error, "#{label} path must stay under #{external_root}: #{path}"
       end
       path
     end
@@ -182,6 +206,11 @@ module SkillsManager
 
     def ensure_checkout_ready!(name, skill)
       path = checkout_path(skill)
+      if skill['source_path']
+        raise Error, "#{name} export is missing; run skills-manager sync #{name}" unless target_path(skill).directory?
+        return
+      end
+
       raise Error, "#{name} checkout is missing; run skills-manager sync #{name}" unless path.join('.git').directory?
       raise Error, "#{name} checkout has local changes; refusing to audit mutable content" if checkout_dirty?(path)
       raise Error, "#{target_path(skill)} does not exist" unless target_path(skill).exist?
@@ -195,6 +224,8 @@ module SkillsManager
     end
 
     def sync_skill(skill)
+      return sync_exported_skill(skill) if skill['source_path']
+
       path = checkout_path(skill)
       origin = skill.fetch('origin')
       ref = skill.fetch('ref', 'HEAD')
@@ -213,8 +244,36 @@ module SkillsManager
       run('git', '-C', path.to_s, 'merge', '--ff-only', 'FETCH_HEAD')
     end
 
+    def sync_exported_skill(skill)
+      temp = external_root.join('.tmp', skill.fetch('_name')).expand_path
+      source = temp.join(skill.fetch('source_path')).expand_path
+      target = target_path(skill)
+
+      if dry_run
+        puts "  would clone temp: #{skill.fetch('origin')} -> #{temp}"
+        puts "  would export: #{source} -> #{target}"
+        puts "  would remove temp: #{temp}"
+        return
+      end
+
+      FileUtils.rm_rf(temp)
+      FileUtils.mkdir_p(temp.dirname)
+      begin
+        run('git', 'clone', '--depth', '1', '--branch', skill.fetch('ref', 'HEAD'), skill.fetch('origin'), temp.to_s)
+        raise Error, "source_path does not exist: #{source}" unless source.exist?
+
+        FileUtils.rm_rf(target)
+        FileUtils.mkdir_p(target.dirname)
+        FileUtils.cp_r(source, target)
+        record_sync(skill, git_head(temp, short: false))
+      ensure
+        FileUtils.rm_rf(temp)
+        temp.dirname.rmdir if temp.dirname.directory? && temp.dirname.children.empty?
+      end
+    end
+
     def create_audit_bundle(name, skill)
-      head = git_head(checkout_path(skill), short: true)
+      head = current_head(skill, short: true)
       timestamp = Time.now.utc.strftime('%Y%m%dT%H%M%SZ')
       path = external_root.join('audits', name, "#{timestamp}-#{head}")
       FileUtils.mkdir_p(path) unless dry_run
@@ -434,13 +493,20 @@ module SkillsManager
     end
 
     def apply_install_actions(name, skill, audit_bundle)
-      actions = Array(skill['install'])
+      actions = install_actions(skill)
       if actions.empty?
         puts "No install actions configured for #{name}; recorded audit/install receipt only."
         return
       end
 
       actions.each { |action| apply_install_action(name, skill, action, audit_bundle) }
+    end
+
+    def install_actions(skill)
+      actions = Array(skill['install'])
+      return actions unless actions.empty? && skill['auditor'] && skill['adapter'] == 'skillspector'
+
+      [{ 'type' => 'pi_install' }]
     end
 
     def apply_install_action(name, skill, action, _audit_bundle)
@@ -485,11 +551,22 @@ module SkillsManager
       data = state
       data['installed'] ||= {}
       data['installed'][name] = {
-        'head' => git_head(checkout_path(skill), short: false),
+        'head' => current_head(skill, short: false),
         'target' => target_path(skill).to_s,
         'audit_bundle' => audit_bundle&.to_s,
         'installed_at' => Time.now.utc.iso8601,
         'allow_warnings' => allow_warnings
+      }
+      write_state(data)
+    end
+
+    def record_sync(skill, head)
+      data = state
+      data['synced'] ||= {}
+      data['synced'][skill.fetch('_name')] = {
+        'head' => head,
+        'target' => target_path(skill).to_s,
+        'synced_at' => Time.now.utc.iso8601
       }
       write_state(data)
     end
@@ -520,6 +597,17 @@ module SkillsManager
     def git_branch(path)
       branch = capture_or_empty('git', '-C', path.to_s, 'branch', '--show-current').strip
       branch.empty? ? '(detached)' : branch
+    end
+
+    def current_head(skill, short: false)
+      if skill['source_path']
+        head = state.fetch('synced', {}).fetch(skill.fetch('_name'), {}).fetch('head', nil)
+        raise Error, "#{skill.fetch('_name')} sync state is missing; run skills-manager sync #{skill.fetch('_name')}" unless head
+
+        short ? head[0, 7] : head
+      else
+        git_head(checkout_path(skill), short: short)
+      end
     end
 
     def git_head(path, short: false)
