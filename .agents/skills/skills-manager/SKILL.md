@@ -1,6 +1,6 @@
 ---
 name: skills-manager
-description: Manage external Claude/Codex/Pi skills/plugins. Audits normal external skills with NVIDIA SkillSpector, Cisco skill-scanner, and Sentry skill-scanner before install/update.
+description: Manage external Claude and Pi skills/plugins. Audits normal external skills with NVIDIA SkillSpector, Cisco skill-scanner, and Sentry skill-scanner before install/update.
 ---
 
 # Skills manager
@@ -23,7 +23,7 @@ Auditors live at:
 
 ## Rules
 
-- Do not install/update normal external skills directly with `claude`, `codex`, plugin commands, manual copies, or ad-hoc scripts.
+- Do not install/update normal external skills directly with `claude`, `pi`, plugin commands, manual copies, or ad-hoc scripts.
 - Normal skills: audit with all three auditors before install/update.
 - Auditor skills are trust roots; `skills-manager` does not audit them.
 - Update auditor skills one at a time.
@@ -85,9 +85,11 @@ Paths are derived from the entry name. `source_path` is exported to `.ai/externa
    ```bash
    .agents/skills/skills-manager/bin/skills-manager --dry-run sync <name>
    .agents/skills/skills-manager/bin/skills-manager sync <name>
-   .agents/skills/skills-manager/bin/skills-manager audit <name>
+   .agents/skills/skills-manager/bin/skills-manager --dry-run install <name>
    .agents/skills/skills-manager/bin/skills-manager install <name>
    ```
+
+`install` audits normal skills first, then applies the configured install actions.
 
 For updates, use:
 

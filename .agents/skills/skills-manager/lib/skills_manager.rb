@@ -114,7 +114,14 @@ module SkillsManager
     def install(name)
       skill = fetch_skill(name)
       ensure_checkout_ready!(name, skill)
-      audit_bundle = skill['auditor'] ? nil : audit(name)
+      audit_bundle = if skill['auditor']
+                       nil
+                     elsif dry_run
+                       puts "  would audit #{name}"
+                       'fresh audit'
+                     else
+                       audit(name)
+                     end
       apply_install_actions(name, skill, audit_bundle)
       record_install(name, skill, audit_bundle)
       verb = dry_run ? 'Would install' : 'Installed'
@@ -516,6 +523,8 @@ module SkillsManager
         copy_skill_action(name, skill, action)
       when 'pi_install'
         pi_install_action(name, skill)
+      when 'claude_plugin'
+        claude_plugin_action(name, skill)
       else
         raise Error, "unsupported install action for #{name}: #{type.inspect}"
       end
@@ -527,6 +536,16 @@ module SkillsManager
       return if dry_run
 
       run('pi', 'install', source.to_s)
+    end
+
+    def claude_plugin_action(name, skill)
+      source = target_path(skill)
+      puts "  claude plugin marketplace add #{source}"
+      puts "  claude plugin install #{name}@#{name}"
+      return if dry_run
+
+      run('claude', 'plugin', 'marketplace', 'add', source.to_s)
+      run('claude', 'plugin', 'install', "#{name}@#{name}")
     end
 
     def copy_skill_action(name, skill, action)

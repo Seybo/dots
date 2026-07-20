@@ -1,6 +1,3 @@
-/audits/
-/state.yml
-/skillspector/
-/cisco-skill-scanner/
-/sentry-skill-scanner/
-/.tmp/
+/*
+!/.gitignore
+!/external-skills.yml

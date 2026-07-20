@@ -22,6 +22,11 @@ class SkillsManagerTest < Minitest::Test
           'normal-skill' => {
             'origin' => 'https://example.test/normal.git',
             'ref' => 'main'
+          },
+          'plugin-skill' => {
+            'origin' => 'https://example.test/plugin.git',
+            'ref' => 'main',
+            'install' => [{ 'type' => 'claude_plugin' }, { 'type' => 'pi_install' }]
           }
         }.merge(extra_skills)
       }
@@ -63,6 +68,18 @@ class SkillsManagerTest < Minitest::Test
       output = capture_io { manager.list('sentry-skill-scanner') }.first
       assert_includes output, '/.ai/external-skills/sentry-skill-scanner'
       refute_includes output, '/.ai/external-skills/.repos/sentry-skill-scanner'
+    end
+  end
+
+  def test_plugin_install_actions_print_expected_commands
+    with_manager do |manager|
+      dry_manager = SkillsManager::Manager.new(repo_root: manager.repo_root, external_root: manager.external_root, manifest_path: manager.manifest_path, dry_run: true)
+      skill = dry_manager.send(:fetch_skill, 'plugin-skill')
+      output = capture_io { dry_manager.send(:apply_install_actions, 'plugin-skill', skill, nil) }.first
+      assert_includes output, 'claude plugin marketplace add'
+      assert_includes output, 'claude plugin install plugin-skill@plugin-skill'
+      assert_includes output, 'pi install'
+      refute_includes output, 'codex plugin'
     end
   end
 
