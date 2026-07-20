@@ -20,7 +20,17 @@ COOLDOWN_SECONDS = Integer(ENV.fetch('TMUX_AGENT_NOTIFY_COOLDOWN', '60'))
 POLL_SECONDS = Float(ENV.fetch('TMUX_AGENT_NOTIFY_POLL_SECONDS', '1.5'))
 MAX_RUNTIME_SECONDS = Integer(ENV.fetch('TMUX_AGENT_NOTIFY_MAX_RUNTIME_SECONDS', (12 * 60 * 60).to_s))
 
-def notify(pane_label)
+def frontmost_application_name
+  `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null`.strip.downcase
+end
+
+def ghostty_frontmost?
+  frontmost_application_name == 'ghostty'
+end
+
+def notify(_pane_id, pane_label)
+  return if ghostty_frontmost?
+
   message = "Approval or input requested in #{pane_label}"
   system(
     '/usr/bin/osascript',
@@ -168,7 +178,7 @@ def run_pane_watcher(pane_id)
 
       if Time.now - last_notification_at >= COOLDOWN_SECONDS
         last_notification_at = Time.now
-        notify(label)
+        notify(pane_id, label)
       end
     elsif is_marked
       clear_tmux_attention_marker(pane_id)
@@ -214,7 +224,7 @@ loop do
 
   if watched_text_matches?(buffer) && Time.now - last_notification_at >= COOLDOWN_SECONDS
     last_notification_at = Time.now
-    notify(pane_label)
+    notify(nil, pane_label)
   end
 rescue EOFError
   exit 0
