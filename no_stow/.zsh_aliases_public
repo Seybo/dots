@@ -85,6 +85,7 @@ _agent_attention_notify_for_current_tmux_pane() {
   local watcher="$STOW_DIR/no_stow/bin/tmux/agent-attention-notify"
 
   if [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && [ -x "$watcher" ]; then
+    pkill -f "agent-attention-notify --pane $TMUX_PANE" >/dev/null 2>&1 || true
     "$watcher" --pane "$TMUX_PANE" >/dev/null 2>&1 &!
   fi
 }

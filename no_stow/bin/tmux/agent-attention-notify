@@ -9,7 +9,8 @@ require 'tmpdir'
 
 PATTERNS = [
   /Agent wants to run shell command\./,
-  /Choose Review to inspect or modify the full command before running\./,
+  /Agent wants to (?:write|edit|create|update|read) [^.]{1,200}\./,
+  /Choose Review to inspect or modify the full (?:command|content) before (?:running|applying)\./,
   /requires confirmation for this command:/,
   /Do you want to [^?]{1,200}\?/
 ].freeze
@@ -51,6 +52,34 @@ def pane_exists?(pane_id)
   system('tmux', 'display-message', '-p', '-t', pane_id, '#{pane_id}', out: File::NULL, err: File::NULL)
 end
 
+def write_agent_attention_labels(labels)
+  if labels.empty?
+    system('tmux', 'set-option', '-gqu', '@agent-attention-labels', out: File::NULL, err: File::NULL)
+  else
+    system('tmux', 'set-option', '-gq', '@agent-attention-labels', labels.uniq.join('|'), out: File::NULL, err: File::NULL)
+  end
+end
+
+def refresh_global_attention_labels
+  format = '#{@agent-attention-pane}'
+  pane_ids = `tmux list-windows -a -F #{Shellwords.escape(format)} 2>/dev/null`.lines.map(&:strip).reject(&:empty?)
+  labels = pane_ids.select { |pane_id| pane_exists?(pane_id) }.map { |pane_id| pane_label(pane_id) }
+  write_agent_attention_labels(labels)
+end
+
+def set_tmux_attention_marker(pane_id)
+  system('tmux', 'set-window-option', '-q', '-t', pane_id, '@agent-attention-pane', pane_id, out: File::NULL, err: File::NULL)
+  refresh_global_attention_labels
+  system('tmux', 'refresh-client', '-S', out: File::NULL, err: File::NULL)
+end
+
+def clear_tmux_attention_marker(pane_id)
+  current = `tmux show-window-option -v -t #{Shellwords.escape(pane_id)} @agent-attention-pane 2>/dev/null`.strip
+  system('tmux', 'set-window-option', '-qu', '-t', pane_id, '@agent-attention-pane', out: File::NULL, err: File::NULL) if current == pane_id
+  refresh_global_attention_labels
+  system('tmux', 'refresh-client', '-S', out: File::NULL, err: File::NULL)
+end
+
 def run_pane_watcher(pane_id)
   safe_id = pane_id.gsub(/[^A-Za-z0-9_.-]/, '_')
   lock_dir = File.join(Dir.tmpdir, "tmux-agent-attention-#{safe_id}.lock")
@@ -76,23 +105,40 @@ def run_pane_watcher(pane_id)
   File.write(pid_path, Process.pid)
 
   label = pane_label(pane_id)
+  clear_tmux_attention_marker(pane_id)
+  Signal.trap('TERM') { clear_tmux_attention_marker(pane_id); exit 0 }
+  Signal.trap('INT') { clear_tmux_attention_marker(pane_id); exit 0 }
+  Signal.trap('HUP') { clear_tmux_attention_marker(pane_id); exit 0 }
   started_at = Time.now
   last_notification_at = Time.at(0)
+  is_marked = false
 
   loop do
     break if Time.now - started_at > MAX_RUNTIME_SECONDS
     break unless pane_exists?(pane_id)
 
     screen = `tmux capture-pane -p -t #{Shellwords.escape(pane_id)} 2>/dev/null`
+    is_matched = watched_text_matches?(screen)
 
-    if watched_text_matches?(screen) && Time.now - last_notification_at >= COOLDOWN_SECONDS
-      last_notification_at = Time.now
-      notify(label)
+    if is_matched
+      unless is_marked
+        set_tmux_attention_marker(pane_id)
+        is_marked = true
+      end
+
+      if Time.now - last_notification_at >= COOLDOWN_SECONDS
+        last_notification_at = Time.now
+        notify(label)
+      end
+    elsif is_marked
+      clear_tmux_attention_marker(pane_id)
+      is_marked = false
     end
 
     sleep POLL_SECONDS
   end
 ensure
+  clear_tmux_attention_marker(pane_id) if pane_id
   FileUtils.rm_rf(lock_dir) if lock_dir && File.exist?(pid_path) && File.read(pid_path).to_i == Process.pid rescue nil
 end
 
