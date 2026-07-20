@@ -16,4 +16,10 @@ auditors:
     adapter: sentry_skill_scanner
     source_path: skills/skill-scanner
 
-skills: {}
+skills:
+  i-have-adhd:
+    origin: https://github.com/ayghri/i-have-adhd
+    ref: main
+    install:
+      - type: claude_plugin
+      - type: pi_install
