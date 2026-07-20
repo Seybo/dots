@@ -109,6 +109,9 @@ Rules:
   `/autowork`, for final super-review diff scope.
 - Do not rely on Git upstream/tracking branch as the task's base. Upstream is
   normally the branch's push/pull target and can change after `git push -u`.
+  When creating a task branch from an explicit remote base, use `git checkout
+  --no-track -b <branch-name> <base_ref>` so Git does not set the parent/base
+  branch as the new branch's upstream.
 - If an explicit base branch/ref is given and existing branch state contradicts it,
   stop and report the mismatch instead of silently switching bases.
 - If the parent/base branch has advanced and the task branch needs a rebase, stop

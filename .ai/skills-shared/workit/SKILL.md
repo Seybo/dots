@@ -181,10 +181,11 @@ and select checkout `1st`, `2nd`, or `3rd`. Applied to `/workit`:
        git -C /Volumes/dev/projects/shaka/gtm/<checkout> rev-parse --verify --quiet <base_ref>^{commit}
        ```
        If it does not resolve, stop and ask for a valid full branch/ref.
-     - if the generated task branch does not exist, create it from the exact base ref:
+     - if the generated task branch does not exist, create it from the exact base ref without configuring the base as Git upstream/tracking branch:
        ```bash
-       git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout -b <branch-name> <base_ref>
+       git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout --no-track -b <branch-name> <base_ref>
        ```
+       `--no-track` is required because when `<base_ref>` is a remote branch, Git may otherwise set the task branch's upstream to the parent branch. The parent/base must stay in `/autowork` config, not Git upstream.
        Report that `<branch-name>` was created from `<base_ref>`.
      - if the generated task branch already exists and the current branch is not that branch, stop and ask before switching. When running as `/autowork` preflight, stop and report the needed branch decision instead of switching.
      - if the generated task branch already exists and the current branch is that branch, verify the base ref is already contained in the task branch:

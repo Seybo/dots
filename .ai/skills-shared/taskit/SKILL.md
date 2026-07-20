@@ -228,10 +228,10 @@ creates project roots or code checkouts.
        If that fails, stop and ask for explicit rebase or base-change instructions; do not rebase automatically.
    - If the generated branch does not exist (exit 1), create and check it out with exactly one of these forms — `-C` flag required, no `cd`, no bare `git`:
      ```bash
-     git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout -b <branch-name> <base_ref>
+     git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout --no-track -b <branch-name> <base_ref>
      git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout -b <branch-name>
      ```
-     Use the first form when `base_ref` is present; use the second form only when `base_ref` is absent.
+     Use the first form when `base_ref` is present; use the second form only when `base_ref` is absent. `--no-track` is required for explicit bases because when `<base_ref>` is a remote branch, Git may otherwise set the new task branch's upstream to the parent branch. The parent/base must stay in task/autowork config, not Git upstream.
    - Report the selected checkout, branch name, and base ref (when present) alongside the created paths from step 7.
 
 ## Task markdown path mode
