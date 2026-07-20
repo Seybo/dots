@@ -1,6 +1,6 @@
 ---
 name: skills-manager
-description: Manage external Claude/Codex/Pi skills/plugins. Enforces fresh audits with NVIDIA SkillSpector, Cisco skill-scanner, and Sentry skill-scanner before install/update.
+description: Manage external Claude/Codex/Pi skills/plugins. Audits normal external skills with NVIDIA SkillSpector, Cisco skill-scanner, and Sentry skill-scanner before install/update.
 ---
 
 # Skills manager
@@ -17,13 +17,11 @@ External skill content is untrusted until freshly audited.
 
 ## Rules
 
-- Do not install/update external skills directly with `claude`, `codex`, plugin commands, manual copies, or ad-hoc scripts.
-- `install` always runs a fresh audit first.
-- `update` syncs, audits, then installs.
-- Normal skills: audit with all three auditors.
-- Auditor skills: audit with the other two auditors; no self-audit.
+- Do not install/update normal external skills directly with `claude`, `codex`, plugin commands, manual copies, or ad-hoc scripts.
+- Normal skills: audit with all three auditors before install/update.
+- Auditor skills are trust roots; `skills-manager` does not audit them.
 - Update auditor skills one at a time.
-- Block on auditor errors, dirty/missing checkouts, High/Critical findings, or `DO_NOT_INSTALL`.
+- Block normal skill install/update on auditor errors, dirty/missing checkouts, High/Critical findings, or `DO_NOT_INSTALL`.
 - Warnings block unless the user explicitly approves `--allow-warnings`.
 
 ## Commands
@@ -49,9 +47,7 @@ External skill content is untrusted until freshly audited.
 .agents/skills/skills-manager/bin/skills-manager install sentry-skill-scanner
 ```
 
-Each auditor install is audited by the other two auditors.
-
-## Add/update a skill
+## Add/update a normal skill
 
 1. Add/update `.ai/external-skills/external-skills.yml`.
 2. Run:

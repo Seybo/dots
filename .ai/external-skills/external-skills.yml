@@ -8,6 +8,8 @@ skills:
     checkout: checkouts/skillspector
     auditor: true
     adapter: skillspector
+    install:
+      - type: pi_install
 
   cisco-skill-scanner:
     description: Cisco AI Defense skill-scanner security scanner for agent skills.

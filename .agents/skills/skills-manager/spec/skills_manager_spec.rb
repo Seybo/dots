@@ -46,9 +46,16 @@ class SkillsManagerTest < Minitest::Test
     end
   end
 
-  def test_auditor_update_is_audited_by_other_two_auditors
+  def test_auditor_update_has_no_audit_plan
     with_manager do |manager|
-      assert_equal %w[cisco-skill-scanner sentry-skill-scanner], manager.audit_plan('skillspector')
+      assert_empty manager.audit_plan('skillspector')
+    end
+  end
+
+  def test_auditor_audit_is_refused
+    with_manager do |manager|
+      error = assert_raises(SkillsManager::Error) { manager.audit('skillspector') }
+      assert_match(/auditor skills are not audited/, error.message)
     end
   end
 
@@ -69,4 +76,5 @@ class SkillsManagerTest < Minitest::Test
       assert_match(/checkout path must stay under/, error.message)
     end
   end
+
 end

@@ -34,7 +34,7 @@ module SkillsManager
   }.freeze
 
   CommandOutput = Struct.new(:stdout, :stderr, :exit_status, keyword_init: true)
-  AuditResult = Struct.new(:auditor, :status, :severity, :summary, :report_path, :stdout_path, :stderr_path, :command_path, keyword_init: true)
+  AuditResult = Struct.new(:auditor, :status, :severity, :summary, :report_path, keyword_init: true)
 
   class Manager
     attr_reader :repo_root, :external_root, :manifest_path, :dry_run, :allow_warnings
@@ -92,6 +92,8 @@ module SkillsManager
 
     def audit(name)
       skill = fetch_skill(name)
+      raise Error, "#{name} is an auditor; auditor skills are not audited by skills-manager" if skill['auditor']
+
       ensure_checkout_ready!(name, skill)
       ensure_auditors_ready!(name, skill)
 
@@ -107,10 +109,12 @@ module SkillsManager
 
     def install(name)
       skill = fetch_skill(name)
-      audit_bundle = audit(name)
+      ensure_checkout_ready!(name, skill)
+      audit_bundle = skill['auditor'] ? nil : audit(name)
       apply_install_actions(name, skill, audit_bundle)
       record_install(name, skill, audit_bundle)
-      puts "Installed #{name} after fresh audit: #{audit_bundle}"
+      verb = dry_run ? 'Would install' : 'Installed'
+      puts(audit_bundle ? "#{verb} #{name} after fresh audit: #{audit_bundle}" : "#{verb} #{name}")
     end
 
     def update(name = nil)
@@ -149,9 +153,9 @@ module SkillsManager
       missing = REQUIRED_AUDITOR_NAMES - auditors.keys
       raise Error, "manifest is missing required auditor skill(s): #{missing.join(', ')}" unless missing.empty?
 
-      names = REQUIRED_AUDITOR_NAMES.dup
-      names.delete(name) if skill['auditor']
-      names
+      return [] if skill['auditor']
+
+      REQUIRED_AUDITOR_NAMES.dup
     end
 
     def checkout_path(skill)
@@ -444,9 +448,19 @@ module SkillsManager
       case type
       when 'copy_skill'
         copy_skill_action(name, skill, action)
+      when 'pi_install'
+        pi_install_action(name, skill)
       else
         raise Error, "unsupported install action for #{name}: #{type.inspect}"
       end
+    end
+
+    def pi_install_action(_name, skill)
+      source = target_path(skill)
+      puts "  pi install #{source}"
+      return if dry_run
+
+      run('pi', 'install', source.to_s)
     end
 
     def copy_skill_action(name, skill, action)
@@ -473,12 +487,11 @@ module SkillsManager
       data['installed'][name] = {
         'head' => git_head(checkout_path(skill), short: false),
         'target' => target_path(skill).to_s,
-        'audit_bundle' => audit_bundle.to_s,
+        'audit_bundle' => audit_bundle&.to_s,
         'installed_at' => Time.now.utc.iso8601,
         'allow_warnings' => allow_warnings
       }
-      state_path.dirname.mkpath
-      state_path.write(YAML.dump(data))
+      write_state(data)
     end
 
     def state
@@ -493,8 +506,15 @@ module SkillsManager
       external_root.join('state.yml')
     end
 
+    def write_state(data)
+      return if dry_run
+
+      state_path.dirname.mkpath
+      state_path.write(YAML.dump(data))
+    end
+
     def policy_text(is_auditor)
-      is_auditor ? 'auditor update: audited by the other two auditors; self-audit forbidden' : 'normal skill: audited by all three auditors'
+      is_auditor ? 'auditor skill: audit skipped' : 'normal skill: audited by all three auditors'
     end
 
     def git_branch(path)
@@ -520,7 +540,8 @@ module SkillsManager
     def capture(*cmd, chdir: nil, allow_failure: false)
       return CommandOutput.new(stdout: '', stderr: '', exit_status: 0) if dry_run
 
-      stdout, stderr, status = Open3.capture3(*cmd.map(&:to_s), chdir: chdir&.to_s)
+      options = chdir ? { chdir: chdir.to_s } : {}
+      stdout, stderr, status = Open3.capture3(*cmd.map(&:to_s), **options)
       unless status.success? || allow_failure
         raise Error, "#{cmd.shelljoin} failed: #{stderr.strip}"
       end
