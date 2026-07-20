@@ -10,7 +10,8 @@ require 'tmpdir'
 PATTERNS = [
   /Agent wants to run shell command\./,
   /Agent wants to (?:write|edit|create|update|read) [^.]{1,200}\./,
-  /Choose Review to inspect or modify the full (?:command|content) before (?:running|applying)\./,
+  /Proposed (?:content|edits):/,
+  /Choose Review to inspect or modify the (?:full command|full content|resulting file) before (?:running|applying)\./,
   /requires confirmation for this command:/,
   /Do you want to [^?]{1,200}\?/
 ].freeze
@@ -52,13 +53,23 @@ def pane_exists?(pane_id)
   system('tmux', 'display-message', '-p', '-t', pane_id, '#{pane_id}', out: File::NULL, err: File::NULL)
 end
 
-def write_agent_attention_labels(labels)
+def read_tmux_global_labels(option_name)
+  raw = `tmux show-option -gqv #{Shellwords.escape(option_name)} 2>/dev/null`
+  raw.split('|').reject(&:empty?)
+end
+
+def write_tmux_global_labels(option_name, labels)
   if labels.empty?
-    system('tmux', 'set-option', '-gqu', '@agent-attention-labels', out: File::NULL, err: File::NULL)
+    system('tmux', 'set-option', '-gqu', option_name, out: File::NULL, err: File::NULL)
   else
-    system('tmux', 'set-option', '-gq', '@agent-attention-labels', labels.uniq.join('|'), out: File::NULL, err: File::NULL)
+    system('tmux', 'set-option', '-gq', option_name, labels.uniq.join('|'), out: File::NULL, err: File::NULL)
   end
 end
+
+def write_agent_attention_labels(labels)
+  write_tmux_global_labels('@agent-attention-labels', labels)
+end
+
 
 def refresh_global_attention_labels
   format = '#{@agent-attention-pane}'
@@ -78,6 +89,35 @@ def clear_tmux_attention_marker(pane_id)
   system('tmux', 'set-window-option', '-qu', '-t', pane_id, '@agent-attention-pane', out: File::NULL, err: File::NULL) if current == pane_id
   refresh_global_attention_labels
   system('tmux', 'refresh-client', '-S', out: File::NULL, err: File::NULL)
+end
+
+def refresh_agent_running_count
+  labels = read_tmux_global_labels('@agent-running-labels')
+  live_labels = labels.select do |label|
+    pane_id = label.split('=', 2).first
+    pane_exists?(pane_id)
+  end
+
+  write_tmux_global_labels('@agent-running-labels', live_labels)
+  if live_labels.empty?
+    system('tmux', 'set-option', '-gqu', '@agent-running-count', out: File::NULL, err: File::NULL)
+  else
+    system('tmux', 'set-option', '-gq', '@agent-running-count', live_labels.size.to_s, out: File::NULL, err: File::NULL)
+  end
+  system('tmux', 'refresh-client', '-S', out: File::NULL, err: File::NULL)
+end
+
+def set_agent_running(pane_id)
+  refresh_agent_running_count
+  label = "#{pane_id}=#{pane_label(pane_id)}"
+  write_tmux_global_labels('@agent-running-labels', read_tmux_global_labels('@agent-running-labels') | [label])
+  refresh_agent_running_count
+end
+
+def clear_agent_running(pane_id)
+  labels = read_tmux_global_labels('@agent-running-labels').reject { |label| label.start_with?("#{pane_id}=") }
+  write_tmux_global_labels('@agent-running-labels', labels)
+  refresh_agent_running_count
 end
 
 def run_pane_watcher(pane_id)
@@ -140,6 +180,18 @@ def run_pane_watcher(pane_id)
 ensure
   clear_tmux_attention_marker(pane_id) if pane_id
   FileUtils.rm_rf(lock_dir) if lock_dir && File.exist?(pid_path) && File.read(pid_path).to_i == Process.pid rescue nil
+end
+
+if ARGV[0] == '--agent-start'
+  pane_id = ARGV[1] || ENV['TMUX_PANE']
+  set_agent_running(pane_id) unless pane_id.nil? || pane_id.empty?
+  exit 0
+end
+
+if ARGV[0] == '--agent-stop'
+  pane_id = ARGV[1] || ENV['TMUX_PANE']
+  clear_agent_running(pane_id) unless pane_id.nil? || pane_id.empty?
+  exit 0
 end
 
 if ARGV[0] == '--pane'

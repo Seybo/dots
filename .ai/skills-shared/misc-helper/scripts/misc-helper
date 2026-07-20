@@ -8,12 +8,16 @@ Usage: misc-helper <helper>
 Helpers:
   davinci-kill        Force-quit DaVinci Resolve app processes if they are stuck.
   cache-clean         Remove known-safe local macOS/app caches and generated assets.
+  tmux-bar-reset      Clear stuck tmux agent attention/running markers.
 USAGE
 }
 
 helper="${1:-}"
 
 case "$helper" in
+  tmux-bar-reset)
+    "$HOME/.dots/no_stow/bin/tmux/tmux-bar-reset"
+    ;;
   cache-clean)
     disk_target="/System/Volumes/Data"
     [[ -d "$disk_target" ]] || disk_target="$HOME"

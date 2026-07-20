@@ -1,6 +1,6 @@
 ---
 name: misc-helper
-description: Run small personal helper utilities from one command namespace. Command-only skill. Invoke via /misc-helper <helper>, currently supports davinci-kill for terminating stuck DaVinci Resolve app processes and cache-clean for removing known-safe local cache/generated-data folders.
+description: Run small personal helper utilities from one command namespace. Command-only skill. Invoke via /misc-helper <helper>, currently supports davinci-kill, cache-clean, and tmux-bar-reset.
 allowed-tools:
   - "bash(/Users/inseybo/.ai/skills-shared/misc-helper/scripts/misc-helper *)"
 ---
@@ -22,6 +22,7 @@ Currently supported:
 ```text
 /misc-helper davinci-kill
 /misc-helper cache-clean
+/misc-helper tmux-bar-reset
 ```
 
 ## Behavior
@@ -32,6 +33,18 @@ Currently supported:
 4. Do not invent ad-hoc helpers. Add new helpers by updating this skill and `scripts/misc-helper`.
 
 ## Helpers
+
+### tmux-bar-reset
+
+Clear stuck tmux agent attention/running markers.
+
+Run:
+
+```bash
+/Users/inseybo/.ai/skills-shared/misc-helper/scripts/misc-helper tmux-bar-reset
+```
+
+The script clears tmux window/global options used by the agent attention bar and stops `agent-attention-notify --pane` watcher processes.
 
 ### cache-clean
 

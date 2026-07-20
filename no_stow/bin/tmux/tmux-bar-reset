@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Clear tmux agent attention/running markers and stop watcher processes.
+
+set -u
+
+pkill -f 'agent-attention-notify --pane' >/dev/null 2>&1 || true
+
+tmux list-windows -a -F '#{session_name}:#{window_index}' 2>/dev/null |
+  while IFS= read -r window; do
+    [ -n "$window" ] && tmux set-window-option -qu -t "$window" @agent-attention-pane >/dev/null 2>&1 || true
+  done
+
+tmux set-option -gqu @agent-attention-labels >/dev/null 2>&1 || true
+tmux set-option -gqu @agent-running-labels >/dev/null 2>&1 || true
+tmux set-option -gqu @agent-running-count >/dev/null 2>&1 || true
+tmux refresh-client -S >/dev/null 2>&1 || true

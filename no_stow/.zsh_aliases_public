@@ -90,18 +90,36 @@ _agent_attention_notify_for_current_tmux_pane() {
   fi
 }
 
-claude() {
+_run_with_agent_attention() {
+  local agent_command="$1"
+  local watcher="$STOW_DIR/no_stow/bin/tmux/agent-attention-notify"
+  local exit_status
+  shift
+
   _agent_attention_notify_for_current_tmux_pane
-  command claude "$@"
+  if [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && [ -x "$watcher" ]; then
+    "$watcher" --agent-start "$TMUX_PANE" >/dev/null 2>&1 || true
+  fi
+
+  command "$agent_command" "$@"
+  exit_status=$?
+
+  if [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && [ -x "$watcher" ]; then
+    "$watcher" --agent-stop "$TMUX_PANE" >/dev/null 2>&1 || true
+  fi
+
+  return "$exit_status"
+}
+
+claude() {
+  _run_with_agent_attention claude "$@"
 }
 
 pi-p() {
   ln -sfn ~/.pi/agent/auth-personal.json ~/.pi/agent/auth.json
-  _agent_attention_notify_for_current_tmux_pane
-  command pi "$@"
+  _run_with_agent_attention pi "$@"
 }
 pi-w() {
   ln -sfn ~/.pi/agent/auth-work.json ~/.pi/agent/auth.json
-  _agent_attention_notify_for_current_tmux_pane
-  command pi "$@"
+  _run_with_agent_attention pi "$@"
 }
