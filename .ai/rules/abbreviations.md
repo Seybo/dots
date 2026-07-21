@@ -5,6 +5,9 @@ When the meaning is clear, act on them without asking for clarification.
 
 ## Abbreviations
 
+- `00ao` — Answer only: investigate what is needed, then answer the question.
+  Do not make updates, edit files, run fix-up changes, or otherwise change state.
+
 - `00ex` — Explain the referenced text using simple, precise technical terms.
   Prefer a clear paraphrase, then any necessary context.
 
