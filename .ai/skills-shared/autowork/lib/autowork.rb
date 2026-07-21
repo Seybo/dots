@@ -1567,6 +1567,7 @@ module Autowork
     def run
       context = TaskResolver.new(@argv).resolve
       files = RunFiles.new(context.task_folder)
+      files.mkdirs
       setup = setup_if_needed(context, files)
       repo = setup&.repo || GitRepo.new(context.code_dir)
       lock = RunLock.new(files.lock_path)
@@ -3202,7 +3203,7 @@ module Autowork
       state['final_summary'] = files.final_summary_path
       store.write(state)
       mark_manager_review_passed(files, state)
-      mark_final_summary_done(files)
+      mark_final_summary_done(files, state)
       puts '/autowork complete. Production-readiness manager review passed.'
       puts "- summary: #{files.final_summary_path}"
       puts "- manager review: #{files.manager_review_path}"
@@ -3218,12 +3219,13 @@ module Autowork
       File.write(files.manager_review_iteration_path(state.fetch('manager_review_passed_iteration')), updated)
     end
 
-    def mark_final_summary_done(files)
+    def mark_final_summary_done(files, state)
       return unless File.file?(files.final_summary_path)
 
       text = File.read(files.final_summary_path)
       text = text.sub(/- Final status: .*/, '- Final status: done')
       text = text.sub(/- Final phase: .*/, '- Final phase: complete')
+      text = text.sub(/- Awaiting manager review iteration \d+\./, "- Review #{state.fetch('manager_review_passed_iteration')}: passed.")
       marker = "\n## Manager-context production-readiness review\n\n- Passed.\n"
       text += marker unless text.include?('## Manager-context production-readiness review')
       File.write(files.final_summary_path, text)

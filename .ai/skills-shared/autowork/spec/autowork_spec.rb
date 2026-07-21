@@ -1426,6 +1426,7 @@ RSpec.describe Autowork do
       state['final_super_review_iteration'] = 1
       state['final_checks'] = [{ 'command' => nil, 'status' => 'skipped', 'summary' => 'none' }]
       state_store.write(state)
+      FileUtils.rm_rf(File.join(files.log_dir, 'manager_reviews'))
       File.write(files.super_review_path, "# Super review\n\nDiff base: main\n")
       File.write(files.status_path(0, 'claude', 'super_review', 1), JSON.pretty_generate(
         'status' => 'done',
@@ -1442,6 +1443,8 @@ RSpec.describe Autowork do
       expect(state['status']).to eq('manager_review')
       expect(state['phase']).to eq('ready_for_manager_final_review')
       expect(state['final_super_reviewed']).to eq(true)
+      expect(File.directory?(File.join(files.log_dir, 'manager_reviews'))).to be(true)
+      expect(File.read(files.manager_review_iteration_path(1))).to include('Review iteration: 1')
       final_summary = File.read(files.final_summary_path)
       expect(final_summary).to include('Final super-review')
       expect(final_summary).to include('Final status: manager_review')
@@ -1913,7 +1916,7 @@ RSpec.describe Autowork do
       state['phase'] = 'ready_for_manager_final_review'
       state['next_action'] = 'manager_context_production_readiness_review'
       state_store.write(state)
-      File.write(files.final_summary_path, "# Summary\n\n- Final status: manager_review\n- Final phase: ready_for_manager_final_review\n")
+      File.write(files.final_summary_path, "# Summary\n\n- Final status: manager_review\n- Final phase: ready_for_manager_final_review\n\n## Manager review loop\n\n- Awaiting manager review iteration 1.\n")
       File.write(files.manager_review_path, "# Manager-context production-readiness review\n\n## Manager review result\n\n- Pending.\n")
 
       described_class.new([task_folder]).run
@@ -1923,6 +1926,7 @@ RSpec.describe Autowork do
       expect(state['phase']).to eq('complete')
       expect(state['manager_context_reviewed']).to eq(true)
       expect(File.read(files.final_summary_path)).to include('Final status: done')
+      expect(File.read(files.final_summary_path)).to include('- Review 1: passed.')
       expect(File.read(files.final_summary_path)).to include('Manager-context production-readiness review')
       expect(File.read(files.manager_review_path)).to include('production-ready if the user does not perform another review')
     end
