@@ -13,12 +13,23 @@ PATTERNS = [
   /Proposed (?:content|edits):/,
   /Choose Review to inspect or modify the (?:full command|full content|resulting file) before (?:running|applying)\./,
   /requires confirmation for this command:/,
-  /Do you want to [^?]{1,200}\?/
+  /Do you want to [^?]{1,200}\?/, 
+  /Yes, allow all edits during this session/,
+  /Esc to cancel .* Tab to amend/
 ].freeze
 
 COOLDOWN_SECONDS = Integer(ENV.fetch('TMUX_AGENT_NOTIFY_COOLDOWN', '60'))
 POLL_SECONDS = Float(ENV.fetch('TMUX_AGENT_NOTIFY_POLL_SECONDS', '1.5'))
 MAX_RUNTIME_SECONDS = Integer(ENV.fetch('TMUX_AGENT_NOTIFY_MAX_RUNTIME_SECONDS', (12 * 60 * 60).to_s))
+LOG_PATH = ENV.fetch('TMUX_AGENT_NOTIFY_LOG', '/tmp/tmux-agent-attention.log')
+
+def log_event(message)
+  File.open(LOG_PATH, 'a') do |file|
+    file.puts("#{Time.now.strftime('%Y-%m-%d %H:%M:%S')} #{message}")
+  end
+rescue StandardError
+  nil
+end
 
 def frontmost_application_name
   `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null`.strip.downcase
@@ -28,10 +39,14 @@ def ghostty_frontmost?
   frontmost_application_name == 'ghostty'
 end
 
-def notify(_pane_id, pane_label)
-  return if ghostty_frontmost?
+def notify(pane_id, pane_label)
+  if ghostty_frontmost?
+    log_event("skip notification pane=#{pane_id || '-'} label=#{pane_label} reason=ghostty_frontmost")
+    return
+  end
 
   message = "Approval or input requested in #{pane_label}"
+  log_event("send notification pane=#{pane_id || '-'} label=#{pane_label}")
   system(
     '/usr/bin/osascript',
     '-e', 'on run argv',
@@ -89,12 +104,14 @@ def refresh_global_attention_labels
 end
 
 def set_tmux_attention_marker(pane_id)
+  log_event("set marker pane=#{pane_id} label=#{pane_label(pane_id)}")
   system('tmux', 'set-window-option', '-q', '-t', pane_id, '@agent-attention-pane', pane_id, out: File::NULL, err: File::NULL)
   refresh_global_attention_labels
   system('tmux', 'refresh-client', '-S', out: File::NULL, err: File::NULL)
 end
 
 def clear_tmux_attention_marker(pane_id)
+  log_event("clear marker pane=#{pane_id} label=#{pane_label(pane_id)}")
   current = `tmux show-window-option -v -t #{Shellwords.escape(pane_id)} @agent-attention-pane 2>/dev/null`.strip
   system('tmux', 'set-window-option', '-qu', '-t', pane_id, '@agent-attention-pane', out: File::NULL, err: File::NULL) if current == pane_id
   refresh_global_attention_labels
@@ -155,6 +172,7 @@ def run_pane_watcher(pane_id)
   File.write(pid_path, Process.pid)
 
   label = pane_label(pane_id)
+  log_event("watcher start pane=#{pane_id} label=#{label}")
   clear_tmux_attention_marker(pane_id)
   Signal.trap('TERM') { clear_tmux_attention_marker(pane_id); exit 0 }
   Signal.trap('INT') { clear_tmux_attention_marker(pane_id); exit 0 }
@@ -171,6 +189,7 @@ def run_pane_watcher(pane_id)
     is_matched = watched_text_matches?(screen)
 
     if is_matched
+      log_event("matched pane=#{pane_id} label=#{label}") unless is_marked
       unless is_marked
         set_tmux_attention_marker(pane_id)
         is_marked = true
@@ -188,6 +207,7 @@ def run_pane_watcher(pane_id)
     sleep POLL_SECONDS
   end
 ensure
+  log_event("watcher stop pane=#{pane_id}") if pane_id
   clear_tmux_attention_marker(pane_id) if pane_id
   FileUtils.rm_rf(lock_dir) if lock_dir && File.exist?(pid_path) && File.read(pid_path).to_i == Process.pid rescue nil
 end
