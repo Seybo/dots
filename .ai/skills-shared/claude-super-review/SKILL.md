@@ -1,6 +1,6 @@
 ---
 name: claude-super-review
-description: Multi-agent code review for PR / branch / diff in any repo. Runs 6 parallel Claude subagents (3 generic adversarial + 1 Architecture + 1 Security + 1 Deployment) + an independent Codex pass. Convergence filter (≥2 agents confirmed = valid issue; Critical/HIGH = always surfaced). Surface Critical / High / Medium with mandatory short writeup "what's wrong / code / why it matters / fix". Senior architect voice, output ready to paste into a GitHub comment. Use this skill whenever the user writes "/claude-super-review", "review PR 247", "review my branch", "look at what X pushed", supplies a GitHub PR URL, or asks for a code review of uncommitted changes. Trigger even if "skill" isn't said explicitly - this is the default review workflow.
+description: Multi-agent code review for PR / branch / diff in any repo. Runs 6 parallel Claude subagents (3 generic adversarial + 1 Architecture + 1 Security + 1 Deployment) + an independent Codex pass when Codex preflight succeeds. Convergence filter (≥2 agents confirmed = valid issue; Critical/HIGH = always surfaced). Surface Critical / High / Medium with mandatory short writeup "what's wrong / code / why it matters / fix". Senior architect voice, output ready to paste into a GitHub comment. Use this skill whenever the user writes "/claude-super-review", "review PR 247", "review my branch", "look at what X pushed", supplies a GitHub PR URL, or asks for a code review of uncommitted changes. Trigger even if "skill" isn't said explicitly - this is the default review workflow.
 ---
 
 # code-review
@@ -27,6 +27,7 @@ Never trigger for plain review requests such as:
 ## Workflow (high-level)
 
 ```
+0. Run the Codex preflight before determining scope or reading the diff. If it fails, ask the user to fix Codex and rerun, or explicitly continue without Codex.
 1. Determine scope (PR URL / branch / staged / last commit)
 2. Read project CLAUDE.md + AGENTS.md if present
 3. Fetch diff + PR description (if PR)
@@ -41,9 +42,9 @@ PHASE 1 - Independent reviews (parallel, blind to each other):
    - 1 Architecture subagent → file/module split, God files, layering (model: "sonnet")
    - 1 Security subagent → secrets / PII / injection / regex completeness (model: "opus")
    - 1 Deployment subagent → migrations / env vars / PR description structure (model: "sonnet")
-   - 1 Codex independent pass → cross-vendor signal (gpt-5.5)
+   - 1 Codex independent pass → cross-vendor signal (gpt-5.6-sol), only after a successful preflight
 
-PHASE 2 - Adversarial cross-review (parallel):
+PHASE 2 - Adversarial cross-review (parallel, only when Codex completed):
    - Claude reviews each codex_finding: AGREE / DISAGREE / NEEDS_CONTEXT
    - Codex reviews each claude_finding (post-convergence): AGREE / DISAGREE / NEEDS_CONTEXT
 
@@ -59,6 +60,30 @@ PHASE 5 - Cleanup worktree
 ```
 
 **Empirically: generic broad-mandate agents find more cross-cutting issues than narrow specialists.** Specialized prompts force each agent to think only within its niche (a Logic agent won't think "approval gate compares a different field from the idempotency key" - that requires cross-lens reasoning). Give the generics a mandate of "find anything wrong" and they naturally cluster around the issues that actually matter. Specialization is kept only where the narrow lens is worth one panel slot: Architecture (file/module split, God files, layering), Security (legal/compliance domain knowledge), and Deployment (the PR-description gap - a structural check).
+
+## Step 0 - Codex preflight (must run first)
+
+Before determining scope, reading project files or the diff, creating a worktree, or launching any reviewer, verify that Codex is installed and can make an authenticated request with the configured review model:
+
+```bash
+if ! command -v codex >/dev/null 2>&1; then
+  echo "Codex executable not found"
+elif codex exec --ephemeral --skip-git-repo-check --sandbox read-only \
+  -m gpt-5.6-sol -c 'model_reasoning_effort="high"' \
+  "Reply with exactly CODEX_PREFLIGHT_OK." 2>/dev/null | grep -Fxq "CODEX_PREFLIGHT_OK"; then
+  echo "Codex preflight passed"
+else
+  echo "Codex preflight failed"
+fi
+```
+
+If the preflight fails, stop before any review work and ask:
+
+> Codex preflight failed (executable, authentication, configuration, or API request). Fix Codex and rerun `/claude-super-review`, or explicitly choose **continue without Codex** for this run.
+
+Do not print raw preflight output because it may contain sensitive authentication or provider details. If the user chooses to fix Codex, stop and wait for them to rerun the skill. Only if the user explicitly chooses to continue without Codex, record `Codex status: skipped by user` and proceed with the six Claude reviewers only. Skip the Codex pass and all Codex cross-review calls; use Claude-only convergence and state that limitation in the report.
+
+If the preflight passes, record `Codex status: passed` and continue.
 
 ## Step 1 - Determine scope
 
@@ -103,7 +128,7 @@ If project CLAUDE.md is >300 lines, extract only the relevant sections (severity
 
 ## Phase 1 - Independent reviews (parallel)
 
-Launch **7 parallel** calls in a single message: 3 generic Task calls + 1 Architecture Task + 1 Security Task + 1 Deployment Task + Codex (via Bash background).
+If Codex preflight passed, launch **7 parallel** calls in a single message: 3 generic Task calls + 1 Architecture Task + 1 Security Task + 1 Deployment Task + Codex (via Bash background). If the user explicitly chose to continue without Codex, launch only the 6 Claude Task calls and do not launch Codex.
 
 ### Model assignment (MANDATORY)
 
@@ -117,7 +142,7 @@ Pass `model` explicitly in EVERY Task call. Without an explicit `model`, the sub
 | Security | `"opus"` | The most expensive class of misses; adversarial analysis of regex/auth/race needs maximum depth |
 | Deployment | `"sonnet"` | The most structural role (migrations / env vars / PR description) - the prompt does the heavy lifting |
 | Phase 2 Call A (Claude reviews Codex) | `"opus"` | Adjudication: the power to kill findings - a wrong DISAGREE costs more than the tokens saved |
-| Codex | `gpt-5.5` (CLI `-m`) | Cross-vendor diversity; fallback `gpt-5.4` |
+| Codex | `gpt-5.6-sol` (CLI `-m`, reasoning effort `high`) | Cross-vendor diversity; fallback `gpt-5.4` at `high` |
 
 The layout is locked by Sasha 2026-06-09; Architecture role added 2026-07-10 by replacing one generic reviewer while preserving the Sonnet slot. Do not change it without his decision.
 
@@ -466,15 +491,15 @@ In parallel with the 6 Claude subagents, launch Codex from the worktree director
 # [PROMPT] together with --base ("the argument '--base <BRANCH>' cannot be used with
 # '[PROMPT]'") - confirmed on codex 0.133 AND 0.136, by-design, not a version bug.
 # Plain `codex exec` has no such restriction and preserves the skill's HARD RULES prompt.
-cd "$WORKTREE_DIR" && codex exec -m gpt-5.5 "$(cat /tmp/codex_prompt_pr<num>.txt)" \
+cd "$WORKTREE_DIR" && codex exec -m gpt-5.6-sol -c 'model_reasoning_effort="high"' "$(cat /tmp/codex_prompt_pr<num>.txt)" \
   > /tmp/codex_pr<num>.txt 2>&1 &
 ```
 
-`-m gpt-5.5` is the skill default - it overrides the global `~/.codex/config.toml` model setting. On truncation, retry once with `-m gpt-5.4` (see pitfall below).
+`-m gpt-5.6-sol` with `-c 'model_reasoning_effort="high"'` is the skill default - it overrides the global `~/.codex/config.toml` model and reasoning-effort settings. On truncation, retry once with `-m gpt-5.4` at the same reasoning effort (see pitfall below).
 
 The prompt already tells Codex to read `/tmp/pr<num>.diff` and open files in the checked-out worktree for real line numbers, so the plain `codex exec` form has everything it needs.
 
-(Git-aware alternative WITHOUT a custom prompt: `cd "$WORKTREE_DIR" && codex exec -m gpt-5.5 review --base <base-branch> > /tmp/codex_pr<num>.txt 2>&1 &` - uses Codex's built-in review against the base, but you lose the HARD RULES / output format. Prefer the plain-exec form above. Note: `review` has no `--title` flag.)
+(Git-aware alternative WITHOUT a custom prompt: `cd "$WORKTREE_DIR" && codex exec -m gpt-5.6-sol -c 'model_reasoning_effort="high"' review --base <base-branch> > /tmp/codex_pr<num>.txt 2>&1 &` - uses Codex's built-in review against the base, but you lose the HARD RULES / output format. Prefer the plain-exec form above. Note: `review` has no `--title` flag.)
 
 Run in the background so the main agent isn't blocked waiting on Codex.
 
@@ -508,7 +533,7 @@ Fix: <concrete change>
 ```
 
 **Known pitfall**: The Codex CLI in non-interactive `codex exec` mode sometimes truncates mid-investigation. If output is truncated and does not contain a final "### Verdict:":
-- Retry once with `-m gpt-5.4` (fallback model - different generation, often does not trigger the same truncation).
+- Retry once with `-m gpt-5.4 -c 'model_reasoning_effort="high"'` (fallback model - different generation, often does not trigger the same truncation).
 - If still truncated, skip the Codex pass and note in the output "Codex unavailable - 6-Claude convergence applied".
 - Don't waste time on a third attempt; do not downgrade below 5.4 (mini truncates more often).
 
@@ -530,7 +555,8 @@ With 3 generic agents, a reliable generic convergence threshold is **2 of 3 = hi
 
 ## Phase 2 - Adversarial cross-review (parallel)
 
-Launch 2 parallel Task calls:
+When Codex completed, launch 2 parallel cross-review calls. If Codex was skipped or unavailable, skip Phase 2 and rely on intra-Claude convergence only.
+
 
 ### Call A: Claude reviews Codex findings
 
@@ -556,15 +582,15 @@ Codex findings to review: <paste>
 
 Same approach, mirrored prompt. Codex challenges Claude's findings.
 
-**If Codex is unavailable** - Phase 2 is skipped; rely on intra-Claude convergence only.
+**If Codex fails after preflight** - skip Phase 2 and record the sanitized failure category in the report; rely on intra-Claude convergence only.
 
 ## Phase 3 - Synthesis (main agent)
 
 Artifacts:
 1. `claude_findings` (6 agents, post-dedup)
-2. `codex_findings`
-3. `claude_on_codex` (cross-review verdicts)
-4. `codex_on_claude` (cross-review verdicts)
+2. `codex_findings` (empty when Codex was skipped or unavailable)
+3. `claude_on_codex` (cross-review verdicts, only when Codex completed)
+4. `codex_on_claude` (cross-review verdicts, only when Codex completed)
 
 Decision tree per finding:
 
@@ -590,9 +616,10 @@ Decision tree per finding:
 **Verdict: <Ready to Merge | Needs Attention | Needs Work>**
 <One sentence on what to do next.>
 
-Reviewers: 6 Claude subagents (3 generic + Architecture + Security + Deployment) + Codex.
+Reviewers: 6 Claude subagents (3 generic + Architecture + Security + Deployment) + <Codex status: passed | skipped by user | unavailable after preflight>.
 Diff base: `<base/ref used for the review, or staged/HEAD for non-branch scopes>`.
-Convergence: <X findings caught by 2+ agents, Y by 1 agent + Codex>.
+Codex: <passed | skipped by user | unavailable after preflight: sanitized reason>.
+Convergence: <X findings caught by 2+ agents, Y by 1 agent + Codex; omit the Codex count when Codex was not used>.
 
 ---
 
@@ -787,7 +814,7 @@ If the worktree is busy (subagent still holds an fd), use `git worktree remove -
 ## Hard rules
 
 - **Phase 1 reviewers (6 Claude + Codex) are blind to each other.** Otherwise anchoring bias.
-- **7 parallel Task/Bash calls in a single message.** Sequential = 7x slower.
+- **When Codex is enabled, launch 7 parallel Task/Bash calls in a single message; otherwise launch 6 Claude Task calls.** Sequential = slower and reduces reviewer independence.
 - **`model` explicit in EVERY Task call** (gen-1/gen-2 + Security = `"opus"`, gen-3 + Architecture + Deployment = `"sonnet"`, Phase 2 Call A = `"opus"`). Inheriting the session model is forbidden - the session may be running on an expensive model, and the review silently costs 2-3x more.
 - **CLAUDE.md + AGENTS.md in EVERY prompt.** Without them agents flag violations of conventions that don't exist.
 - **HARD RULES BLOCK pasted into EVERY prompt** (location citations / finding format / intent verification / domain knowledge / cross-field consistency / skip list).
@@ -815,7 +842,7 @@ If the worktree is busy (subagent still holds an fd), use `git worktree remove -
 
 ## Pitfalls
 
-**Codex CLI truncates mid-investigation** - a typical problem of `codex exec` non-interactive mode. Default `-m gpt-5.5`; fallback `-m gpt-5.4`. If both truncate, skip and note "Codex unavailable - 6-Claude convergence applied". Don't burn time on a 3rd attempt.
+**Codex CLI truncates mid-investigation** - a typical problem of `codex exec` non-interactive mode. Default `-m gpt-5.6-sol` at `high` reasoning effort; fallback `-m gpt-5.4` at `high` reasoning effort. If both truncate, skip and note "Codex unavailable - 6-Claude convergence applied". Don't burn time on a 3rd attempt.
 
 **Over-specialized panels miss cross-cutting issues** - e.g. "approval gate filter does not include the same fields the idempotency key uses". A Logic specialist looks at approval logic in isolation and doesn't compare with other files. Solution: 3 generic agents have a broad mandate and natural cross-reference, plus the CROSS-FIELD CONSISTENCY rule in HARD RULES BLOCK. Architecture is kept as the one structural specialist because generic agents are told to skip most refactor/layout findings.
 
@@ -842,9 +869,9 @@ If the worktree is busy (subagent still holds an fd), use `git worktree remove -
 2. `gh pr diff 247 > /tmp/pr247.diff`
 3. `BRANCH=$(gh pr view 247 --json headRefName -q .headRefName); git fetch origin "$BRANCH"; git worktree add /tmp/pr247_worktree "origin/$BRANCH"` (CRITICAL - isolated worktree preserves parallelism)
 4. Read `CLAUDE.md` + `AGENTS.md` in the worktree root.
-5. **Phase 1**: spawn 6 subagents (3 generic + Architecture + Security + Deployment) + Codex in parallel - all blind to each other. Models: gen-1/gen-2 + Security `model: "opus"`, gen-3 + Architecture + Deployment `model: "sonnet"`. Each prompt includes HARD RULES BLOCK, project conventions, PR context, and worktree path.
-6. Wait for all 6 + Codex (background notifications). Dedup intra-Claude (3 generic agents plus specialist signals give a good convergence signal).
-7. **Phase 2**: parallel calls - Claude reviews Codex findings, Codex reviews Claude findings.
+5. **Phase 1**: after Codex preflight, spawn 6 subagents (3 generic + Architecture + Security + Deployment) + Codex in parallel - all blind to each other. If the user chose Claude-only, spawn only the 6 Claude subagents. Models: gen-1/gen-2 + Security `model: "opus"`, gen-3 + Architecture + Deployment `model: "sonnet"`. Each prompt includes HARD RULES BLOCK, project conventions, PR context, and worktree path.
+6. Wait for the launched reviewers (background notifications). Dedup intra-Claude (3 generic agents plus specialist signals give a good convergence signal).
+7. **Phase 2**: if Codex completed, run parallel calls - Claude reviews Codex findings and Codex reviews Claude findings. If Codex was skipped or unavailable, skip Phase 2 and rely on intra-Claude convergence.
 8. **Phase 3**: synthesize per the decision tree → final markdown with detailed findings.
 8.5. **Phase 3.5**: write the same markdown verbatim to `super-review.md` (task folder if known, else repo root). Print `Report saved: <path>`.
 9. **Phase 4**: ask "which findings to leave as pending PR comments?" (by their number in the report).
