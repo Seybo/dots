@@ -19,6 +19,9 @@ Invoke only with:
 /autowork <project-or-gtm-session> [task_id] [full-base-branch-or-ref]
 /autowork doctor
 /autowork doctor --no-send-test
+/autowork rebase-base
+/autowork rebase-base --base <new-base-ref>
+autowork update-base <task_folder> <new-base-ref>
 autowork manager-review-pass <task_folder>
 ```
 
@@ -101,7 +104,9 @@ Base branch/ref rules:
   /autowork <task_id> <full-base-branch-or-ref>
   /autowork <project-or-gtm-session> <task_id> <full-base-branch-or-ref>
   ```
-- Store the resolved base in `<task_folder>/autowork-log/config.yml` as `review_base_ref`, `review_base_ref_is_explicit`, and `review_base_commit`; run the final review against `review_base_ref...HEAD`.
+- Store the initial resolved base in `<task_folder>/autowork-log/config.yml` as `original_review_base_ref` and `original_review_base_commit`.
+- Store the active/current review base separately as `review_base_ref`, `review_base_ref_is_explicit`, and `review_base_commit`; run the final review against `review_base_ref...HEAD`.
+- `original_review_base_*` is audit/debug context and must not change after run initialization. `review_base_*` may change after an explicit rebase/base update.
 - For explicit stacked bases, `/autowork` must detect when the base ref resolves to a different commit than `review_base_commit`. If it changed, pause before starting the next step/final phase and ask for explicit rebase/base-change instructions. Do not rebase automatically.
 - After an intentional rebase or base change, update the recorded review base explicitly:
   ```text
@@ -109,6 +114,63 @@ Base branch/ref rules:
   ```
   Use this when the parent branch advanced, or when the parent task merged and this task should now review against `main`/`master`.
 - The super-review report must state the exact diff base used.
+
+## Manual base rebase command
+
+`/autowork rebase-base` is an explicit manual helper for stacked branches whose recorded autowork base advanced. It belongs in this skill because `/autowork` owns `review_base_ref` and `review_base_commit`, but normal orchestration must never auto-rebase.
+
+Invocation:
+
+```text
+/autowork rebase-base
+/autowork rebase-base --base <new-base-ref>
+```
+
+Examples:
+
+- Current base ref stays the same, but the ref advanced:
+  ```text
+  /autowork rebase-base
+  ```
+- Parent branch merged and the task should now be based on `master`:
+  ```text
+  /autowork rebase-base --base master
+  ```
+- Task should move from one stacked parent to another:
+  ```text
+  /autowork rebase-base --base origin/example-parent-branch
+  ```
+
+Rules:
+
+1. Infer the task from the current repo/branch using normal task-resolution rules.
+2. Load `<task_folder>/autowork-log/config.yml`.
+3. Require `repo_dir`, `review_base_ref`, and `review_base_commit`; preserve `original_review_base_ref` and `original_review_base_commit` unchanged.
+4. Require the repo worktree to be clean.
+5. Require the current branch to equal stored `branch_name` when present.
+6. Refuse to run while `<task_folder>/autowork-log/run.lock` exists.
+7. Fetch origin.
+8. If `--base <new-base-ref>` is passed, use that as the target base; otherwise use current `review_base_ref`.
+9. Resolve the target base ref; do not use branch upstream (`@{u}`), and do not use `main`/`master` unless `review_base_ref` or `--base` says so.
+10. Verify recorded `review_base_commit` is an ancestor of the current branch. If it is not, stop and ask for user direction.
+11. Rebase the current branch from the recorded old base onto the target base ref:
+    ```bash
+    git -C <repo_dir> rebase --onto <target-base-ref> <review_base_commit>
+    ```
+12. If conflicts occur, stop with a conflict report at `<task_folder>/autowork-log/rebase_conflicts.md` containing, for each conflict:
+    - file
+    - conflict
+    - kept side
+    - reason
+    - checks run
+13. After a successful rebase, update active base metadata only:
+    ```yaml
+    review_base_ref: <target-base-ref>
+    review_base_commit: <resolved-target-base-sha>
+    ```
+    Keep `original_review_base_ref` and `original_review_base_commit` unchanged.
+14. Do not push.
+15. Do not resume `/autowork` automatically; ask the user before continuing orchestration.
 
 The final super-review wait uses `super_review_status_timeout_minutes: 20`, separate from normal `worker_status_timeout_minutes`.
 
@@ -623,7 +685,10 @@ max_runtime_hours_per_run: 1
 worker_status_timeout_minutes: 10
 super_review_status_timeout_minutes: 20
 run_final_super_review: true
+original_review_base_ref: main | master | <full-base-branch-or-ref>
+original_review_base_commit: <sha-or-null>
 review_base_ref: main | master | <full-base-branch-or-ref>
+review_base_commit: <sha-or-null>
 ```
 
 If a limit is hit:

@@ -212,6 +212,18 @@ module Autowork
     def ancestor?(ancestor_ref, descendant_ref)
       Shell.capture('git', '-C', root, 'merge-base', '--is-ancestor', ancestor_ref, descendant_ref).success?
     end
+
+    def fetch_origin
+      Shell.capture!('git', '-C', root, 'fetch', 'origin')
+    end
+
+    def rebase_onto(new_base_ref, old_base_commit)
+      Shell.capture('git', '-C', root, 'rebase', '--onto', new_base_ref, old_base_commit)
+    end
+
+    def unmerged_files
+      Shell.capture!('git', '-C', root, 'diff', '--name-only', '--diff-filter=U').lines.map(&:strip).reject(&:empty?)
+    end
   end
 
   class StatusValidator
@@ -457,6 +469,7 @@ module Autowork
     def lock_path = File.join(log_dir, 'run.lock')
     def pause_path = File.join(log_dir, 'control', 'pause')
     def paused_reason_path = File.join(log_dir, 'paused_reason.md')
+    def rebase_conflicts_path = File.join(log_dir, 'rebase_conflicts.md')
     def final_checks_path = File.join(log_dir, 'final_checks.md')
     def final_summary_path = File.join(log_dir, 'final_summary.md')
     def super_review_path = File.join(log_dir, 'super-review.md')
@@ -1284,6 +1297,7 @@ module Autowork
         'task_project' => context.project,
         'task_id' => context.task_id,
         'repo_dir' => repo.root,
+        'branch_name' => repo.branch,
         'steps_count' => steps.count,
         'pi_manager_target' => roles.manager.id,
         'pi_worker_target' => roles.pi_worker.id,
@@ -1297,6 +1311,8 @@ module Autowork
         'worker_status_timeout_minutes' => 10,
         'super_review_status_timeout_minutes' => 20,
         'run_final_super_review' => true,
+        'original_review_base_ref' => review_base_ref,
+        'original_review_base_commit' => recorded_review_base_commit,
         'review_base_ref' => review_base_ref,
         'review_base_ref_is_explicit' => !context.review_base_ref.nil?,
         'review_base_commit' => recorded_review_base_commit,
@@ -1341,6 +1357,10 @@ module Autowork
         'next_action' => 'send_pi_implement_prompt',
         'created_at' => now,
         'updated_at' => now,
+        'original_review_base_ref' => review_base_ref,
+        'original_review_base_commit' => recorded_review_base_commit,
+        'review_base_ref' => review_base_ref,
+        'review_base_commit' => recorded_review_base_commit,
         'steps' => steps.numbers.to_h { |number| [number.to_s, { 'status' => 'pending', 'commits' => [], 'reviews' => [] }] }
       }
       StateStore.new(files.state_path).write(state)
@@ -2729,6 +2749,125 @@ module Autowork
     end
   end
 
+  class BaseRebaser
+    def initialize(argv, cwd: Dir.pwd)
+      @argv = argv
+      @cwd = cwd
+    end
+
+    def run
+      target_base_ref = parse_target_base_ref
+      context = TaskResolver.new([], cwd: @cwd).resolve
+      files = RunFiles.new(context.task_folder)
+      raise Error, "Missing autowork config: #{files.config_path}" unless File.file?(files.config_path)
+      raise Error, "Autowork run is active; stop it before rebasing: #{files.lock_path}" if File.file?(files.lock_path)
+
+      config = YAML.safe_load(File.read(files.config_path))
+      repo = GitRepo.new(config.fetch('repo_dir'))
+      expected_branch = config['branch_name'].to_s.empty? ? repo.branch : config['branch_name']
+      raise Error, "Run from the task branch #{expected_branch.inspect}; current branch is #{repo.branch.inspect}" unless repo.branch == expected_branch
+      raise Error, "Worktree must be clean before rebase-base:\n#{repo.status}" unless repo.clean?
+
+      old_base_ref = config.fetch('review_base_ref')
+      old_base_commit = config['review_base_commit']
+      raise Error, 'Missing review_base_commit; cannot safely determine which commits belong to this task' if old_base_commit.to_s.empty?
+
+      target_base_ref ||= old_base_ref
+      repo.fetch_origin
+      target_base_commit = repo.ref_commit(target_base_ref)
+      unless repo.ancestor?(old_base_commit, 'HEAD')
+        raise Error, "Recorded review_base_commit #{old_base_commit} is not an ancestor of HEAD; stop and inspect branch history before rebasing"
+      end
+
+      result = repo.rebase_onto(target_base_ref, old_base_commit)
+      unless result.success?
+        write_conflict_report(files, config, old_base_ref, old_base_commit, target_base_ref, result, repo)
+        raise Error, "Rebase stopped with conflicts or errors. Resolve them, then finish the rebase manually. Conflict report: #{files.rebase_conflicts_path}"
+      end
+
+      update_base_metadata(files, config, repo, expected_branch, old_base_ref, old_base_commit, target_base_ref, target_base_commit)
+
+      puts 'Rebased autowork branch onto review base.'
+      puts "- task: #{context.task_folder}"
+      puts "- branch: #{expected_branch}"
+      puts "- old_review_base_ref: #{old_base_ref}"
+      puts "- old_review_base_commit: #{old_base_commit}"
+      puts "- review_base_ref: #{target_base_ref}"
+      puts "- review_base_commit: #{target_base_commit}"
+      puts '- push: not performed'
+      puts '- next: run /autowork again only when you want to resume orchestration'
+    end
+
+    private
+
+    def parse_target_base_ref
+      return nil if @argv.empty?
+      return @argv[1] if @argv.length == 2 && @argv[0] == '--base' && !@argv[1].to_s.empty?
+
+      raise Error, 'Usage: autowork rebase-base [--base <new-base-ref>]'
+    end
+
+    def update_base_metadata(files, config, repo, expected_branch, old_base_ref, old_base_commit, target_base_ref, target_base_commit)
+      now = Time.now.iso8601
+      config['branch_name'] = expected_branch
+      config['original_review_base_ref'] ||= config['review_base_ref'] || old_base_ref
+      config['original_review_base_commit'] ||= config['review_base_commit'] || old_base_commit
+      config['review_base_ref'] = target_base_ref
+      config['review_base_ref_is_explicit'] = true
+      config['review_base_commit'] = target_base_commit
+      config['review_base_recorded_at'] = now
+      config['review_base_updated_at'] = now
+      File.write(files.config_path, config.to_yaml)
+
+      store = StateStore.new(files.state_path)
+      state = store.read
+      state['original_review_base_ref'] ||= config['original_review_base_ref']
+      state['original_review_base_commit'] ||= config['original_review_base_commit']
+      state['review_base_ref'] = target_base_ref
+      state['review_base_commit'] = target_base_commit
+      state['review_base_updated_at'] = now
+      state.delete('paused_reason')
+      state['status'] = 'running' if state['status'] == 'paused'
+      store.write(state)
+      FileUtils.rm_f(files.paused_reason_path)
+      FileUtils.rm_f(files.rebase_conflicts_path)
+      raise Error, 'Rebase completed but new review base is not an ancestor of HEAD; inspect branch history before resuming' unless repo.ancestor?(target_base_commit, 'HEAD')
+    end
+
+    def write_conflict_report(files, config, old_base_ref, old_base_commit, target_base_ref, result, repo)
+      files.mkdirs
+      files_with_conflicts = repo.unmerged_files
+      conflict_sections = files_with_conflicts.map do |path|
+        <<~MD
+          ## #{path}
+
+          - conflict: unresolved rebase conflict
+          - kept side: unresolved
+          - reason: unresolved
+          - checks: not run; rebase is unresolved
+        MD
+      end.join("\n")
+      conflict_sections = "- No unmerged files reported by Git. Inspect the rebase error output.\n" if conflict_sections.empty?
+
+      File.write(files.rebase_conflicts_path, <<~MD)
+        # Autowork rebase conflicts
+
+        - branch: #{config['branch_name']}
+        - old_review_base_ref: #{old_base_ref}
+        - old_review_base_commit: #{old_base_commit}
+        - target_review_base_ref: #{target_base_ref}
+
+        ## Git output
+
+        ```text
+        #{result.stderr.empty? ? result.stdout : result.stderr}
+        ```
+
+        #{conflict_sections}
+      MD
+    end
+  end
+
   class BaseRefUpdater
     def initialize(argv)
       @argv = argv
@@ -2743,6 +2882,11 @@ module Autowork
       repo = GitRepo.new(config.fetch('repo_dir'))
       new_base_commit = repo.ref_commit(new_base_ref)
       state = StateStore.new(files.state_path).read
+
+      config['original_review_base_ref'] ||= config['review_base_ref']
+      config['original_review_base_commit'] ||= config['review_base_commit']
+      state['original_review_base_ref'] ||= config['original_review_base_ref']
+      state['original_review_base_commit'] ||= config['original_review_base_commit']
 
       config['review_base_ref'] = new_base_ref
       config['review_base_ref_is_explicit'] = true
@@ -2806,6 +2950,8 @@ module Autowork
         show_status(@argv[1..])
       when 'manager-review-pass'
         ManagerReviewPass.new(@argv[1..]).run
+      when 'rebase-base'
+        BaseRebaser.new(@argv[1..]).run
       when 'update-base'
         BaseRefUpdater.new(@argv[1..]).run
       else
@@ -2827,6 +2973,7 @@ module Autowork
           autowork init [project-or-gtm-session] [task_id] [full-base-branch-or-ref]
           autowork doctor [--no-send-test]
           autowork status <task_folder>
+          autowork rebase-base [--base <new-base-ref>]
           autowork update-base <task_folder> <new-base-ref>
           autowork manager-review-pass <task_folder>
       USAGE
