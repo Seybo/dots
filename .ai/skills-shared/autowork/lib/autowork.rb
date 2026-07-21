@@ -13,6 +13,7 @@ module Autowork
   TASK_ROOT = '/Volumes/dev/_tasks'
   DOTS_REPO = '/Users/inseybo/.dots'
   STEP_HEADING = /^## Step ([0-9]+)\b/.freeze
+  MANAGER_REVIEW_SEVERITIES = %w[BLOCKER MINOR].freeze
 
   class Shell
     Result = Struct.new(:stdout, :stderr, :status, keyword_init: true) do
@@ -229,7 +230,7 @@ module Autowork
   class StatusValidator
     ALLOWED_STATUSES = %w[done needs_user failed].freeze
     ALLOWED_AGENTS = %w[pi claude].freeze
-    ALLOWED_PHASES = %w[implement review classify fix debate final_checks super_review super_fix super_fix_review].freeze
+    ALLOWED_PHASES = %w[implement review classify fix debate final_checks super_review super_fix super_fix_review manager_fix manager_fix_review].freeze
 
     Result = Struct.new(:valid, :errors, :data, keyword_init: true) do
       def valid?
@@ -299,6 +300,10 @@ module Autowork
     end
 
     def validate_findings(data, errors)
+      if data['phase'] == 'manager_fix_review' && data['status'] == 'done' && !data.key?('findings')
+        errors << 'findings is required for completed manager_fix_review'
+        return
+      end
       return unless data.key?('findings')
 
       unless data['findings'].is_a?(Array)
@@ -313,8 +318,9 @@ module Autowork
         %w[id severity title body].each do |key|
           errors << "findings[#{index}].#{key} must be a non-empty string" unless finding[key].is_a?(String) && !finding[key].strip.empty?
         end
-        unless %w[BLOCKER MINOR PASS CRITICAL HIGH MEDIUM].include?(finding['severity'])
-          errors << "findings[#{index}].severity must be BLOCKER, MINOR, PASS, CRITICAL, HIGH, or MEDIUM"
+        allowed_severities = data['phase'] == 'manager_fix_review' ? MANAGER_REVIEW_SEVERITIES : %w[BLOCKER MINOR PASS CRITICAL HIGH MEDIUM]
+        unless allowed_severities.include?(finding['severity'])
+          errors << "findings[#{index}].severity must be one of #{allowed_severities.join(', ')}"
         end
       end
     end
@@ -356,6 +362,58 @@ module Autowork
       unless %w[agree_with_pi still_disagree accept accept_with_alternative_fix needs_user].include?(debate['decision'])
         errors << 'debate.decision is invalid'
       end
+    end
+  end
+
+  class ManagerFindingsValidator
+    ALLOWED_SEVERITIES = MANAGER_REVIEW_SEVERITIES
+
+    Result = Struct.new(:valid, :errors, :data, keyword_init: true) do
+      def valid?
+        valid
+      end
+    end
+
+    def validate_file(path)
+      data = JSON.parse(File.read(path))
+      validate_hash(data)
+    rescue Errno::ENOENT
+      Result.new(valid: false, errors: ["missing manager findings file: #{path}"], data: nil)
+    rescue JSON::ParserError => e
+      Result.new(valid: false, errors: ["invalid JSON: #{e.message}"], data: nil)
+    end
+
+    def validate_hash(data)
+      errors = []
+      unless data.is_a?(Hash)
+        return Result.new(valid: false, errors: ['manager findings JSON must be an object'], data: data)
+      end
+
+      errors << 'summary must be a non-empty string' unless data['summary'].is_a?(String) && !data['summary'].strip.empty?
+      findings = data['findings']
+      if !findings.is_a?(Array) || findings.empty?
+        errors << 'findings must be a non-empty array'
+      else
+        findings.each_with_index { |finding, index| validate_finding(finding, index, errors) }
+      end
+      errors << 'followups must be an array when present' if data.key?('followups') && !data['followups'].is_a?(Array)
+      Result.new(valid: errors.empty?, errors: errors, data: data)
+    end
+
+    private
+
+    def validate_finding(finding, index, errors)
+      unless finding.is_a?(Hash)
+        errors << "findings[#{index}] must be an object"
+        return
+      end
+
+      %w[id severity title body recommendation].each do |key|
+        errors << "findings[#{index}].#{key} must be a non-empty string" unless finding[key].is_a?(String) && !finding[key].strip.empty?
+      end
+      return if ALLOWED_SEVERITIES.include?(finding['severity'])
+
+      errors << "findings[#{index}].severity must be one of #{ALLOWED_SEVERITIES.join(', ')}"
     end
   end
 
@@ -404,7 +462,6 @@ module Autowork
     def submit_delay_seconds
       ENV.fetch('AUTOWORK_SEND_SUBMIT_DELAY_SECONDS', DEFAULT_SUBMIT_DELAY_SECONDS).to_f
     end
-
 
     def pane_format
       ['#{pane_id}', '#{session_name}', '#{window_id}', '#{window_name}', '#{pane_active}', '#{pane_current_command}', '#{pane_title}', '#{pane_current_path}'].join("\t")
@@ -461,7 +518,7 @@ module Autowork
     end
 
     def mkdirs
-      %w[control prompts reviews debates resolutions super_fixes status].each { |name| FileUtils.mkdir_p(File.join(log_dir, name)) }
+      %w[control prompts reviews debates resolutions super_fixes manager_reviews manager_fixes status].each { |name| FileUtils.mkdir_p(File.join(log_dir, name)) }
     end
 
     def config_path = File.join(log_dir, 'config.yml')
@@ -474,6 +531,10 @@ module Autowork
     def final_summary_path = File.join(log_dir, 'final_summary.md')
     def super_review_path = File.join(log_dir, 'super-review.md')
     def manager_review_path = File.join(log_dir, 'manager_review.md')
+    def manager_review_iteration_path(iteration) = File.join(log_dir, 'manager_reviews', "manager_review#{iteration}.md")
+    def manager_findings_path(iteration) = File.join(log_dir, 'manager_reviews', "manager_review#{iteration}_findings.json")
+    def manager_fix_result_path(iteration) = File.join(log_dir, 'manager_fixes', "manager_review_pi_fix#{iteration}_result.md")
+    def manager_fix_review_path(iteration) = File.join(log_dir, 'manager_fixes', "manager_review_claude_fix_review#{iteration}_result.md")
     def final_check_review_path(review) = File.join(log_dir, 'reviews', "final_checks_claude_review#{review}_result.md")
     def super_fix_result_path(iteration) = File.join(log_dir, 'super_fixes', "super_review_pi_fix#{iteration}_result.md")
     def super_fix_review_path(iteration) = File.join(log_dir, 'super_fixes', "super_review_claude_fix_review#{iteration}_result.md")
@@ -1145,6 +1206,134 @@ module Autowork
       path
     end
 
+    def pi_manager_fix(iteration, manager_review_iteration, manager_findings, review_findings)
+      result_path = @files.manager_fix_result_path(iteration)
+      status_path = @files.status_path(0, 'pi', 'manager_fix', iteration)
+      path = @files.prompt_path("manager_review_pi_fix#{iteration}_request.md")
+      FileUtils.rm_f(result_path)
+      FileUtils.rm_f(status_path)
+      findings_to_fix = Array(review_findings).empty? ? manager_findings : review_findings
+      File.write(path, <<~PROMPT)
+        # Autowork: manager production-readiness fix #{iteration}
+
+        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+
+        The pi-manager used manager-only conversation context and found production-readiness issues. Fix them as mandatory task requirements. If repo evidence makes a finding impossible or contradictory, report `needs_user`; do not silently dispute or defer it.
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+        - manager review: #{@files.manager_review_path}
+        - manager findings: #{@files.manager_findings_path(manager_review_iteration)}
+        - final checks: #{@files.final_checks_path}
+
+        Original manager findings that must remain satisfied:
+
+        ```json
+        #{JSON.pretty_generate(manager_findings)}
+        ```
+
+        Findings to fix in this iteration:
+
+        ```json
+        #{JSON.pretty_generate(findings_to_fix)}
+        ```
+
+        Rules:
+        - Work only in repo: #{@repo.root}
+        - Do not commit.
+        - Leave changes unstaged/uncommitted for `/autowork` to commit.
+        - Do not stage, commit, push, switch branches, stash, rebase, or edit PR/MR metadata.
+        - Fix every listed finding narrowly and keep all original manager findings satisfied.
+        - Preserve task scope, data integrity, PII rules, and existing accepted behavior.
+        - Add regression coverage for corrected behavior.
+        - Run focused checks if useful. `/autowork` reruns configured full final checks after the commit.
+        - Write a human-readable fix report to:
+          #{result_path}
+        - Write the report before status JSON.
+        - Write valid JSON status last to:
+          #{status_path}
+        - #{final_status_action_note}
+
+        Required status JSON shape:
+
+        ```json
+        {
+          "status": "done",
+          "agent": "pi",
+          "phase": "manager_fix",
+          "step": 0,
+          "summary": "...",
+          "checks_run": [],
+          "followups": []
+        }
+        ```
+
+        If a finding cannot be resolved safely without user input, use `"status": "needs_user"` and include a `"question"` string.
+        If the fix failed, use `"status": "failed"` and explain why in `"summary"`.
+      PROMPT
+      path
+    end
+
+    def claude_manager_fix_review(iteration, manager_review_iteration, commit_sha, manager_findings)
+      result_path = @files.manager_fix_review_path(iteration)
+      status_path = @files.status_path(0, 'claude', 'manager_fix_review', iteration)
+      path = @files.prompt_path("manager_review_claude_fix_review#{iteration}_request.md")
+      FileUtils.rm_f(result_path)
+      FileUtils.rm_f(status_path)
+      File.write(path, <<~PROMPT)
+        # Autowork: scoped review of manager production-readiness fix #{iteration}
+
+        You are the Claude review agent participating in `/autowork` as `claude-worker`.
+
+        Review manager-fix commit `#{commit_sha}`. This is a normal scoped review, not another whole-branch super-review.
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+        - manager review: #{@files.manager_review_path}
+        - manager findings: #{@files.manager_findings_path(manager_review_iteration)}
+        - Pi fix report: #{@files.manager_fix_result_path(iteration)}
+        - final checks: #{@files.final_checks_path}
+
+        Manager findings that must be satisfied:
+
+        ```json
+        #{JSON.pretty_generate(manager_findings)}
+        ```
+
+        Rules:
+        - Work in repo: #{@repo.root}
+        - Do not edit repo files.
+        - Review the manager-fix commit and enough surrounding code to verify the manager findings without regressing original task behavior.
+        - Surface every `BLOCKER` and `MINOR` finding in one pass.
+        - Do not run RSpec, RuboCop, linters, formatters, or other checks. `/autowork` reran full final checks after the fix; inspect `final_checks.md` and the commit.
+        - Verify task intent, edge cases, data integrity, idempotency, PII rules, docs, and regression coverage affected by the fix.
+        - Write the human-readable review to:
+          #{result_path}
+        - Write the review before status JSON.
+        - Write valid JSON status last to:
+          #{status_path}
+        - #{final_status_action_note}
+
+        Required status JSON shape:
+
+        ```json
+        {
+          "status": "done",
+          "agent": "claude",
+          "phase": "manager_fix_review",
+          "step": 0,
+          "summary": "...",
+          "findings": []
+        }
+        ```
+
+        Use an empty `findings` array only when the manager fix is production-ready. If review needs user input, use `"status": "needs_user"` with a `"question"` string.
+      PROMPT
+      path
+    end
+
     def claude_debate(step, review, debate_id, round, resolution)
       result_path = @files.debate_claude_result_path(step, debate_id, round)
       status_path = @files.status_path(step, 'claude', 'debate', "_#{debate_id}_round#{round}")
@@ -1307,6 +1496,7 @@ module Autowork
         'max_debate_rounds_per_disagreement' => 5,
         'max_final_check_fix_iterations' => 5,
         'max_super_review_fix_iterations' => 3,
+        'max_manager_review_fix_iterations' => 5,
         'max_runtime_hours_per_run' => 1,
         'worker_status_timeout_minutes' => 10,
         'super_review_status_timeout_minutes' => 20,
@@ -1452,8 +1642,18 @@ module Autowork
         send_claude_super_review_fix_review(context, repo, files, config, store, state)
       when 'waiting_for_claude_super_review_fix_review'
         wait_for_claude_super_review_fix_review(context, repo, files, config, store, state)
+      when 'ready_to_send_pi_manager_fix'
+        send_pi_manager_fix(context, repo, files, config, store, state)
+      when 'waiting_for_pi_manager_fix'
+        wait_for_pi_manager_fix(context, repo, files, config, store, state)
+      when 'ready_to_commit_manager_fix'
+        commit_manager_fix(context, repo, files, config, store, state)
+      when 'ready_to_send_claude_manager_fix_review'
+        send_claude_manager_fix_review(context, repo, files, config, store, state)
+      when 'waiting_for_claude_manager_fix_review'
+        wait_for_claude_manager_fix_review(context, repo, files, config, store, state)
       when 'ready_for_manager_final_review'
-        print_manager_final_review_instructions(repo, files)
+        print_manager_final_review_instructions(repo, files, state)
       when 'ready_to_send_pi_final_check_fix'
         send_pi_final_check_fix(context, repo, files, config, store, state)
       when 'waiting_for_pi_final_check_fix'
@@ -1910,7 +2110,12 @@ module Autowork
     end
 
     def continue_after_passing_final_checks(context, repo, files, config, store, state, results)
-      if state['pending_super_review_fix_review']
+      if state['pending_manager_fix_review']
+        state['phase'] = 'ready_to_send_claude_manager_fix_review'
+        state['next_action'] = 'send_claude_manager_fix_review_prompt'
+        store.write(state)
+        send_claude_manager_fix_review(context, repo, files, config, store, state)
+      elsif state['pending_super_review_fix_review']
         state['phase'] = 'ready_to_send_claude_super_review_fix_review'
         state['next_action'] = 'send_claude_super_review_fix_review_prompt'
         store.write(state)
@@ -2087,6 +2292,127 @@ module Autowork
       Array(state['super_review_fix_commits'])
     end
 
+    def send_pi_manager_fix(context, repo, files, config, store, state)
+      raise Error, "Refusing to send Pi manager fix with dirty baseline in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      iteration = (state['manager_fix_iteration'] || 0) + 1
+      if iteration > config.fetch('max_manager_review_fix_iterations', 5).to_i
+        pause_with_reason!(files, store, state, "Manager findings still need work after #{iteration - 1} fix iteration(s). See #{files.manager_review_path}")
+      end
+
+      prompt = PromptWriter.new(files, context, repo).pi_manager_fix(
+        iteration,
+        state.fetch('manager_review_iteration'),
+        state.fetch('manager_review_findings'),
+        state['manager_fix_review_findings']
+      )
+      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      state['status'] = 'running'
+      state['manager_fix_iteration'] = iteration
+      state['phase'] = 'waiting_for_pi_manager_fix'
+      state['next_action'] = 'wait_for_pi_manager_fix_status'
+      store.write(state)
+      puts "Sent manager fix #{iteration} prompt to pi-worker: #{prompt}"
+      wait_for_pi_manager_fix(context, repo, files, config, store, state)
+    end
+
+    def wait_for_pi_manager_fix(context, repo, files, config, store, state)
+      iteration = state.fetch('manager_fix_iteration')
+      result = wait_for_status(
+        files.status_path(0, 'pi', 'manager_fix', iteration),
+        expected: { agent: 'pi', phase: 'manager_fix', step: 0 },
+        config: config
+      )
+      handle_agent_status!(result, files, store, state)
+      require_nonempty_artifact!(files.manager_fix_result_path(iteration), 'Pi manager fix report')
+      state['manager_fix_followups'] = (Array(state['manager_fix_followups']) + Array(result.data['followups'])).uniq
+      state['phase'] = 'ready_to_commit_manager_fix'
+      state['next_action'] = 'commit_manager_fix'
+      store.write(state)
+      commit_manager_fix(context, repo, files, config, store, state)
+    end
+
+    def commit_manager_fix(context, repo, files, config, store, state)
+      iteration = state.fetch('manager_fix_iteration')
+      if repo.clean?
+        pause_with_reason!(files, store, state, "Pi manager fix #{iteration} produced no repo changes. See #{files.manager_fix_result_path(iteration)}")
+      end
+
+      repo.add_all
+      commit_sha = repo.commit("Manager review fix #{iteration}")
+      raise Error, "Worktree is dirty after manager fix #{iteration} commit:\n#{repo.status}" unless repo.clean?
+
+      state['manager_fix_commits'] = manager_fix_commits(state) + [commit_sha]
+      state['last_commit'] = commit_sha
+      state['pending_manager_fix_review'] = true
+      state.delete('manager_fix_review_findings')
+      state['phase'] = 'ready_to_run_final_checks'
+      state['next_action'] = 'run_final_checks_after_manager_fix'
+      store.write(state)
+      puts "Committed manager review fix #{iteration}: #{commit_sha}"
+      run_final_checks(context, repo, files, config, store, state)
+    end
+
+    def send_claude_manager_fix_review(context, repo, files, config, store, state)
+      raise Error, "Refusing to send Claude manager-fix review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      iteration = state.fetch('manager_fix_iteration')
+      commit_sha = manager_fix_commits(state).last
+      raise Error, 'Manager-fix review requires a manager-fix commit' if commit_sha.to_s.empty?
+
+      prompt = PromptWriter.new(files, context, repo).claude_manager_fix_review(
+        iteration,
+        state.fetch('manager_review_iteration'),
+        commit_sha,
+        state.fetch('manager_review_findings')
+      )
+      @tmux.send_prompt(config.fetch('claude_worker_target'), prompt)
+      state['status'] = 'running'
+      state['phase'] = 'waiting_for_claude_manager_fix_review'
+      state['next_action'] = 'wait_for_claude_manager_fix_review_status'
+      store.write(state)
+      puts "Sent manager-fix review #{iteration} prompt to claude-worker: #{prompt}"
+      wait_for_claude_manager_fix_review(context, repo, files, config, store, state)
+    end
+
+    def wait_for_claude_manager_fix_review(context, repo, files, config, store, state)
+      iteration = state.fetch('manager_fix_iteration')
+      result = wait_for_status(
+        files.status_path(0, 'claude', 'manager_fix_review', iteration),
+        expected: { agent: 'claude', phase: 'manager_fix_review', step: 0 },
+        config: config
+      )
+      handle_agent_status!(result, files, store, state)
+      require_nonempty_artifact!(files.manager_fix_review_path(iteration), 'Claude manager-fix review')
+      raise Error, "Claude manager-fix review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+
+      findings = actionable_findings(result.data)
+      state['manager_fix_reviews'] = Array(state['manager_fix_reviews']) + [{
+        'iteration' => iteration,
+        'status' => 'done',
+        'summary' => result.data['summary'],
+        'findings_count' => findings.count
+      }]
+      if findings.empty?
+        state.delete('pending_manager_fix_review')
+        state.delete('manager_fix_review_findings')
+        state['manager_review_cycles'].last['status'] = 'fixed_and_reviewed' if Array(state['manager_review_cycles']).last
+        store.write(state)
+        complete_run(context, repo, files, store, state, state.fetch('final_checks'))
+      else
+        state['manager_fix_review_findings'] = findings
+        state.delete('pending_manager_fix_review')
+        state['phase'] = 'ready_to_send_pi_manager_fix'
+        state['next_action'] = 'send_pi_manager_fix_prompt'
+        store.write(state)
+        send_pi_manager_fix(context, repo, files, config, store, state)
+      end
+    end
+
+    def manager_fix_commits(state)
+      Array(state['manager_fix_commits'])
+    end
+
     def complete_run(context, repo, files, store, state, results)
       return mark_complete_after_manager_review(context, repo, files, store, state, results) if state['manager_context_reviewed']
 
@@ -2095,12 +2421,13 @@ module Autowork
       state['status'] = 'manager_review'
       state['phase'] = 'ready_for_manager_final_review'
       state['next_action'] = 'manager_context_production_readiness_review'
+      state['manager_review_iteration'] = (state['manager_review_iteration'] || 0) + 1
       state['final_summary'] = files.final_summary_path
       state['manager_review'] = files.manager_review_path
       store.write(state)
       write_final_summary(context, repo, files, state, results)
-      write_manager_review_request(context, repo, files)
-      print_manager_final_review_instructions(repo, files)
+      write_manager_review_request(context, repo, files, state)
+      print_manager_final_review_instructions(repo, files, state)
     end
 
     def mark_complete_after_manager_review(context, repo, files, store, state, results)
@@ -2118,8 +2445,9 @@ module Autowork
       puts "- repo: #{repo.root}"
     end
 
-    def print_manager_final_review_instructions(repo, files)
-      puts "/autowork reached final manager-context production-readiness review."
+    def print_manager_final_review_instructions(repo, files, state)
+      iteration = state.fetch('manager_review_iteration')
+      puts "/autowork reached final manager-context production-readiness review #{iteration}."
       puts "Use the pi-manager conversation context that pi-worker and claude-worker did not have."
       puts "Read:"
       puts "- manager review checklist: #{files.manager_review_path}"
@@ -2128,11 +2456,13 @@ module Autowork
       puts "- super-review: #{files.super_review_path}"
       puts "- repo: #{repo.root}"
       puts "If clean, run: autowork manager-review-pass #{files.task_folder}"
-      puts "If not clean, do not mark complete; pause/report or route a fix loop."
+      puts "If findings exist, write: #{files.manager_findings_path(iteration)}"
+      puts "Then route automatically: autowork manager-review-fix #{files.task_folder}"
     end
 
-    def write_manager_review_request(context, repo, files)
-      File.write(files.manager_review_path, <<~MD)
+    def write_manager_review_request(context, repo, files, state)
+      iteration = state.fetch('manager_review_iteration')
+      text = <<~MD
         # Manager-context production-readiness review
 
         Before declaring `/autowork` complete, pi-manager must perform this final review using the full context available only in the manager conversation: original user request, draft/task creation, grilling decisions, task edits, scope boundaries, explicit user preferences, and any caveats that may not be fully captured in `task.md` or `steps.md`.
@@ -2159,7 +2489,37 @@ module Autowork
         - Is anything important missing from `final_summary.md`?
         - Is the result production-ready if the user does not perform another review?
 
-        If this review finds anything that would make the change unsafe, incomplete, misleading, under-tested, over-scoped, or not production-ready, do not mark complete. Pause or route through the appropriate fix/review loop.
+        If this review finds anything that would make the change unsafe, incomplete, misleading, under-tested, over-scoped, or not production-ready, do not mark complete. Write structured findings to:
+
+        ```text
+        #{files.manager_findings_path(iteration)}
+        ```
+
+        Required JSON shape:
+
+        ```json
+        {
+          "summary": "Why manager review did not pass",
+          "findings": [
+            {
+              "id": "MR1",
+              "severity": "BLOCKER",
+              "title": "Short title",
+              "body": "What is wrong and why it matters",
+              "recommendation": "Concrete required fix"
+            }
+          ],
+          "followups": []
+        }
+        ```
+
+        Use `BLOCKER` for production correctness/safety gaps and `MINOR` for local low-risk fixes. Include every actionable finding in one pass. Then run:
+
+        ```sh
+        autowork manager-review-fix #{files.task_folder}
+        ```
+
+        That command owns Pi routing, commits, full checks, scoped Claude review, retries, and return to a fresh manager gate. Do not send manual tmux prompts or create manual commits.
 
         If clean, record your pass below and run:
 
@@ -2169,8 +2529,11 @@ module Autowork
 
         ## Manager review result
 
+        - Review iteration: #{iteration}
         - Pending.
       MD
+      File.write(files.manager_review_path, text)
+      File.write(files.manager_review_iteration_path(iteration), text)
     end
 
     def send_pi_final_check_fix(context, repo, files, config, store, state)
@@ -2391,6 +2754,10 @@ module Autowork
 
         #{summary_super_review_markdown(files, state)}
 
+        ## Manager review loop
+
+        #{summary_manager_review_markdown(state)}
+
         ## Review follow-ups
 
         #{summary_review_followups_markdown(state)}
@@ -2421,7 +2788,10 @@ module Autowork
       super_commits = super_review_fix_commits(state).each_with_index.map do |sha, index|
         "- Super-review fix #{index + 1}: #{sha}"
       end
-      (step_commits + final_commits + super_commits).join("\n")
+      manager_commits = manager_fix_commits(state).each_with_index.map do |sha, index|
+        "- Manager review fix #{index + 1}: #{sha}"
+      end
+      (step_commits + final_commits + super_commits + manager_commits).join("\n")
     end
 
     def summary_reviews_markdown(state)
@@ -2436,7 +2806,10 @@ module Autowork
       super_reviews = Array(state['super_review_fix_reviews']).map do |review|
         "- Super-review fix review #{review.fetch('iteration')}: #{review.fetch('summary')}"
       end
-      (step_reviews + final_reviews + super_reviews).join("\n")
+      manager_reviews = Array(state['manager_fix_reviews']).map do |review|
+        "- Manager review fix review #{review.fetch('iteration')}: #{review.fetch('summary')}"
+      end
+      (step_reviews + final_reviews + super_reviews + manager_reviews).join("\n")
     end
 
     def summary_debates_markdown(files)
@@ -2462,6 +2835,15 @@ module Autowork
       lines.join("\n")
     end
 
+    def summary_manager_review_markdown(state)
+      cycles = Array(state['manager_review_cycles'])
+      return "- Awaiting manager review iteration #{state['manager_review_iteration'] || 1}." if cycles.empty?
+
+      cycles.map do |cycle|
+        "- Review #{cycle.fetch('iteration')}: #{cycle.fetch('status')} — #{cycle.fetch('summary')} (#{cycle.fetch('findings_count')} finding(s))"
+      end.join("\n")
+    end
+
     def summary_review_followups_markdown(state)
       followups = Array(state['step_review_followups'])
       return '- None.' if followups.empty?
@@ -2485,6 +2867,8 @@ module Autowork
       caveats << state['paused_reason'] if state['paused_reason']
       caveats.concat(Array(state['step_review_followups']))
       caveats.concat(super_review_followups(state))
+      caveats.concat(Array(state['manager_review_followups']))
+      caveats.concat(Array(state['manager_fix_followups']))
       return '- None.' if caveats.empty?
 
       caveats.map { |caveat| "- #{caveat}" }.join("\n")
@@ -2698,6 +3082,93 @@ module Autowork
     end
   end
 
+  class ManagerReviewFix
+    def initialize(argv, tmux: Tmux.new)
+      @argv = argv
+      @tmux = tmux
+    end
+
+    def run
+      task_folder = @argv&.first
+      raise Error, 'Usage: autowork manager-review-fix <task_folder>' unless task_folder && @argv.length == 1
+
+      files = RunFiles.new(task_folder)
+      files.mkdirs
+      lock = RunLock.new(files.lock_path)
+      lock.acquire!
+      begin
+        config = YAML.safe_load(File.read(files.config_path))
+        store = StateStore.new(files.state_path)
+        state = store.read
+        unless state['phase'] == 'ready_for_manager_final_review'
+          raise Error, "Manager findings can only route from phase ready_for_manager_final_review, got #{state['phase'].inspect}"
+        end
+
+        repo = GitRepo.new(config.fetch('repo_dir'))
+        raise Error, "Worktree must be clean before manager-review-fix:\n#{repo.status}" unless repo.clean?
+        expected_branch = config['branch_name']
+        if expected_branch && !expected_branch.empty? && repo.branch != expected_branch
+          raise Error, "Manager findings belong to branch #{expected_branch.inspect}; current branch is #{repo.branch.inspect}"
+        end
+
+        review_iteration = state.fetch('manager_review_iteration', 1)
+        findings_path = files.manager_findings_path(review_iteration)
+        validation = ManagerFindingsValidator.new.validate_file(findings_path)
+        raise Error, "Invalid manager findings JSON at #{findings_path}: #{validation.errors.join('; ')}" unless validation.valid?
+
+        data = validation.data
+        state['manager_review_findings'] = data.fetch('findings')
+        state['manager_review_followups'] = (Array(state['manager_review_followups']) + Array(data['followups'])).uniq
+        state['manager_review_cycles'] = Array(state['manager_review_cycles']) + [{
+          'iteration' => review_iteration,
+          'status' => 'routed_for_fix',
+          'summary' => data.fetch('summary'),
+          'findings_count' => data.fetch('findings').count,
+          'findings_file' => findings_path
+        }]
+        state.delete('manager_fix_review_findings')
+        state.delete('pending_manager_fix_review')
+        state['status'] = 'running'
+        state['phase'] = 'ready_to_send_pi_manager_fix'
+        state['next_action'] = 'send_pi_manager_fix_prompt'
+        store.write(state)
+        mark_manager_review_routed(files, review_iteration, findings_path)
+      ensure
+        lock.release!
+      end
+
+      Orchestrator.new(orchestrator_args(config), tmux: @tmux).run
+    end
+
+    private
+
+    def orchestrator_args(config)
+      selector = project_selector(config.fetch('task_project'), config.fetch('repo_dir'))
+      args = [selector, config.fetch('task_id').to_s]
+      args << config.fetch('review_base_ref') if config['review_base_ref_is_explicit']
+      args
+    end
+
+    def project_selector(project, repo_dir)
+      return project unless project == 'shaka_gtm'
+
+      checkout = File.basename(repo_dir)
+      index = { '1st' => '1', '2nd' => '2', '3rd' => '3' }.fetch(checkout) do
+        raise Error, "Cannot infer GTM session alias from repo_dir #{repo_dir.inspect}"
+      end
+      "shaka_gtm#{index}"
+    end
+
+    def mark_manager_review_routed(files, iteration, findings_path)
+      existing = File.file?(files.manager_review_path) ? File.read(files.manager_review_path) : "# Manager-context production-readiness review\n"
+      replacement = "- Review #{iteration} findings routed automatically.\n- Findings: #{findings_path}"
+      updated = existing.sub('- Pending.', replacement)
+      updated = "#{existing}\n#{replacement}\n" if updated == existing
+      File.write(files.manager_review_path, updated)
+      File.write(files.manager_review_iteration_path(iteration), updated)
+    end
+  end
+
   class ManagerReviewPass
     def initialize(argv)
       @argv = argv
@@ -2708,6 +3179,14 @@ module Autowork
       raise Error, 'Usage: autowork manager-review-pass <task_folder>' unless task_folder && @argv.length == 1
 
       files = RunFiles.new(task_folder)
+      config = YAML.safe_load(File.read(files.config_path))
+      repo = GitRepo.new(config.fetch('repo_dir'))
+      raise Error, "Worktree must be clean before manager-review-pass:\n#{repo.status}" unless repo.clean?
+      expected_branch = config['branch_name']
+      if expected_branch && !expected_branch.empty? && repo.branch != expected_branch
+        raise Error, "Manager review belongs to branch #{expected_branch.inspect}; current branch is #{repo.branch.inspect}"
+      end
+
       store = StateStore.new(files.state_path)
       state = store.read
       unless state['phase'] == 'ready_for_manager_final_review'
@@ -2716,6 +3195,7 @@ module Autowork
 
       state['manager_context_reviewed'] = true
       state['manager_context_reviewed_at'] = Time.now.iso8601
+      state['manager_review_passed_iteration'] = state.fetch('manager_review_iteration', 1)
       state['status'] = 'done'
       state['phase'] = 'complete'
       state['next_action'] = 'none'
@@ -2735,6 +3215,7 @@ module Autowork
       updated = existing.sub('- Pending.', "- Passed at #{state['manager_context_reviewed_at']}.\n- Result: production-ready if the user does not perform another review.")
       updated = existing + "\n- Passed at #{state['manager_context_reviewed_at']}.\n" if updated == existing && !existing.include?(state['manager_context_reviewed_at'])
       File.write(files.manager_review_path, updated)
+      File.write(files.manager_review_iteration_path(state.fetch('manager_review_passed_iteration')), updated)
     end
 
     def mark_final_summary_done(files)
@@ -2959,6 +3440,8 @@ module Autowork
         Initializer.new(@argv[1..]).run
       when 'status'
         show_status(@argv[1..])
+      when 'manager-review-fix'
+        ManagerReviewFix.new(@argv[1..]).run
       when 'manager-review-pass'
         ManagerReviewPass.new(@argv[1..]).run
       when 'rebase-base'
@@ -2986,6 +3469,7 @@ module Autowork
           autowork status <task_folder>
           autowork rebase-base [base-ref]
           autowork update-base <task_folder> <new-base-ref>
+          autowork manager-review-fix <task_folder>
           autowork manager-review-pass <task_folder>
       USAGE
     end

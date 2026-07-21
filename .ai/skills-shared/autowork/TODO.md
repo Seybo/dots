@@ -32,9 +32,12 @@
 - final manager-context production-readiness review gate:
   - stop at `ready_for_manager_final_review` after final checks, super-review, and scoped fix review pass
   - write `manager_review.md` with the manager-only context checklist
-  - require pi-manager to decide whether the result is production-ready if the user does not perform another review
+  - accept one structured `manager_reviews/manager_reviewN_findings.json` file through `autowork manager-review-fix <task_folder>`
+  - automatically route manager findings to Pi, commit `Manager review fix N`, rerun full final checks, send a scoped Claude review, and loop on Claude findings
+  - return to a fresh manager gate after Claude accepts; never auto-pass manager context after a fix
+  - require pi-manager to decide whether the final result is production-ready if the user does not perform another review
   - mark complete only through `autowork manager-review-pass <task_folder>`
-- deterministic specs for task resolution, state, status JSON, locks, pane discovery, doctor, first-cycle send/commit/review prompt flow, accepted-fix flow, debate flow, final-check fix flow, final super-review flow, super-review fix flow, manager-context final review, and final summary
+- deterministic specs for task resolution, state, status JSON, locks, pane discovery, doctor, first-cycle send/commit/review prompt flow, accepted-fix flow, debate flow, final-check fix flow, final super-review flow, super-review fix flow, automated manager-fix flow, manager-context final review, and final summary
 
 ## Intentional workflow boundaries
 

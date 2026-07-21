@@ -299,6 +299,50 @@ RSpec.describe Autowork do
       expect(result.errors).to include('step expected 2, got 1')
     end
 
+    it 'rejects a manager fix review status without findings' do
+      result = validator.validate_hash(
+        {
+          'status' => 'done',
+          'agent' => 'claude',
+          'phase' => 'manager_fix_review',
+          'step' => 0,
+          'summary' => 'accepted'
+        }
+      )
+
+      expect(result).not_to be_valid
+      expect(result.errors).to include('findings is required for completed manager_fix_review')
+    end
+
+    it 'accepts a manager fix review escalation without findings' do
+      result = validator.validate_hash(
+        {
+          'status' => 'needs_user',
+          'agent' => 'claude',
+          'phase' => 'manager_fix_review',
+          'step' => 0,
+          'summary' => 'Need a product decision',
+          'question' => 'Should this behavior be changed?'
+        }
+      )
+
+      expect(result).to be_valid
+    end
+
+    it 'accepts a failed manager fix review without findings' do
+      result = validator.validate_hash(
+        {
+          'status' => 'failed',
+          'agent' => 'claude',
+          'phase' => 'manager_fix_review',
+          'step' => 0,
+          'summary' => 'The review could not complete'
+        }
+      )
+
+      expect(result).to be_valid
+    end
+
     it 'reports invalid JSON status files' do
       path = File.join(@tmpdir, 'status.json')
       File.write(path, '{ nope')
@@ -310,6 +354,48 @@ RSpec.describe Autowork do
     end
   end
 
+  describe Autowork::ManagerFindingsValidator do
+    let(:validator) { described_class.new }
+
+    it 'accepts a complete actionable manager finding set' do
+      result = validator.validate_hash(
+        'summary' => 'Manager context found a production gap',
+        'findings' => [{
+          'id' => 'MR1',
+          'severity' => 'BLOCKER',
+          'title' => 'Wrong campaign attribution',
+          'body' => 'Current state is not a campaign event',
+          'recommendation' => 'Use the campaign-scoped endpoint'
+        }],
+        'followups' => []
+      )
+
+      expect(result).to be_valid
+    end
+
+    it 'rejects severities outside the manager review contract' do
+      result = validator.validate_hash(
+        'summary' => 'Manager context found a production gap',
+        'findings' => [{
+          'id' => 'MR1',
+          'severity' => 'HIGH',
+          'title' => 'Wrong campaign attribution',
+          'body' => 'Current state is not a campaign event',
+          'recommendation' => 'Use the campaign-scoped endpoint'
+        }]
+      )
+
+      expect(result).not_to be_valid
+    end
+
+    it 'rejects empty, incomplete, and non-actionable finding input' do
+      result = validator.validate_hash('summary' => '', 'findings' => [])
+
+      expect(result).not_to be_valid
+      expect(result.errors).to include('summary must be a non-empty string', 'findings must be a non-empty array')
+    end
+  end
+
   describe Autowork::RunFiles do
     it 'creates the expected autowork-log subdirectories' do
       task_folder = File.join(@tmpdir, 'task')
@@ -318,7 +404,7 @@ RSpec.describe Autowork do
       files.mkdirs
 
       expect(File.directory?(files.log_dir)).to be(true)
-      %w[control prompts reviews debates resolutions status].each do |name|
+      %w[control prompts reviews debates resolutions super_fixes manager_reviews manager_fixes status].each do |name|
         expect(File.directory?(File.join(files.log_dir, name))).to be(true)
       end
       expect(files.config_path).to eq(File.join(files.log_dir, 'config.yml'))
@@ -391,6 +477,21 @@ RSpec.describe Autowork do
       expect(roles.manager.title).to eq('pi-manager')
       expect(roles.pi_worker.title).to eq('pi-worker')
       expect(roles.claude_worker.title).to eq('claude-worker')
+    end
+
+    it 'submits prompt text literally, then sends Enter separately' do
+      tmux = described_class.new
+      prompt_file = '/tmp/autowork prompt.md'
+
+      expect(Autowork::Shell).to receive(:capture!)
+        .with('tmux', 'send-keys', '-t', '%3', '-l', "Please read and follow: #{prompt_file}")
+        .ordered
+      expect(tmux).to receive(:sleep).with(Autowork::Tmux::DEFAULT_SUBMIT_DELAY_SECONDS).ordered
+      expect(Autowork::Shell).to receive(:capture!)
+        .with('tmux', 'send-keys', '-t', '%3', 'Enter')
+        .ordered
+
+      tmux.send_prompt('%3', prompt_file)
     end
 
     it 'rejects missing exact pane titles' do
@@ -1529,6 +1630,139 @@ RSpec.describe Autowork do
       expect(final_summary).to include('Super-review fix review 1')
       expect(final_summary).to include('Run a provider smoke test later')
       expect(File.read(files.manager_review_path)).to include('Manager-context production-readiness review')
+      expect(File.read(files.manager_review_iteration_path(1))).to include('Review iteration: 1')
+    end
+
+    it 'commits a manager fix, reruns final checks, and sends a scoped Claude review' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      config = YAML.safe_load(File.read(files.config_path))
+      config['final_check_commands'] = ['true']
+      File.write(files.config_path, config.to_yaml)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_pi_manager_fix'
+      state['manager_review_iteration'] = 1
+      state['manager_fix_iteration'] = 1
+      state['manager_review_findings'] = [{ 'id' => 'MR1', 'severity' => 'BLOCKER', 'title' => 'Bug', 'body' => 'Broken', 'recommendation' => 'Fix it' }]
+      state_store.write(state)
+      File.write(files.manager_fix_result_path(1), "Fixed MR1\n")
+      File.write(files.status_path(0, 'pi', 'manager_fix', 1), JSON.pretty_generate(
+        'status' => 'done',
+        'agent' => 'pi',
+        'phase' => 'manager_fix',
+        'step' => 0,
+        'summary' => 'fixed manager finding',
+        'checks_run' => [],
+        'followups' => []
+      ))
+      File.write(File.join(repo, 'manager-fixed.txt'), "fixed\n")
+
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
+
+      state = state_store.read
+      expect(`git -C #{repo} log -1 --pretty=%s`.strip).to eq('Manager review fix 1')
+      expect(state['manager_fix_commits'].first).to match(/\A[0-9a-f]{40}\z/)
+      expect(state['phase']).to eq('waiting_for_claude_manager_fix_review')
+      expect(File.read(files.final_checks_path)).to include('Status: passed')
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('manager_review_claude_fix_review1_request.md'))
+    end
+
+    it 'returns to a fresh manager gate when Claude accepts a manager fix' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      fix_sha = commit_file(repo, 'manager-fixed.txt', "fixed\n", 'Manager review fix 1')
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_claude_manager_fix_review'
+      state['manager_review_iteration'] = 1
+      state['manager_fix_iteration'] = 1
+      state['manager_fix_commits'] = [fix_sha]
+      state['pending_manager_fix_review'] = true
+      state['manager_review_findings'] = [{ 'id' => 'MR1', 'severity' => 'BLOCKER', 'title' => 'Bug', 'body' => 'Broken', 'recommendation' => 'Fix it' }]
+      state['manager_review_cycles'] = [{ 'iteration' => 1, 'status' => 'routed_for_fix', 'summary' => 'one bug', 'findings_count' => 1 }]
+      state['final_checks'] = [{ 'command' => 'true', 'status' => 'passed', 'exit_status' => 0 }]
+      state_store.write(state)
+      File.write(files.manager_review_iteration_path(1), "Review iteration: 1\n")
+      File.write(files.manager_fix_review_path(1), "Manager fix accepted\n")
+      File.write(files.status_path(0, 'claude', 'manager_fix_review', 1), JSON.pretty_generate(
+        'status' => 'done',
+        'agent' => 'claude',
+        'phase' => 'manager_fix_review',
+        'step' => 0,
+        'summary' => '0 BLOCKER / 0 MINOR. Accept.',
+        'findings' => []
+      ))
+
+      described_class.new(%w[env 0003], tmux: tmux).run
+
+      state = state_store.read
+      expect(state['phase']).to eq('ready_for_manager_final_review')
+      expect(state['manager_review_iteration']).to eq(2)
+      expect(state['manager_review_cycles'].first['status']).to eq('fixed_and_reviewed')
+      expect(File.read(files.final_summary_path)).to include('Manager review fix 1', 'Manager review fix review 1')
+      expect(File.read(files.manager_review_path)).to include('manager_review2_findings.json')
+      expect(File.read(files.manager_review_iteration_path(1))).to include('Review iteration: 1')
+      expect(File.read(files.manager_review_iteration_path(2))).to include('Review iteration: 2')
+    end
+
+    it 'routes Claude manager-fix findings into the next Pi manager fix iteration' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      fix_sha = commit_file(repo, 'manager-fixed.txt', "incomplete\n", 'Manager review fix 1')
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_claude_manager_fix_review'
+      state['manager_review_iteration'] = 1
+      state['manager_fix_iteration'] = 1
+      state['manager_fix_commits'] = [fix_sha]
+      state['pending_manager_fix_review'] = true
+      state['manager_review_findings'] = [{ 'id' => 'MR1', 'severity' => 'BLOCKER', 'title' => 'Bug', 'body' => 'Broken', 'recommendation' => 'Fix it' }]
+      state['final_checks'] = [{ 'command' => 'true', 'status' => 'passed', 'exit_status' => 0 }]
+      state_store.write(state)
+      File.write(files.manager_fix_review_path(1), "One issue remains\n")
+      File.write(files.status_path(0, 'claude', 'manager_fix_review', 1), JSON.pretty_generate(
+        'status' => 'done',
+        'agent' => 'claude',
+        'phase' => 'manager_fix_review',
+        'step' => 0,
+        'summary' => '0 BLOCKER / 1 MINOR',
+        'findings' => [{ 'id' => 'MRF1', 'severity' => 'MINOR', 'title' => 'Missing regression', 'body' => 'Edge case remains', 'recommendation' => 'Add coverage' }]
+      ))
+
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
+
+      state = state_store.read
+      expect(state['phase']).to eq('waiting_for_pi_manager_fix')
+      expect(state['manager_fix_iteration']).to eq(2)
+      expect(state['manager_fix_review_findings'].first['id']).to eq('MRF1')
+      expect(tmux).to have_received(:send_prompt).with('%2', files.prompt_path('manager_review_pi_fix2_request.md'))
+      expect(File.read(files.prompt_path('manager_review_pi_fix2_request.md'))).to include('Missing regression')
     end
 
     it 'commits accepted fixes and sends a follow-up Claude review' do
@@ -1571,6 +1805,97 @@ RSpec.describe Autowork do
     end
   end
 
+  describe Autowork::ManagerReviewFix do
+    around do |example|
+      previous = ENV['AUTOWORK_WORKER_STATUS_TIMEOUT_SECONDS']
+      ENV['AUTOWORK_WORKER_STATUS_TIMEOUT_SECONDS'] = '0'
+      example.run
+    ensure
+      ENV['AUTOWORK_WORKER_STATUS_TIMEOUT_SECONDS'] = previous
+    end
+
+    it 'validates structured findings and starts the automated Pi manager-fix loop' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['status'] = 'manager_review'
+      state['phase'] = 'ready_for_manager_final_review'
+      state['manager_review_iteration'] = 1
+      state_store.write(state)
+      File.write(files.manager_review_path, "# Manager review\n\n- Pending.\n")
+      File.write(files.manager_findings_path(1), JSON.pretty_generate(
+        'summary' => 'Manager context found one production bug',
+        'findings' => [{
+          'id' => 'MR1',
+          'severity' => 'BLOCKER',
+          'title' => 'Wrong campaign attribution',
+          'body' => 'Account state is not a campaign event',
+          'recommendation' => 'Use campaign-scoped state'
+        }],
+        'followups' => ['Run a provider smoke test after deploy']
+      ))
+      File.write(files.lock_path, JSON.pretty_generate('pid' => 999_999_999))
+
+      expect { described_class.new([task_folder], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
+
+      state = state_store.read
+      expect(state['phase']).to eq('waiting_for_pi_manager_fix')
+      expect(state['manager_review_findings'].first['id']).to eq('MR1')
+      expect(state['manager_review_followups']).to include('Run a provider smoke test after deploy')
+      expect(state['manager_review_cycles'].first).to include('iteration' => 1, 'status' => 'routed_for_fix', 'findings_count' => 1)
+      expect(tmux).to have_received(:send_prompt).with('%2', files.prompt_path('manager_review_pi_fix1_request.md'))
+      expect(File.read(files.manager_review_path)).to include('findings routed automatically')
+      expect(File.file?(files.lock_path)).to eq(false)
+    end
+
+    it 'rejects manager findings while an autowork process owns the run lock' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      File.write(files.lock_path, JSON.pretty_generate('pid' => Process.pid))
+
+      expect { described_class.new([task_folder], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /already locked by live pid/)
+    end
+
+    it 'rejects invalid manager findings before sending a worker prompt' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'ready_for_manager_final_review'
+      state['manager_review_iteration'] = 1
+      state_store.write(state)
+      File.write(files.manager_findings_path(1), JSON.pretty_generate('summary' => 'bad', 'findings' => []))
+
+      expect { described_class.new([task_folder], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /findings must be a non-empty array/)
+    end
+  end
+
   describe Autowork::ManagerReviewPass do
     it 'marks a pending manager-context review as complete' do
       task_root, task_folder = make_env_task
@@ -1600,6 +1925,20 @@ RSpec.describe Autowork do
       expect(File.read(files.final_summary_path)).to include('Final status: done')
       expect(File.read(files.final_summary_path)).to include('Manager-context production-readiness review')
       expect(File.read(files.manager_review_path)).to include('production-ready if the user does not perform another review')
+    end
+
+    it 'rejects a pass from a different branch' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      system('git', '-C', repo, 'switch', '-c', 'unrelated', out: File::NULL, err: File::NULL)
+
+      expect { described_class.new([task_folder]).run }
+        .to raise_error(Autowork::Error, /Manager review belongs to branch/)
     end
   end
 

@@ -22,6 +22,7 @@ Invoke only with:
 /autowork rebase-base
 /autowork rebase-base <base-ref>
 autowork update-base <task_folder> <new-base-ref>
+autowork manager-review-fix <task_folder>
 autowork manager-review-pass <task_folder>
 ```
 
@@ -32,7 +33,7 @@ Claude is a participant in this workflow, not the orchestrator, and must not run
 
 ## Current implementation status
 
-V1 supports implementation, review, accepted fixes, re-review, bounded Pi/Claude debate facilitation, multi-step progression, final checks, automated final-check fix commits, final-check fix review, one final whole-branch `/claude-super-review`, `/claude-super-fix`-style Pi adjudication/fixes, normal scoped Claude review of super-review fix commits, final manager-context production-readiness review, and final summary. It can initialize/resume a run, send a Step N implementation prompt to `pi-worker`, wait for Pi status JSON, commit `Step N`, send a review prompt to `claude-worker`, wait for Claude review status JSON, ask Pi to classify findings, commit accepted fixes as `Step N fix M`, re-review fix commits, run bounded debate rounds for disputed/deferred findings, advance through planned steps, run configured final checks, commit final-check fixes as `Final checks fix M`, ask Claude to review final-check fix commits, run final super-review, ask Pi to adjudicate/fix super-review findings, commit `Super-review fix N`, rerun final checks, ask Claude to review super-review fix commits, stop for pi-manager's production-readiness review using manager-only context, and write `final_summary.md`. If debate remains unresolved after the configured round limit, `/autowork` pauses for human arbitration because the manager must not decide which agent is correct.
+V1 supports implementation, review, accepted fixes, re-review, bounded Pi/Claude debate facilitation, multi-step progression, final checks, automated final-check fix commits, final-check fix review, one final whole-branch `/claude-super-review`, `/claude-super-fix`-style Pi adjudication/fixes, normal scoped Claude review of super-review fix commits, final manager-context production-readiness review, automated manager-finding fix/check/Claude-review loops, and final summary. It can initialize/resume a run, send a Step N implementation prompt to `pi-worker`, wait for Pi status JSON, commit `Step N`, send a review prompt to `claude-worker`, wait for Claude review status JSON, ask Pi to classify findings, commit accepted fixes as `Step N fix M`, re-review fix commits, run bounded debate rounds for disputed/deferred findings, advance through planned steps, run configured final checks, commit final-check fixes as `Final checks fix M`, ask Claude to review final-check fix commits, run final super-review, ask Pi to adjudicate/fix super-review findings, commit `Super-review fix N`, rerun final checks, ask Claude to review super-review fix commits, stop for pi-manager's production-readiness review using manager-only context, and write `final_summary.md`. If debate remains unresolved after the configured round limit, `/autowork` pauses for human arbitration because the manager must not decide which agent is correct.
 
 Implemented helper:
 
@@ -40,7 +41,7 @@ Implemented helper:
 /Users/inseybo/.ai/skills-shared/autowork/bin/autowork
 ```
 
-It currently resolves/validates a task, relies on `/workit ... create-steps-only` preflight to create/update `steps.md` and verify/setup the task branch, requires a clean repo for normal orchestration start, discovers tmux panes, creates `autowork-log/`, writes config/state, sends prompts with `tmux send-keys`, waits for status JSON, commits Step N implementations, sends Claude review prompts, asks Pi to classify review findings, commits accepted fixes, sends follow-up review prompts, advances through planned steps, runs final checks, runs the final super-review gate, writes `final_checks.md`, `super-review.md`, super-fix artifacts, `manager_review.md`, and `final_summary.md`.
+It currently resolves/validates a task, relies on `/workit ... create-steps-only` preflight to create/update `steps.md` and verify/setup the task branch, requires a clean repo for normal orchestration start, discovers tmux panes, creates `autowork-log/`, writes config/state, sends prompts with `tmux send-keys`, waits for status JSON, commits Step N implementations, sends Claude review prompts, asks Pi to classify review findings, commits accepted fixes, sends follow-up review prompts, advances through planned steps, runs final checks, runs the final super-review gate, routes structured manager findings through automated Pi fix and scoped Claude review loops, and writes `final_checks.md`, `super-review.md`, manager/super-fix artifacts, `manager_review.md`, and `final_summary.md`.
 
 ## Doctor command
 
@@ -86,7 +87,9 @@ Automate the existing manual loop:
 13. Rerun final checks after super-review fixes.
 14. Ask Claude for a normal scoped review of super-review fix commits, not another full super-review.
 15. Stop for pi-manager's manager-context production-readiness review.
-16. Mark complete only after pi-manager concludes the result is production-ready if the user does not perform another review.
+16. If pi-manager finds issues, write one structured findings file and invoke `autowork manager-review-fix <task_folder>`.
+17. Let `/autowork` route the findings to Pi, commit `Manager review fix N`, rerun final checks, obtain a scoped Claude review, loop on review findings, and return to a fresh manager gate.
+18. Mark complete only after pi-manager concludes the result is production-ready if the user does not perform another review.
 
 The user is not expected to review every intermediate step, and the final result should be production-ready without relying on another user review.
 
@@ -292,6 +295,14 @@ Create all orchestration files under the task folder:
     super_review_pi_fix1_result.md
     super_review_claude_fix_review1_result.md
 
+  manager_reviews/
+    manager_review1.md
+    manager_review1_findings.json
+
+  manager_fixes/
+    manager_review_pi_fix1_result.md
+    manager_review_claude_fix_review1_result.md
+
   status/
     step1_pi_implement_status.json
     step1_claude_review1_status.json
@@ -299,6 +310,8 @@ Create all orchestration files under the task folder:
     step0_claude_super_review1_status.json
     step0_pi_super_fix1_status.json
     step0_claude_super_fix_review1_status.json
+    step0_pi_manager_fix1_status.json
+    step0_claude_manager_fix_review1_status.json
 
   final_checks.md
   super-review.md
@@ -348,13 +361,15 @@ Resume rule:
 
 `/autowork` writes prompt files and sends only the file path to the target pane.
 
-Example tmux send:
+Prompt submission must use the helper's tested literal-text path with a short configurable delay before Enter:
 
 ```sh
-tmux send-keys -t "$claude_target" "Please read and follow: <prompt_file>" C-m
+tmux send-keys -t "$claude_target" -l "Please read and follow: <prompt_file>"
+sleep "${AUTOWORK_SEND_SUBMIT_DELAY_SECONDS:-0.2}"
+tmux send-keys -t "$claude_target" Enter
 ```
 
-Do not paste large prompt bodies into tmux panes.
+Do not paste large prompt bodies into tmux panes. Do not bypass `Tmux#send_prompt` for manager fixes; `autowork manager-review-fix` owns delivery, status waits, commits, checks, and reviews.
 
 Agents write their own review, debate, resolution, and status content into the assigned files.
 `/autowork` coordinates the sequence.
@@ -403,9 +418,11 @@ classify
 fix
 debate
 final_checks
+manager_fix
+manager_fix_review
 ```
 
-If a status file is missing or invalid, ask the responsible agent once to rewrite it correctly. If still invalid, pause and ask the user.
+A completed `manager_fix_review` status must include a `findings` array, including an empty array for an accepted fix. `needs_user` and `failed` statuses may omit `findings`. If a status file is missing or invalid, ask the responsible agent once to rewrite it correctly. If still invalid, pause and ask the user.
 
 If an agent needs user input, it writes:
 
@@ -475,6 +492,7 @@ git add -A
 git commit -m "Step N"
 git commit -m "Step N fix M"
 git commit -m "Final checks fix M"
+git commit -m "Manager review fix M"
 ```
 
 Also allowed by `/autowork` invocation during preflight only:
@@ -516,6 +534,7 @@ Step 1 fix 2
 Step 2
 Step 2 fix 1
 Final checks fix 1
+Manager review fix 1
 ```
 
 Core invariant:
@@ -672,7 +691,40 @@ If final checks fail:
 8. if Claude finds issues, send them to Pi as another final-check fix iteration
 9. repeat until checks pass and Claude accepts, or until `max_final_check_fix_iterations` is hit
 
-After final checks pass and any final-check fix commits are accepted, run the final super-review gate described above. Then stop at `ready_for_manager_final_review` so pi-manager can perform a manager-context production-readiness review using the original conversation, task creation, grilling, scope, and other manager-only context. Finish only when final checks pass, final-check fix commits are accepted, final super-review has no actionable findings or those findings have been adjudicated/fixed, Claude accepts the scoped super-review fix review, and pi-manager records that the result is production-ready if the user does not perform another review. Successful completion writes `final_summary.md`.
+After final checks pass and any final-check fix commits are accepted, run the final super-review gate described above. Then stop at `ready_for_manager_final_review` so pi-manager can perform a manager-context production-readiness review using the original conversation, task creation, grilling, scope, and other manager-only context.
+
+## Manager-context finding loop
+
+The manager gate is the only phase that can use manager-only conversation context. It must still use the orchestrator for any code-changing response.
+
+If manager review finds actionable issues:
+
+1. Write all findings in one pass to the exact `manager_reviews/manager_reviewN_findings.json` path printed by `/autowork` and listed in `manager_review.md`.
+2. Use this shape. Manager findings must use the existing autowork actionable severity vocabulary: `BLOCKER` or `MINOR`. Each gate also preserves a per-iteration human-readable copy at `manager_reviews/manager_reviewN.md`; `manager_review.md` is the current-gate copy.
+   ```json
+   {
+     "summary": "Why manager review did not pass",
+     "findings": [
+       {
+         "id": "MR1",
+         "severity": "BLOCKER",
+         "title": "Short title",
+         "body": "What is wrong and why it matters",
+         "recommendation": "Concrete required fix"
+       }
+     ],
+     "followups": []
+   }
+   ```
+3. Invoke `autowork manager-review-fix <task_folder>` immediately. The original `/autowork` invocation grants this manager loop permission to stage and commit according to the protocol; do not ask the user to route each finding.
+4. The helper validates the findings and clean branch, sends a Pi fix prompt through `Tmux#send_prompt`, waits for status JSON, commits `Manager review fix N`, reruns configured full final checks, and sends the commit to Claude for scoped review.
+5. If Claude finds issues in the manager fix, `/autowork` sends all of them back to Pi in the next manager-fix iteration. Pi may request user input but may not silently defer or dispute a manager-context requirement.
+6. When Claude accepts, `/autowork` returns to a fresh `ready_for_manager_final_review` gate. Pi-manager reviews the final result again using manager-only context.
+7. Only `autowork manager-review-pass <task_folder>` marks the run complete.
+
+Do not manually call `tmux send-keys`, stage, commit, or construct ad hoc manager-fix status files. Normal resume rules apply if a worker timeout interrupts the manager-fix loop.
+
+Finish only when final checks pass, final-check fix commits are accepted, final super-review has no actionable findings or those findings have been adjudicated/fixed, every manager-fix commit has passed scoped Claude review, and pi-manager records that the result is production-ready if the user does not perform another review. Successful completion writes `final_summary.md`.
 
 ## Limits
 
@@ -683,6 +735,7 @@ max_fix_iterations_per_step: 10
 max_debate_rounds_per_disagreement: 5
 max_final_check_fix_iterations: 5
 max_super_review_fix_iterations: 3
+max_manager_review_fix_iterations: 5
 max_total_commits: steps_count * 3
 max_runtime_hours_per_run: 1
 worker_status_timeout_minutes: 10
@@ -722,7 +775,13 @@ Include:
 - manager-context production-readiness review result
 - any unresolved caveats
 
-Then stop and tell pi-manager where to review. If the manager-context review passes, record completion with:
+Then stop and tell pi-manager where to review. If findings exist, write the printed structured findings file and route it with:
+
+```text
+autowork manager-review-fix <task_folder>
+```
+
+After the automated fix/check/Claude-review loop returns to a fresh manager gate, review again. If the manager-context review passes, record completion with:
 
 ```text
 autowork manager-review-pass <task_folder>
