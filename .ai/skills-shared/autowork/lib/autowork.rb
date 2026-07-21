@@ -2756,7 +2756,7 @@ module Autowork
     end
 
     def run
-      target_base_ref = parse_target_base_ref
+      requested_target_base_ref = parse_target_base_ref
       context = TaskResolver.new([], cwd: @cwd).resolve
       files = RunFiles.new(context.task_folder)
       raise Error, "Missing autowork config: #{files.config_path}" unless File.file?(files.config_path)
@@ -2772,8 +2772,8 @@ module Autowork
       old_base_commit = config['review_base_commit']
       raise Error, 'Missing review_base_commit; cannot safely determine which commits belong to this task' if old_base_commit.to_s.empty?
 
-      target_base_ref ||= old_base_ref
       repo.fetch_origin
+      target_base_ref = resolve_target_base_ref(repo, requested_target_base_ref || old_base_ref)
       target_base_commit = repo.ref_commit(target_base_ref)
       unless repo.ancestor?(old_base_commit, 'HEAD')
         raise Error, "Recorded review_base_commit #{old_base_commit} is not an ancestor of HEAD; stop and inspect branch history before rebasing"
@@ -2802,9 +2802,20 @@ module Autowork
 
     def parse_target_base_ref
       return nil if @argv.empty?
-      return @argv[1] if @argv.length == 2 && @argv[0] == '--base' && !@argv[1].to_s.empty?
+      return @argv[0] if @argv.length == 1 && !@argv[0].to_s.empty? && !@argv[0].start_with?('-')
 
-      raise Error, 'Usage: autowork rebase-base [--base <new-base-ref>]'
+      raise Error, 'Usage: autowork rebase-base [base-ref]'
+    end
+
+    def resolve_target_base_ref(repo, base_ref)
+      case base_ref
+      when 'master'
+        repo.ref_exists?('origin/master') ? 'origin/master' : 'master'
+      when 'main'
+        repo.ref_exists?('origin/main') ? 'origin/main' : 'main'
+      else
+        base_ref
+      end
     end
 
     def update_base_metadata(files, config, repo, expected_branch, old_base_ref, old_base_commit, target_base_ref, target_base_commit)
@@ -2973,7 +2984,7 @@ module Autowork
           autowork init [project-or-gtm-session] [task_id] [full-base-branch-or-ref]
           autowork doctor [--no-send-test]
           autowork status <task_folder>
-          autowork rebase-base [--base <new-base-ref>]
+          autowork rebase-base [base-ref]
           autowork update-base <task_folder> <new-base-ref>
           autowork manager-review-pass <task_folder>
       USAGE

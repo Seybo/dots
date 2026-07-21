@@ -20,7 +20,7 @@ Invoke only with:
 /autowork doctor
 /autowork doctor --no-send-test
 /autowork rebase-base
-/autowork rebase-base --base <new-base-ref>
+/autowork rebase-base <base-ref>
 autowork update-base <task_folder> <new-base-ref>
 autowork manager-review-pass <task_folder>
 ```
@@ -123,7 +123,7 @@ Invocation:
 
 ```text
 /autowork rebase-base
-/autowork rebase-base --base <new-base-ref>
+/autowork rebase-base <base-ref>
 ```
 
 Examples:
@@ -134,11 +134,11 @@ Examples:
   ```
 - Parent branch merged and the task should now be based on `master`:
   ```text
-  /autowork rebase-base --base master
+  /autowork rebase-base master
   ```
 - Task should move from one stacked parent to another:
   ```text
-  /autowork rebase-base --base origin/example-parent-branch
+  /autowork rebase-base origin/example-parent-branch
   ```
 
 Rules:
@@ -150,19 +150,22 @@ Rules:
 5. Require the current branch to equal stored `branch_name` when present.
 6. Refuse to run while `<task_folder>/autowork-log/run.lock` exists.
 7. Fetch origin.
-8. If `--base <new-base-ref>` is passed, use that as the target base; otherwise use current `review_base_ref`.
-9. Resolve the target base ref; do not use branch upstream (`@{u}`), and do not use `main`/`master` unless `review_base_ref` or `--base` says so.
+8. If positional `<base-ref>` is passed, use that as the target base; otherwise use current `review_base_ref`.
+9. Resolve the target base ref; after fetching, `master` means `origin/master` when it exists, and `main` means `origin/main` when it exists. Preserve full refs like `origin/example-parent-branch` exactly. Do not use branch upstream (`@{u}`).
 10. Verify recorded `review_base_commit` is an ancestor of the current branch. If it is not, stop and ask for user direction.
 11. Rebase the current branch from the recorded old base onto the target base ref:
     ```bash
     git -C <repo_dir> rebase --onto <target-base-ref> <review_base_commit>
     ```
-12. If conflicts occur, stop with a conflict report at `<task_folder>/autowork-log/rebase_conflicts.md` containing, for each conflict:
+12. If conflicts occur, resolve them when the correct resolution is clear.
+    For each resolved conflict, write a report to `<task_folder>/autowork-log/rebase_conflicts.md` with:
     - file
-    - conflict
-    - kept side
+    - what conflicted
+    - kept side or combined resolution
     - reason
     - checks run
+
+    If the correct resolution is not clear, leave the rebase paused, write the unresolved conflict report, and ask the user.
 13. After a successful rebase, update active base metadata only:
     ```yaml
     review_base_ref: <target-base-ref>

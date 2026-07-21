@@ -619,7 +619,7 @@ RSpec.describe Autowork do
       expect(Autowork::GitRepo.new(repo).ancestor?('parent-task', 'HEAD')).to be(true)
     end
 
-    it 'rebases onto a new base passed with --base and preserves the original base' do
+    it 'rebases onto a positional new base and preserves the original base' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
       add_origin_remote(repo)
@@ -635,20 +635,21 @@ RSpec.describe Autowork do
       commit_file(repo, 'task.txt', "task\n", 'task work')
       system('git', '-C', repo, 'checkout', 'master', out: File::NULL, err: File::NULL)
       master_sha = commit_file(repo, 'master.txt', "master\n", 'advance master')
+      system('git', '-C', repo, 'push', 'origin', 'master', out: File::NULL, err: File::NULL)
       system('git', '-C', repo, 'checkout', 'mikhail/sc-0003/task', out: File::NULL, err: File::NULL)
 
-      Autowork::BaseRebaser.new(%w[--base master], cwd: repo).run
+      Autowork::BaseRebaser.new(%w[master], cwd: repo).run
 
       files = Autowork::RunFiles.new(task_folder)
       config = YAML.safe_load(File.read(files.config_path))
       state = Autowork::StateStore.new(files.state_path).read
       expect(config['original_review_base_ref']).to eq('parent-task')
       expect(config['original_review_base_commit']).to eq(base_sha)
-      expect(config['review_base_ref']).to eq('master')
+      expect(config['review_base_ref']).to eq('origin/master')
       expect(config['review_base_commit']).to eq(master_sha)
       expect(state['original_review_base_ref']).to eq('parent-task')
-      expect(state['review_base_ref']).to eq('master')
-      expect(Autowork::GitRepo.new(repo).ancestor?('master', 'HEAD')).to be(true)
+      expect(state['review_base_ref']).to eq('origin/master')
+      expect(Autowork::GitRepo.new(repo).ancestor?('origin/master', 'HEAD')).to be(true)
     end
 
     it 'keeps waiting when a status file is temporarily invalid while being written' do
