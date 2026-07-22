@@ -10,6 +10,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 ## GitHub / PRs / code review
 
 - `/skill:claude-super-review` — default deep code-review workflow for PRs, branches, diffs, and uncommitted changes.
+- `/skill:claude-super-fix` — verify and apply real, in-scope fixes from a saved super-review report.
 - `/skill:addressit` — interactively fetch and address GitHub PR review comments one at a time.
 - `/skill:delete-merged-branches` — delete local git branches that were merged and removed from remote.
 - GitHub PR review fetch rule — source: `/Users/inseybo/.pi/agent/AGENTS.md` and project `AGENTS.md` files.
@@ -22,11 +23,15 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `/skill:draftit` — save selected conversation context into a draft task folder.
 - `/skill:workit` — start work from an existing task folder.
 - `/skill:sumit` — summarize a task file into PR-description text with reviewer gotchas and copy it to the clipboard.
+- `/skill:autowork` — orchestrate an existing task plan across Pi and Claude panes, with commits, reviews, checks, and bounded fixes.
 
 ## Local dev environment / dotfiles
 
 - `/skill:agent-permissions` — explain or update Claude Code and Pi command permissions/allowlists.
+- `/skill:dots-backup` — report dotfiles backup destinations, coverage, overlaps, and stored run status.
 - `/skill:dots-check` — scan dotfiles changes for secrets or sensitive data before publishing.
+- `/skill:dots-commit` — review uncommitted dotfiles changes and suggest focused commit groups and messages.
+- `/skill:skills-manager` — audit and manage external Claude and Pi skills through the controlled installer.
 - `/skill:misc-helper` / `/misc-helper` — run small personal helper utilities, currently DaVinci Resolve process cleanup.
 - Dev-env refs — source: `/Users/inseybo/.dots/refs/dev-env`.
 - Dots repo rules — source: `/Users/inseybo/.dots/AGENTS.md` and `/Users/inseybo/.pi/agent/AGENTS.md`.
@@ -47,6 +52,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 ## Documentation lookup
 
 - `/skill:find-docs` — fetch current documentation, API references, and examples for libraries, frameworks, SDKs, CLIs, and cloud services.
+- `/skill:web-search` — search current public information through the isolated Brave broker.
 
 ## Explaining code and flows
 
@@ -63,6 +69,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 
 ## Abbreviations
 
+- `00ao` — answer only after investigating; do not change files or state.
 - `00ex` — explain referenced text in simple, precise terms.
 - `00gf` — give feedback on referenced idea or text.
 - `00rar` — read the other agent's latest task-folder review file (`claude_review*.md` in Pi, `pi_review*.md` in Claude).

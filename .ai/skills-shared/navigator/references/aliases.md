@@ -5,6 +5,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 ## GitHub / PRs
 
 - `github`, `gh`, `pr`, `pull request`, `review PR`, `review my branch`, `look at diff`, `code review` → `/skill:claude-super-review`
+- `fix super-review`, `address super-review findings`, `apply review fixes` → `/skill:claude-super-fix`
 - `review comments`, `address comments`, `inline comments`, `review id` → `/skill:addressit`
 - `stale branches`, `merged branches`, `delete branches` → `/skill:delete-merged-branches`
 
@@ -16,12 +17,16 @@ Use this file to map vague user wording to likely capabilities. The exact source
 - `draft task`, `save this for later`, `capture context` → `/skill:draftit`
 - `start task`, `work on task` → `/skill:workit`
 - `summarize task`, `task summary`, `PR text from task`, `PR description from task` → `/skill:sumit`
+- `autonomous task`, `orchestrate task`, `run task workflow automatically` → `/skill:autowork`
 
 ## Local dev environment / dotfiles
 
 - `local dev environment`, `dev env`, `dev-env refs`, `refs/dev-env` → read `/Users/inseybo/.dots/refs/dev-env`
 - `permission`, `allowlist`, `approval prompt`, `agent permissions`, `pi permissions`, `claude permissions` → `/skill:agent-permissions`
 - `publish dots`, `secret scan`, `sensitive data`, `dotfiles check` → `/skill:dots-check`
+- `backup status`, `backup coverage`, `dotfiles backup` → `/skill:dots-backup`
+- `prepare dots commit`, `commit dotfiles`, `suggest commits` → `/skill:dots-commit`
+- `install external skill`, `update external skill`, `audit skill` → `/skill:skills-manager`
 - `davinci`, `resolve stuck`, `kill resolve`, `stuck app process` → `/skill:misc-helper` or `/misc-helper davinci-kill`
 
 ## Themes / UI
@@ -40,6 +45,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 ## Docs
 
 - `docs`, `documentation`, `api reference`, `how do I use library`, `version migration`, `CLI usage` → `/skill:find-docs`
+- `search web`, `web research`, `current public information`, `compare options` → `/skill:web-search`
 
 ## Explanation
 
@@ -55,6 +61,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 
 ## Abbreviations
 
+- `00ao` → answer only after investigating; do not change files or state.
 - `00ex` → explain referenced text.
 - `00gf` → give feedback on referenced text or idea.
 - `00rar` → read the other agent's latest task-folder review file (`claude_review*.md` in Pi, `pi_review*.md` in Claude).
