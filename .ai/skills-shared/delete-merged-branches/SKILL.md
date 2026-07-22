@@ -2,7 +2,8 @@
 name: delete-merged-branches
 description: >-
   Delete local git branches that were merged and removed from remote.
-  Command-only skill. Invoke only via /delete-merged-branches.
+  Command-only skill. In Pi, invoke via /skill:delete-merged-branches;
+  /delete-merged-branches is also accepted where that alias is exposed.
 disable-model-invocation: true
 ---
 
@@ -12,9 +13,10 @@ This is a command-only skill.
 
 ## Invocation
 
-Use only:
+In Pi, use either:
 
 ```text
+/skill:delete-merged-branches [prefix]
 /delete-merged-branches [prefix]
 ```
 

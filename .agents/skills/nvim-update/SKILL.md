@@ -5,9 +5,10 @@ description: Audit the local Neovim config under .config/nvim and report whether
 
 # Nvim Update
 
-Use this skill only for the command-style invocation:
+Use this skill only for an explicit command-style invocation:
 
-- `/nvim-update`
+- `/skill:nvim-update`
+- `/nvim-update` where that short alias is exposed
 
 This skill is repo-specific to `~/.dots` and audits only `~/.dots/.config/nvim`.
 

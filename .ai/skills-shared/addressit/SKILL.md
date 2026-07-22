@@ -3,7 +3,8 @@ name: addressit
 description: >-
   Interactively fetch and address GitHub PR review comments one at a time.
   Accepts PR links, review/comment links, reviewer filters, and time windows.
-  Command-only skill. Invoke only via /addressit.
+  Command-only skill. In Pi, invoke via /skill:addressit; /addressit is also
+  accepted where that alias is exposed.
 disable-model-invocation: true
 ---
 
@@ -13,7 +14,13 @@ This is a command-only skill for addressing PR review feedback interactively.
 
 ## Invocation
 
-Use only:
+In Pi, use:
+
+```text
+/skill:addressit <pr-number-or-github-url-or-filter>
+```
+
+Where the short alias is exposed, this is equivalent:
 
 ```text
 /addressit <pr-number-or-github-url-or-filter>

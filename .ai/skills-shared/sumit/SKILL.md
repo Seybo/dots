@@ -5,7 +5,8 @@ description: >-
   Deployment, and Gotchas sections, then copy it to the clipboard. Include
   implementation/review nuances that help AI reviewer agents avoid false
   positives and missed issues. Can infer the project and story ID from the
-  current checkout and git branch. Command-only skill. Invoke only via /sumit.
+  current checkout and git branch. Command-only skill. In Pi, invoke via
+  /skill:sumit; /sumit is also accepted where that alias is exposed.
 disable-model-invocation: true
 ---
 
@@ -15,9 +16,10 @@ This is a command-only skill.
 
 ## Invocation
 
-Use only:
+In Pi, use either:
 
 ```text
+/skill:sumit
 /sumit
 /sumit <project>
 /sumit <project> <task_id>

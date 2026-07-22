@@ -5,7 +5,8 @@ description: >-
   or create a Shortcut story only when given a story ID or a task.md with complete Story details.
   Supports a manual task name, a Shortcut story ID, a task.md path, a draftNN reference,
   or inferring the project and Shortcut story ID from the current git branch.
-  Command-only skill. Invoke only via /taskit.
+  Command-only skill. In Pi, invoke via /skill:taskit; /taskit is also
+  accepted where that alias is exposed.
 disable-model-invocation: true
 ---
 
@@ -15,9 +16,10 @@ This is a command-only skill.
 
 ## Invocation
 
-Use only:
+In Pi, use either:
 
 ```text
+/skill:taskit
 /taskit
 /taskit <project>
 /taskit <project> <task name>

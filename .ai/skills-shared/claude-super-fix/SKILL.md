@@ -1,6 +1,11 @@
 ---
 name: claude-super-fix
-description: Command-only companion to claude-super-review. Use only when the user invokes /claude-super-fix to verify and address findings from a saved super-review.md report or pasted external review feedback. Applies only real, in-scope fixes; rejects noise and scope creep; never stages, commits, pushes, changes branches, stashes, or edits PR/MR metadata.
+description: >-
+  Command-only companion to claude-super-review. In Pi, use /skill:claude-super-fix
+  to verify and address findings from a saved super-review.md report or pasted
+  external review feedback; /claude-super-fix is also accepted where that alias
+  is exposed. Applies only real, in-scope fixes; rejects noise and scope creep;
+  never stages, commits, pushes, changes branches, stashes, or edits PR/MR metadata.
 disable-model-invocation: true
 ---
 
@@ -8,11 +13,13 @@ disable-model-invocation: true
 
 Companion skill for `/claude-super-review`.
 
-Use this only when the user explicitly invokes:
+Use this only when the user explicitly invokes either the Pi form:
 
-- `/claude-super-fix`
-- `/claude-super-fix <path-to-super-review.md>`
-- `/claude-super-fix <pasted findings>`
+- `/skill:claude-super-fix`
+- `/skill:claude-super-fix <path-to-super-review.md>`
+- `/skill:claude-super-fix <pasted findings>`
+
+The short `/claude-super-fix` forms are equivalent where that alias is exposed.
 
 Do not trigger implicitly for generic review, fix, or PR-feedback requests.
 

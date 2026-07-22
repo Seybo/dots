@@ -3,8 +3,8 @@ name: projectit
 description: >-
   Create a new project workspace for the task workflow. Creates the task root under
   /Volumes/dev/_tasks/<project>, creates the expected code directory, runs git init
-  there, and creates a matching Zellij layout. Command-only skill. Invoke only via
-  /projectit.
+  there, and creates a matching Zellij layout. Command-only skill. In Pi, invoke
+  via /skill:projectit; /projectit is also accepted where that alias is exposed.
 disable-model-invocation: true
 ---
 
@@ -14,9 +14,10 @@ This is a command-only skill.
 
 ## Invocation
 
-Use only:
+In Pi, use either:
 
 ```text
+/skill:projectit help
 /projectit help
 /projectit <project>
 ```

@@ -3,8 +3,8 @@ name: autowork
 description: >-
   Pi-only command. Autonomously executes an existing task plan by coordinating
   visible Pi and Claude tmux panes, committing each code-changing iteration,
-  collecting Claude reviews/debates, and running final checks. Invoke only via
-  /autowork.
+  collecting Claude reviews/debates, and running final checks. In Pi, invoke via
+  /skill:autowork; /autowork is also accepted where that alias is exposed.
 disable-model-invocation: true
 ---
 
@@ -12,9 +12,10 @@ disable-model-invocation: true
 
 This is a **Pi-only command skill**.
 
-Invoke only with:
+In Pi, use either:
 
 ```text
+/skill:autowork
 /autowork
 /autowork <task_id> <full-base-branch-or-ref>
 /autowork <project-or-gtm-session> [task_id] [full-base-branch-or-ref]

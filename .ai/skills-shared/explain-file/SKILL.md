@@ -3,7 +3,8 @@ name: explain-file
 description: >-
   Explain how a file works paragraph by paragraph, with special attention to
   context, edge cases, weird code, and why the implementation looks the way it does.
-  Command-only skill. Invoke only via /explain-file.
+  Command-only skill. In Pi, invoke via /skill:explain-file; /explain-file is
+  also accepted where that alias is exposed.
 ---
 
 # Explain File
@@ -12,9 +13,10 @@ This is a command-only skill.
 
 ## Invocation
 
-Use only:
+In Pi, use either:
 
 ```text
+/skill:explain-file <path-to-file>
 /explain-file <path-to-file>
 ```
 

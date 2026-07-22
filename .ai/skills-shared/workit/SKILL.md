@@ -5,7 +5,8 @@ description: >-
   Reads the task's task.md and proceeds with the work it describes.
   Can infer the project and task/story ID from the current git branch.
   Supports create-steps-only mode for /autowork preflight.
-  Command-only skill. Invoke only via /workit.
+  Command-only skill. In Pi, invoke via /skill:workit; /workit is also
+  accepted where that alias is exposed.
 ---
 
 # Workit
@@ -14,9 +15,10 @@ This is a command-only skill.
 
 ## Invocation
 
-Use only:
+In Pi, use either:
 
 ```text
+/skill:workit
 /workit
 /workit <project-or-gtm-session> [task_id]
 /workit <project-or-gtm-session> [task_id] --base <full-base-branch-or-ref>

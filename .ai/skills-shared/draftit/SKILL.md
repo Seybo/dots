@@ -5,7 +5,8 @@ description: >-
   conversation context/text into task.md for later conversion via /taskit <project> draftNN.
   Local-only drafts are the default; include epic: <id> to make a Shortcut-ready draft.
   Can infer the project from the current checkout when it is not passed.
-  Command-only skill. Invoke only via /draftit.
+  Command-only skill. In Pi, invoke via /skill:draftit; /draftit is also
+  accepted where that alias is exposed.
 disable-model-invocation: true
 ---
 
@@ -15,9 +16,10 @@ This is a command-only skill.
 
 ## Invocation
 
-Use only:
+In Pi, use either:
 
 ```text
+/skill:draftit help
 /draftit help
 /draftit <project> [epic: <id>] [name: <title>] [context-reference-or-text]
 /draftit [epic: <id>] [name: <title>] [context-reference-or-text]
