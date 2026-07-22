@@ -181,6 +181,11 @@ vim.keymap.set('n', '<c-g>cm', function()
   vim.cmd('edit!')
 end, { desc = '[ Git ] Checkout master' })
 
+-- -- [[ Theme ]] -- --
+vim.keymap.set('n', '<leader>tr', function()
+  dofile(vim.env.STOW_DIR .. '/themes/active/nvim.lua')
+end, { desc = '[ Theme ] Reload' })
+
 -- -- [[ Misc ]] -- --
 
 vim.keymap.set('n', '<a-n><a-n>', ':set nornu<CR>', { silent = true }) -- absolute line numbers
