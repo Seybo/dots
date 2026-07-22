@@ -5,6 +5,7 @@ description: >-
   visible Pi and Claude tmux panes, committing each code-changing iteration,
   collecting Claude reviews/debates, and running final checks. Invoke only via
   /autowork.
+disable-model-invocation: true
 ---
 
 # Autowork

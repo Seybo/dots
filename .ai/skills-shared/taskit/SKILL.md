@@ -6,6 +6,7 @@ description: >-
   Supports a manual task name, a Shortcut story ID, a task.md path, a draftNN reference,
   or inferring the project and Shortcut story ID from the current git branch.
   Command-only skill. Invoke only via /taskit.
+disable-model-invocation: true
 ---
 
 # Taskit

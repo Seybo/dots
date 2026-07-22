@@ -3,6 +3,7 @@ name: misc-helper
 description: Run small personal helper utilities from one command namespace. Command-only skill. Invoke via /misc-helper <helper>, currently supports davinci-kill, cache-clean, and tmux-bar-reset.
 allowed-tools:
   - "bash(/Users/inseybo/.ai/skills-shared/misc-helper/scripts/misc-helper *)"
+disable-model-invocation: true
 ---
 
 # Misc Helper

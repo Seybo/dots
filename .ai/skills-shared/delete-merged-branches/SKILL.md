@@ -3,6 +3,7 @@ name: delete-merged-branches
 description: >-
   Delete local git branches that were merged and removed from remote.
   Command-only skill. Invoke only via /delete-merged-branches.
+disable-model-invocation: true
 ---
 
 # Delete Merged Branches

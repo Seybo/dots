@@ -6,6 +6,7 @@ description: >-
   Local-only drafts are the default; include epic: <id> to make a Shortcut-ready draft.
   Can infer the project from the current checkout when it is not passed.
   Command-only skill. Invoke only via /draftit.
+disable-model-invocation: true
 ---
 
 # Draftit

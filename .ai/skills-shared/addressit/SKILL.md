@@ -4,6 +4,7 @@ description: >-
   Interactively fetch and address GitHub PR review comments one at a time.
   Accepts PR links, review/comment links, reviewer filters, and time windows.
   Command-only skill. Invoke only via /addressit.
+disable-model-invocation: true
 ---
 
 # Addressit

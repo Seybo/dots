@@ -1,6 +1,7 @@
 ---
 name: claude-super-fix
 description: Command-only companion to claude-super-review. Use only when the user invokes /claude-super-fix to verify and address findings from a saved super-review.md report or pasted external review feedback. Applies only real, in-scope fixes; rejects noise and scope creep; never stages, commits, pushes, changes branches, stashes, or edits PR/MR metadata.
+disable-model-invocation: true
 ---
 
 # claude-super-fix

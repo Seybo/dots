@@ -6,6 +6,7 @@ description: >-
   implementation/review nuances that help AI reviewer agents avoid false
   positives and missed issues. Can infer the project and story ID from the
   current checkout and git branch. Command-only skill. Invoke only via /sumit.
+disable-model-invocation: true
 ---
 
 # Sumit

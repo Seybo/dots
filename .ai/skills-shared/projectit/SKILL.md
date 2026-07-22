@@ -5,6 +5,7 @@ description: >-
   /Volumes/dev/_tasks/<project>, creates the expected code directory, runs git init
   there, and creates a matching Zellij layout. Command-only skill. Invoke only via
   /projectit.
+disable-model-invocation: true
 ---
 
 # Projectit
