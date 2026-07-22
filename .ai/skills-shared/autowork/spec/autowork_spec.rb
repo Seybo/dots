@@ -559,6 +559,7 @@ RSpec.describe Autowork do
       expect(config['claude_worker_target']).to eq('%3')
       expect(config['branch_name']).not_to be_empty
       expect(config['super_review_status_timeout_minutes']).to eq(20)
+      expect(config['max_total_commits']).to eq(15)
       expect(config['run_final_super_review']).to eq(true)
       expect(%w[main master]).to include(config['review_base_ref'])
       expect(config['original_review_base_ref']).to eq(config['review_base_ref'])
@@ -622,6 +623,31 @@ RSpec.describe Autowork do
       expect(tmux).to have_received(:send_prompt).with('%2', files.prompt_path('step1_pi_implement_request.md'))
       expect(state['status']).to eq('running')
       expect(state['phase']).to eq('waiting_for_pi_implement')
+    end
+
+    it 'pauses before committing when the total commit limit is reached' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'ready_to_commit_step'
+      state['steps']['1']['commits'] = Array.new(15, 'a' * 40)
+      state_store.write(state)
+      File.write(File.join(repo, 'pending.txt'), "pending\n")
+
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Autowork commit limit reached: 15\/15/)
+
+      expect(state_store.read['status']).to eq('paused')
+      expect(File.read(files.paused_reason_path)).to include('Increase max_total_commits explicitly')
+      expect(File.exist?(File.join(repo, 'pending.txt'))).to be(true)
     end
 
     it 'pauses before advancing when an explicit review base advances' do
@@ -1451,6 +1477,7 @@ RSpec.describe Autowork do
       expect(final_summary).to include('## Unresolved caveats')
       expect(final_summary).to include('- None.')
       expect(final_summary).not_to include('unresolved disagreement after the configured round limit')
+      expect(final_summary).to include('- Final outcome: accepted.')
       expect(File.read(files.manager_review_path)).to include('production-ready if the user does not perform another review')
     end
 
@@ -1631,6 +1658,7 @@ RSpec.describe Autowork do
       final_summary = File.read(files.final_summary_path)
       expect(final_summary).to include('Super-review fix 1')
       expect(final_summary).to include('Super-review fix review 1')
+      expect(final_summary).to include('- Final outcome: accepted.')
       expect(final_summary).to include('Run a provider smoke test later')
       expect(File.read(files.manager_review_path)).to include('Manager-context production-readiness review')
       expect(File.read(files.manager_review_iteration_path(1))).to include('Review iteration: 1')

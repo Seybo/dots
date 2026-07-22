@@ -736,7 +736,7 @@ max_debate_rounds_per_disagreement: 5
 max_final_check_fix_iterations: 5
 max_super_review_fix_iterations: 3
 max_manager_review_fix_iterations: 5
-max_total_commits: steps_count * 3
+max_total_commits: 15
 max_runtime_hours_per_run: 1
 worker_status_timeout_minutes: 10
 super_review_status_timeout_minutes: 20
@@ -746,6 +746,8 @@ original_review_base_commit: <sha-or-null>
 review_base_ref: main | master | <full-base-branch-or-ref>
 review_base_commit: <sha-or-null>
 ```
+
+The commit limit counts implementation, step-fix, final-check-fix, super-review-fix, and manager-review-fix commits together. It is checked before every commit.
 
 If a limit is hit:
 

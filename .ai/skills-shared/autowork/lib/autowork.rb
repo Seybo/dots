@@ -14,6 +14,7 @@ module Autowork
   DOTS_REPO = '/Users/inseybo/.dots'
   STEP_HEADING = /^## Step ([0-9]+)\b/.freeze
   MANAGER_REVIEW_SEVERITIES = %w[BLOCKER MINOR].freeze
+  DEFAULT_MAX_TOTAL_COMMITS = 15
 
   class Shell
     Result = Struct.new(:stdout, :stderr, :status, keyword_init: true) do
@@ -1491,7 +1492,7 @@ module Autowork
         'pi_manager_target' => roles.manager.id,
         'pi_worker_target' => roles.pi_worker.id,
         'claude_worker_target' => roles.claude_worker.id,
-        'max_total_commits' => steps.count * 3,
+        'max_total_commits' => DEFAULT_MAX_TOTAL_COMMITS,
         'max_fix_iterations_per_step' => 10,
         'max_debate_rounds_per_disagreement' => 5,
         'max_final_check_fix_iterations' => 5,
@@ -1737,6 +1738,7 @@ module Autowork
       step = state['current_step']
       raise Error, "No changes to commit for Step #{step}; pi-worker status was done but worktree is clean" if repo.clean?
 
+      ensure_commit_budget!(files, store, state, config)
       repo.add_all
       commit_sha = repo.commit("Step #{step}")
       raise Error, "Worktree is dirty after Step #{step} commit:\n#{repo.status}" unless repo.clean?
@@ -1888,6 +1890,7 @@ module Autowork
       fix_iteration = state.fetch('fix_iteration')
       raise Error, "No changes to commit for Step #{step} fix #{fix_iteration}; pi-worker status was done but worktree is clean" if repo.clean?
 
+      ensure_commit_budget!(files, store, state, config)
       repo.add_all
       commit_sha = repo.commit("Step #{step} fix #{fix_iteration}")
       raise Error, "Worktree is dirty after Step #{step} fix #{fix_iteration} commit:\n#{repo.status}" unless repo.clean?
@@ -2202,7 +2205,8 @@ module Autowork
       handle_agent_status!(result, files, store, state)
       require_nonempty_artifact!(files.super_fix_result_path(iteration), 'Pi super-review fix/adjudication')
       resolutions = result.data.fetch('resolutions', [])
-      validate_resolution_coverage!(state.fetch('final_super_review_findings', []), resolutions)
+      findings = Array(state.fetch('final_super_review_findings', [])) + Array(state['super_review_fix_review_findings'])
+      validate_resolution_coverage!(findings.uniq { |finding| finding.fetch('id') }, resolutions)
       needs_user = resolutions.select { |resolution| resolution['decision'] == 'needs_user' }
       pause_for_needs_user!(needs_user, files, store, state) unless needs_user.empty?
       state['super_review_fix_resolutions'] = resolutions
@@ -2229,6 +2233,7 @@ module Autowork
         pause_with_reason!(files, store, state, "Pi accepted super-review finding(s) in fix #{iteration}, but the worktree is clean. See #{files.super_fix_result_path(iteration)}")
       end
 
+      ensure_commit_budget!(files, store, state, config)
       repo.add_all
       commit_sha = repo.commit("Super-review fix #{iteration}")
       raise Error, "Worktree is dirty after super-review fix #{iteration} commit:\n#{repo.status}" unless repo.clean?
@@ -2339,6 +2344,7 @@ module Autowork
         pause_with_reason!(files, store, state, "Pi manager fix #{iteration} produced no repo changes. See #{files.manager_fix_result_path(iteration)}")
       end
 
+      ensure_commit_budget!(files, store, state, config)
       repo.add_all
       commit_sha = repo.commit("Manager review fix #{iteration}")
       raise Error, "Worktree is dirty after manager fix #{iteration} commit:\n#{repo.status}" unless repo.clean?
@@ -2576,6 +2582,7 @@ module Autowork
         return
       end
 
+      ensure_commit_budget!(files, store, state, config)
       repo.add_all
       commit_sha = repo.commit("Final checks fix #{iteration}")
       raise Error, "Worktree is dirty after final-check fix #{iteration} commit:\n#{repo.status}" unless repo.clean?
@@ -2831,8 +2838,9 @@ module Autowork
       return '- Disabled by config.' unless state['final_super_reviewed']
 
       lines = ["- Report: #{files.super_review_path}"]
-      lines << "- Summary: #{state['final_super_review_summary']}" if state['final_super_review_summary']
+      lines << "- Initial report: #{state['final_super_review_summary']}" if state['final_super_review_summary']
       lines << "- Fix commits: #{super_review_fix_commits(state).count}"
+      lines << '- Final outcome: accepted.'
       lines.join("\n")
     end
 
@@ -2870,6 +2878,7 @@ module Autowork
       caveats.concat(super_review_followups(state))
       caveats.concat(Array(state['manager_review_followups']))
       caveats.concat(Array(state['manager_fix_followups']))
+      caveats.uniq!
       return '- None.' if caveats.empty?
 
       caveats.map { |caveat| "- #{caveat}" }.join("\n")
@@ -2952,6 +2961,20 @@ module Autowork
         state['step_review_followups'] << "#{resolution['finding_id']}: #{resolution['rationale']}"
       end
       state['step_review_followups'].uniq!
+    end
+
+    def ensure_commit_budget!(files, store, state, config)
+      max_commits = Integer(config.fetch('max_total_commits', DEFAULT_MAX_TOTAL_COMMITS))
+      current_commits = state.fetch('steps', {}).values.sum { |step| Array(step['commits']).count } +
+        %w[final_check_fix_commits super_review_fix_commits manager_fix_commits].sum { |key| Array(state[key]).count }
+      return if current_commits < max_commits
+
+      pause_with_reason!(
+        files,
+        store,
+        state,
+        "Autowork commit limit reached: #{current_commits}/#{max_commits}. Increase max_total_commits explicitly before continuing."
+      )
     end
 
     def pause_for_needs_user!(resolutions, files, store, state)
