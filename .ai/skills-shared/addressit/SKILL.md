@@ -1,8 +1,9 @@
 ---
 name: addressit
 description: >-
-  Interactively fetch and address GitHub PR review comments one at a time.
-  Accepts PR links, review/comment links, reviewer filters, and time windows.
+  Pi-manager command that fetches GitHub PR review comments, asks the operator to
+  approve a classified batch, coordinates Pi and Claude workers in tmux, commits
+  one combined fix round, and waits for final Pi-manager review.
   Command-only skill. In Pi, invoke via /skill:addressit; /addressit is also
   accepted where that alias is exposed.
 disable-model-invocation: true
@@ -10,19 +11,19 @@ disable-model-invocation: true
 
 # Addressit
 
-This is a command-only skill for addressing PR review feedback interactively.
+This is a **Pi-manager-only command skill**. Claude is a review participant and
+must not invoke addressit.
+
+Helper:
+
+```text
+/Users/inseybo/.ai/skills-shared/addressit/bin/addressit
+```
 
 ## Invocation
 
-In Pi, use:
-
 ```text
 /skill:addressit <pr-number-or-github-url-or-filter>
-```
-
-Where the short alias is exposed, this is equivalent:
-
-```text
 /addressit <pr-number-or-github-url-or-filter>
 ```
 
@@ -31,155 +32,203 @@ Examples:
 ```text
 /addressit 123
 /addressit https://github.com/org/repo/pull/123
-/addressit https://github.com/org/repo/pull/123#discussion_r123456789
-/addressit https://github.com/org/repo/pull/123#pullrequestreview-987654321
 /addressit 123 comments from @octocat
 /addressit 123 comments since 12 hours ago
 /addressit 123 comments from @octocat since 2026-06-04T09:00:00Z
 ```
 
-Do not auto-use this skill from a vague review-related request. Wait for the explicit slash command.
+Do not auto-use this skill from a general review-related request. Wait for an
+explicit `/addressit` invocation.
 
-## What it does
+## Task and branch preflight
 
-Fetch GitHub PR review comments and guide the operator through them one by one:
+Addressit uses the current checkout and the same project/task resolution rules as
+`/autowork` and `/workit`:
 
-1. paste the comment here
-2. give an opinion on whether it is valid/actionable
-3. propose one or more solutions
-4. wait for the operator to choose/approve a solution
-5. implement only the approved solution
-6. summarize changes, then automatically continue to the next comment (no separate approval to advance)
+1. infer the project from the current checkout
+2. infer the task/story ID from the current branch (`sc-<digits>` or a local
+   four-digit task prefix)
+3. require exactly one matching folder under `/Volumes/dev/_tasks/<project>/`
+4. require that folder to contain `task.md`
+5. require a clean worktree
+6. require current-window tmux panes titled exactly `pi-manager`, `pi-worker`,
+   and `claude-worker`, all rooted at the same repository
 
-Start from the first comment automatically. Advance through the queue on your own, but never implement a comment's fix until the operator approves that comment's solution — one solution-approval gate per comment, no batching.
+If no task folder can be found, report that fact and stop. Do not create a task
+folder, suggest a creation command, or create partial addressit state.
 
-## Inputs supported
+Addressit never pushes. It commits locally; the operator pushes the branch and
+waits for GitHub to receive any new review comments before invoking addressit
+again.
 
-The command may include one or more of:
+## Round workflow
 
-- a PR number in the current repo: `123`
-- a full PR URL: `https://github.com/org/repo/pull/123`
-- a specific review URL: `https://github.com/org/repo/pull/123#pullrequestreview-987654321`
-- a specific inline comment/discussion URL fragment such as `#discussion_r123456789`
-- a reviewer filter: `from @username`, `from username`, `comments from @username`
-- a time filter: `since 12 hours ago`, `since yesterday`, `since 2026-06-04T09:00:00Z`
+The operator is the polling mechanism. Each explicit invocation handles one
+snapshot of unresolved/new comments:
 
-If the PR/repo cannot be determined, ask for a PR number or PR URL.
+1. Fetch inline PR review comments through `gh api`.
+2. Apply the existing PR URL, reviewer, time, and specific-comment/review filters.
+3. Ignore a comment only when the local ledger records the same GitHub comment ID
+   and the same `updated_at` as `addressed` or `skipped`.
+4. If a previously addressed/skipped comment was edited, treat the edited
+   version as new.
+5. Save the selected comments under `<task_folder>/addressit-log/`.
+6. Stop and show the concise selected-comment list. Do not launch Pi-worker yet.
 
-## Fetching comments
+Review summaries and issue-level PR comments are not included by default. Use the
+existing explicit all-comments behavior when those are requested.
 
-1. **Determine repo and PR:**
-   - If a full GitHub PR URL is provided, extract `owner/repo` and PR number from the URL.
-   - Otherwise, use the current repository:
-     ```bash
-     gh repo view --json nameWithOwner -q .nameWithOwner
-     ```
-   - Extract the PR number from the command arguments.
+A round has one universal approval gate. Pi-manager must read the saved full
+comment artifact, classify every selected comment, and present a concise table:
 
-2. **Detect optional filters:**
-   - `from @username` / `from username` filters comments by `.user.login`.
-   - `since <time expression>` filters comments by `.created_at` or `.updated_at` at or after that time.
-   - For relative time expressions, compute an ISO-8601 UTC timestamp locally with `date` where possible. If ambiguous, ask the operator to clarify.
-   - Specific review IDs come from URL fragments like `#pullrequestreview-987654321`.
-   - Specific comment IDs come from URL fragments like `#discussion_r123456789`; the numeric id is `123456789`.
+- `minor` or `not_minor`
+- `valid` or `not_valid`
+- short reasoning, including file/line context when useful
 
-3. **Fetch comments:**
+Then wait for the operator. The operator may approve or correct the labels. The
+operator's response must put every selected comment into exactly one state:
 
-   Specific review:
-   ```bash
-   gh api repos/${REPO}/pulls/${PR_NUMBER}/reviews/${REVIEW_ID}/comments
-   ```
+- `approved`: send it to Pi-worker
+- `skipped`: do not address it
 
-   Otherwise, all inline PR review comments:
-   ```bash
-   gh api repos/${REPO}/pulls/${PR_NUMBER}/comments
-   ```
+No comment remains pending after the approval response. Approved comments include
+minor comments. The helper writes the exact decision set to the round approval
+JSON and launches the worker only after every selected comment has a decision.
 
-   Also fetch review summaries and issue-level PR comments when the user asks for "all comments" or when no inline comments are found:
-   ```bash
-   gh api repos/${REPO}/pulls/${PR_NUMBER}/reviews
-   gh api repos/${REPO}/issues/${PR_NUMBER}/comments
-   ```
+Approval JSON shape:
 
-4. **Normalize each comment into this shape:**
-   ```json
-   {
-     "id": "github comment/review id",
-     "kind": "inline_review_comment | review_summary | issue_comment",
-     "user": "login",
-     "created_at": "timestamp",
-     "updated_at": "timestamp",
-     "path": "file path if present",
-     "line": "line/start_line/or null",
-     "url": "html_url if present",
-     "body": "full comment body"
-   }
-   ```
+```json
+{
+  "comments": [
+    {
+      "id": "123456789",
+      "minor": true,
+      "valid": true,
+      "decision": "approved",
+      "rationale": "The reviewer is correct because ..."
+    },
+    {
+      "id": "123456790",
+      "minor": false,
+      "valid": false,
+      "decision": "skipped",
+      "rationale": "This path is unreachable because ..."
+    }
+  ]
+}
+```
 
-5. **Apply filters:**
-   - Specific comment URL: keep only the matching comment ID.
-   - Specific review URL: keep comments belonging to that review.
-   - Reviewer filter: keep only comments from that user.
-   - Since filter: keep comments with `created_at` or `updated_at` at/after the threshold.
-   - Remove duplicate comments by `id` + `kind`.
+The selected comments are one task batch. Pi-worker receives one prompt for all
+approved comments and leaves changes unstaged/uncommitted. Addressit creates one
+combined implementation commit:
 
-6. **Present a queue:**
-   - Show how many comments were found after filtering.
-   - List each comment as:
-     ```text
-     1. <kind> @<user> <path>:<line> <url>
-     ```
-   - Do not ask which comment to start with. Start with comment `1` and work down the list in order.
+```text
+Address PR #<number> round <N>
+```
 
-## Per-comment workflow
+It does not create or modify `steps.md` and does not invoke `/workit`.
 
-For exactly one selected comment at a time:
+## Claude review and fix loop
 
-1. **Paste the comment:**
-   - Include author, kind, URL, file path, line/range, timestamp.
-   - Quote the full body verbatim in a Markdown blockquote.
-   - If the comment contains sensitive prospect data, emails, phone numbers, credentials, or PII, redact it before echoing and say it was redacted.
+After the combined implementation commit, addressit sends Claude one scoped review
+prompt covering:
 
-2. **Give your opinion:**
-   - Say whether the comment is valid, partially valid, not valid, or needs clarification.
-   - Evaluate whether the scenario described by the reviewer is actually possible/reachable in the current code path before proposing a fix.
-   - If the scenario is impossible or unreachable, explain why and recommend skipping or replying instead of changing code.
-   - Explain briefly using the current code context.
-   - If uncertain, say what file/code you need to inspect before deciding, then inspect it.
+- every approved GitHub comment
+- regressions introduced by the implementation
+- the exact commit and current diff
 
-3. **Propose solution(s):**
-   - Provide one recommended solution.
-   - Provide alternatives only when there is a real tradeoff.
-   - Include expected files to change and likely test/check commands.
-   - Do not implement yet.
+Claude writes a human-readable review and status JSON. Claude does not run tests,
+linters, or formatters during this review.
 
-4. **Wait for operator approval:**
-   - Ask the operator to choose/approve a solution. This is the one required gate per comment.
-   - If the operator rejects the comment or asks to skip, mark it skipped in the queue and automatically continue to the next comment.
+If Claude reports findings:
 
-5. **Implement approved solution:**
-   - Make the smallest targeted change that addresses the approved comment.
-   - Follow repo instructions and existing style.
-   - Do not opportunistically fix unrelated feedback.
-   - If implementation reveals that the approved plan is wrong or too broad, stop and ask before changing course.
+1. Pi-worker classifies every finding as accept, alternative fix, dispute,
+   follow-up, or needs-user.
+2. Accepted findings are fixed together in one Pi turn.
+3. Addressit commits them as `Address PR #<number> round <N> fix <M>`.
+4. Claude reviews the fix commit again.
+5. Repeat within the configured fix limit.
 
-6. **Verify:**
-   - Run the smallest relevant checks/tests first.
-   - Before running commands likely to take more than a few seconds, state what they will do and why.
-   - Summarize pass/fail results.
+If Pi and Claude disagree, use the bounded debate flow from `/autowork`. Do not
+silently choose a winner. Pause for operator arbitration when the configured
+round limit is reached or either worker requests user input. For a persisted user
+arbitration pause, record one decision for every Claude finding and resume with:
 
-7. **Report and auto-advance:**
-   - Report changed files, checks run, and whether the comment appears addressed.
-   - Then continue to the next comment automatically — do not ask for approval to advance. Go straight into the per-comment workflow for the next queued comment (present it, give an opinion, propose solutions, then stop at that comment's solution-approval gate).
-   - When the queue is empty, stop and report the final state: which comments were addressed, which were skipped.
-   - The operator can still interrupt at any time to pause, redirect, or stop the run.
+```text
+addressit resolve <task_folder> <resolution-json>
+```
 
-## Important notes
+The resolution JSON uses `finding_id` and `decision` (`accept` or `skip`).
 
-- Never implement before presenting the comment, opinion, and proposed solution(s).
-- Never batch multiple comments unless the operator explicitly says to address a group together.
-- If multiple comments are duplicates or tightly coupled, explain that and ask whether to group them.
-- Preserve a clear queue state in chat: pending, current, addressed, skipped.
-- Prefer `gh api` over web fetching for GitHub review data.
-- If a GitHub URL specifies a different repo than the current working directory, fetch from that repo but ask before editing if the local checkout does not match.
-- For PR review URLs or review IDs, fetch the review directly and fetch inline comments from that review; do not rely only on `gh pr view`.
+## Checks and manager gate
+
+Reuse `/autowork`'s configured final-check rules:
+
+- Ruby repositories with a `Gemfile` default to:
+  `bundle exec rubocop` and `bundle exec rspec`
+- non-Ruby or unconfigured repositories record checks as skipped
+- Pi may run focused checks during implementation/fix turns
+- Claude does not rerun checks during review
+
+After Claude accepts and final checks pass, addressit stops at the final
+Pi-manager gate. Pi-manager must review the original comments, classifications,
+approvals, diff, commits, Claude reviews, and final checks using manager-only
+conversation context. Write the result to:
+
+```text
+<task_folder>/addressit-log/manager_review.md
+```
+
+Only after that review passes may Pi-manager run:
+
+```text
+addressit manager-pass <task_folder>
+```
+
+That command marks the approved comment IDs as `addressed`. Skipped IDs remain
+`skipped`. Addressit does not mark comments addressed merely because Claude
+accepted the code.
+
+If manager review finds an issue, write a findings JSON file and run:
+
+```text
+addressit manager-fix <task_folder> <findings-json>
+```
+
+The helper sends the findings to Pi-worker, creates a manager-fix commit, reruns
+configured checks, sends the commit to Claude for scoped review, and returns to a
+fresh manager gate.
+
+## Persisted artifacts
+
+```text
+<task_folder>/addressit-log/
+  state.json
+  config.yml
+  rounds/round<N>_comments.json
+  rounds/round<N>_approval.json
+  prompts/
+  reviews/
+  status/
+  debates/
+  final_checks.md
+  manager_review.md
+```
+
+Use read-only status inspection when needed:
+
+```text
+addressit status <task_folder>
+```
+
+The internal approval handoff is:
+
+```text
+addressit approve <task_folder> <approval-json>
+```
+
+Pi-manager uses this only after the operator has approved or skipped every
+selected comment.
+
+A later `/addressit <same-pr>` invocation fetches GitHub again and creates the
+next round from comment IDs/versions that are not addressed or skipped.
