@@ -3,7 +3,7 @@ name: default
 root: <%= @settings.fetch("workspace_root") %>
 startup_window: git
 enable_pane_titles: true
-pane_title_position: top
+pane_title_position: "off"
 
 windows:
   - git:
