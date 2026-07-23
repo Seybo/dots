@@ -20,11 +20,28 @@ Helper:
 /Users/inseybo/.ai/skills-shared/addressit/bin/addressit
 ```
 
+## Invocation state (mandatory)
+
+If Pi presents this skill as a `<skill name="addressit">` block, an explicit
+`/skill:addressit` command has already been invoked. Do not ask the user to
+invoke it again or downgrade the request to a general review request.
+
+`disable-model-invocation: true` disables automatic invocation; it does not
+block explicit user invocation.
+
+Pi appends command arguments verbatim. Extract the PR number or GitHub PR URL
+from anywhere in those arguments, ignoring conversational filler, and pass the
+PR target first to the helper. The helper requires:
+
+```text
+addressit <pr-number-or-github-url> [filters]
+```
+
 ## Invocation
 
 ```text
-/skill:addressit <pr-number-or-github-url-or-filter>
-/addressit <pr-number-or-github-url-or-filter>
+/skill:addressit <pr-number-or-github-url> [filters]
+/addressit <pr-number-or-github-url> [filters]
 ```
 
 Examples:
