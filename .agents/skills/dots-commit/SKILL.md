@@ -1,11 +1,11 @@
 ---
 name: dots-commit
-description: Prepare focused commits for the dotfiles repo. Runs dots-check on uncommitted changes first, stops on findings, reviews whether changes belong in the dotfiles repo, then proposes focused commit groups and commit messages matching recent history. Review-only; does not stage or commit without explicit user approval.
+description: Prepare focused commits for the dotfiles repo. Runs dots-check, reviews repo fit, presents focused commit groups, waits for approval, then creates the approved commits.
 ---
 
 # Dots Commit
 
-Prepare focused commits for `/Users/inseybo/.dots` without committing automatically.
+Prepare focused commits for `/Users/inseybo/.dots`, show them, wait for approval, then create the approved commits.
 
 This skill is repo-specific and lives in `.dots` at `.agents/skills/dots-commit`.
 
@@ -21,12 +21,11 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
 
 ## Hard rules
 
-- Do not stage files.
-- Do not commit.
-- Do not mutate git history, branches, tags, stashes, remotes, or commit state.
-- Only suggest commit groups and commit messages unless the user later gives explicit approval for a specific git mutation.
-- If `dots-check` reports any finding, stop before reviewing commit groups. Ask the user whether each finding should be fixed or intentionally ignored.
-- If the user explicitly approves creating commits, run `dots-check` again after the commits for every new commit created in the session and verify that every finding is expected.
+- Prepare and present commit groups first; wait for explicit user approval before staging or committing.
+- Do not mutate git history, branches, tags, stashes, remotes, or commit state before approval.
+- After approval, stage and commit only the approved paths and groups.
+- If `dots-check` reports any finding, stop before proposing commits. Ask whether each finding should be fixed or explicitly ignored.
+- After approved commits, run `dots-check` again for every commit created in the session and verify that every finding is expected.
 
 ## Workflow
 
@@ -84,7 +83,7 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
    - Match the existing style: short imperative-ish subject, usually `<area>: <change>`.
    - Prefer scopes already present in recent history when they fit, such as `ai:`, `tmux:`, `nvim:`, `theme:`, `monit:`, or `env:`.
 
-6. **Suggest focused commits**
+6. **Prepare and present focused commits**
    - Group changes by purpose, not by file extension.
    - Keep unrelated areas separate, for example:
      - agent skill behavior/docs
@@ -99,8 +98,15 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
      - exact paths to include
      - any paths to exclude or handle separately
    - If a group is mixed or risky, say what needs user guidance.
+   - Present the groups and wait for explicit approval before staging or committing.
+   - Include `Needs your decision` only when the agent cannot proceed without user input, such as a dots-check finding or questionable repo fit. Do not use it to tell the user to stage or commit manually.
 
-7. **After explicitly approved commits, scan the new commits**
+7. **After explicit approval, create the approved commits**
+   - State the exact approved paths and commit subjects.
+   - Stage only those paths and create the approved commits.
+   - Do not ask the user to stage or commit manually unless they specifically request Git commands instead.
+
+8. **After approved commits, scan the new commits**
    - This step applies only if the user gives explicit approval to stage/commit specific groups and commits are created in this session.
    - Count commits created since the starting commit from step 1:
      ```bash
@@ -133,9 +139,8 @@ Suggested commits:
 
 Post-commit dots-check:
 - not run|pass|expected findings|unexpected findings|error
-
-Needs your decision:
-- ...
 ```
 
-Keep the output concise but specific enough that the user can stage the suggested groups manually.
+Add a `Needs your decision:` section only when the agent is blocked and cannot proceed without user input. Do not add it merely because approval is pending.
+
+Keep the output concise and specific. Show the proposed groups, then wait for approval. If no approval has been given, state that no files were staged or committed.
