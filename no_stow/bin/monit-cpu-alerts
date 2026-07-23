@@ -37,7 +37,7 @@ Commands:
 Example:
   monit-cpu-alerts install
   monit-cpu-alerts add ruby-lsp 'ruby-lsp' 30 60 total_cpu
-  monit-cpu-alerts add-scan zellij '(^|/)zellij( |$)' 30 30
+  monit-cpu-alerts add-scan tmux '(^|/)tmux( |$)' 30 30
   monit-cpu-alerts load
 USAGE
 }
