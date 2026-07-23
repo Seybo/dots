@@ -7,6 +7,8 @@ DOTS_DIR = ENV.fetch('STOW_DIR', File.expand_path('~/.dots'))
 REPO_REGISTRY_PATH = File.join(DOTS_DIR, '.ai', 'skills-shared', 'components', 'projects.yml')
 RUNTIME_REGISTRY_PATH = File.expand_path('~/.ai/skills-shared/components/projects.yml')
 REGISTRY_PATH = File.file?(REPO_REGISTRY_PATH) ? REPO_REGISTRY_PATH : RUNTIME_REGISTRY_PATH
+TASK_ROOT = ENV.fetch('TASK_ROOT', '/Volumes/dev/_tasks')
+BOOTSTRAP_LAYOUT_DIR = File.join(DOTS_DIR, 'no_stow', 'bin', 'tmux', 'layouts')
 TMUXINATOR_CONFIG_DIR = File.expand_path(ENV.fetch('TMUXINATOR_CONFIG', '~/.config/tmuxinator'))
 
 class WorkspaceError < StandardError; end
@@ -24,6 +26,10 @@ def ordinal(number)
 end
 
 def project_workspace(target, projects)
+  if projects.key?(target) && !projects.fetch(target)['is_infrastructure']
+    return [target, '1st']
+  end
+
   projects.keys.sort_by { |project| -project.length }.each do |project|
     next if projects.fetch(project)['is_infrastructure']
 
@@ -44,22 +50,41 @@ def layout_path(layout_name)
   File.join(TMUXINATOR_CONFIG_DIR, "#{layout_name}.yml")
 end
 
+def layout_reference(layout_name)
+  return [TMUXINATOR_CONFIG_DIR, layout_name] if File.file?(layout_path(layout_name))
+
+  bootstrap_path = File.join(BOOTSTRAP_LAYOUT_DIR, 'default.yml')
+  return [BOOTSTRAP_LAYOUT_DIR, 'default'] if File.file?(bootstrap_path)
+
+  raise WorkspaceError, "tmuxinator layout does not exist: #{layout_path(layout_name)}"
+end
+
 def start_layout(session, layout_name, code_dir, task_root)
+  config_dir, config_name = layout_reference(layout_name)
   settings = [
     "workspace_root=#{code_dir}",
     "task_root=#{task_root}"
   ]
-  command = ['tmuxinator', 'start', '--skip-attach', '--name', session, layout_name, *settings]
-  environment = { 'TMUXINATOR_CONFIG' => TMUXINATOR_CONFIG_DIR }
+  command = ['tmuxinator', 'start', '--skip-attach', '--name', session, config_name, *settings]
+  environment = { 'TMUXINATOR_CONFIG' => config_dir }
   return if system(environment, *command)
 
-  raise WorkspaceError, "tmuxinator command failed for #{layout_name.inspect}"
+  raise WorkspaceError, "tmuxinator command failed for #{config_name.inspect}"
 end
 
 def main
-  check_only = ARGV.first == '--check'
-  target = check_only ? ARGV[1] : ARGV[0]
-  raise WorkspaceError, 'usage: start-workspace [--check] <project><workspace-number>' unless target
+  arguments = ARGV.dup
+  check_only = arguments.first == '--check'
+  arguments.shift if check_only
+  project_or_target = arguments.shift
+  workspace_number = arguments.shift
+  if project_or_target.nil? || arguments.any?
+    raise WorkspaceError, 'usage: start-workspace [--check] <project> [workspace-number]'
+  end
+  if workspace_number && !workspace_number.match?(/\A\d+\z/)
+    raise WorkspaceError, 'workspace number must be a positive integer'
+  end
+  target = workspace_number ? "#{project_or_target}#{workspace_number}" : project_or_target
 
   projects = load_projects
   project_workspace_pair = project_workspace(target, projects)
@@ -68,10 +93,10 @@ def main
   project, workspace = project_workspace_pair
   config = projects.fetch(project)
   layout_name = config.fetch('tmux_layout')
-  raise WorkspaceError, "tmuxinator layout does not exist: #{layout_path(layout_name)}" unless File.file?(layout_path(layout_name))
+  layout_reference(layout_name)
 
   code_dir = File.join(config.fetch('code_root'), workspace)
-  task_root = File.join('/Volumes/dev/_tasks', project)
+  task_root = File.join(TASK_ROOT, project)
   raise WorkspaceError, "workspace does not exist: #{code_dir}" unless File.directory?(code_dir)
   raise WorkspaceError, "task project does not exist: #{task_root}" unless File.directory?(task_root)
   exit 0 if check_only
