@@ -143,4 +143,4 @@ Post-commit dots-check:
 
 Add a `Needs your decision:` section only when the agent is blocked and cannot proceed without user input. Do not add it merely because approval is pending.
 
-Keep the output concise and specific. Show the proposed groups, then wait for approval. If no approval has been given, state that no files were staged or committed.
+Keep the output concise and specific. Show the proposed groups, then end with the exact question: `proceed with all the commits?` If no approval has been given, state that no files were staged or committed.
