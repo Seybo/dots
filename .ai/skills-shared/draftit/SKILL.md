@@ -31,8 +31,10 @@ Otherwise infer `<project>` from the current working directory and treat the who
 input as the draft request. Drafts have no story ID, so only the project is inferred.
 
 Local-only drafts are the default. Including `epic: <id>` in the invocation makes
-the draft Shortcut-ready. `name: <title>` is optional; if it is omitted for a
-Shortcut-ready draft, infer a concise title from the conversation context.
+the draft Shortcut-ready only when the selected project's registry entry has
+`task_provider: shortcut`. For `task_provider: local` projects, `epic:` is invalid and
+must be rejected instead of creating a Shortcut-ready draft. `name: <title>` is optional;
+if it is omitted for a Shortcut-ready draft, infer a concise title from the conversation context.
 
 Examples:
 
@@ -68,14 +70,16 @@ The result is intended to be used later with:
      ```text
      Draft flow:
      1. Run /draftit <project> to create a local-only /Volumes/dev/_tasks/<project>/draftNN/task.md from the current conversation context.
-     2. Add epic: <id> only when you want the draft to become a Shortcut story later, e.g. /draftit shaka_gtm epic: 33001 name: Add CSV export.
+     2. Add epic: <id> only for a project with `task_provider: shortcut` when you want the draft to become a Shortcut story later, e.g. /draftit shaka_gtm epic: 33001 name: Add CSV export.
      3. Run /taskit <project> draftNN later.
-     4. /taskit converts local-only drafts to timestamp task folders and Shortcut-ready drafts to Shortcut stories.
+     4. /taskit converts local-only drafts to sequential local task folders and Shortcut-ready drafts to Shortcut stories.
      ```
    - determine `<project>` and the draft request:
      - if the first token after `/draftit` matches an existing folder under `/Volumes/dev/_tasks/`, treat it as `<project>` and take all remaining text as the draft request
      - otherwise infer `<project>` from the current working directory using [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md), and take the whole input after `/draftit` as the draft request
-   - extract `epic: <id>` from the draft request when present; this is the only trigger for a Shortcut-ready draft
+   - read the selected project's `task_provider` from `~/.ai/skills-shared/components/projects.yml`
+   - extract `epic: <id>` from the draft request when present; this is the only trigger for a Shortcut-ready draft on `task_provider: shortcut` projects
+   - if `epic: <id>` is present for a `task_provider: local` project, stop and report that the project is local/manual-only; do not create the draft
    - extract optional `name: <title>` from the draft request when present
    - do not expect or ask for a `Context:` field; the context should come from the conversation or any literal remaining request text
    - if the project cannot be resolved or inferred, ask the user to provide it, e.g.:

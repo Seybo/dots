@@ -36,9 +36,9 @@ With two or more tokens, treat the first token as `<project>` only when it match
 
 The selector/task name is interpreted as either:
 
-- a **Shortcut story ID** if it is a single token of digits only (e.g. `12345`)
-- a **draft reference** if it is a single token matching `^draft\d{2}$`, resolved to `/Volumes/dev/_tasks/<project>/draftNN/task.md`; Shortcut is used only if the file has complete `# Story details`
-- a **task markdown path** if it is a single existing path ending in `.md` or `.markdown`; Shortcut is used only if the file has complete `# Story details`
+- a **Shortcut story ID** if the selected project has `task_provider: shortcut` and the selector is a single token of digits only (e.g. `12345`); for `task_provider: local` projects, numeric selectors remain local/manual task names
+- a **draft reference** if it is a single token matching `^draft\d{2}$`, resolved to `/Volumes/dev/_tasks/<project>/draftNN/task.md`; Shortcut is used only for a `task_provider: shortcut` project whose file has complete `# Story details`
+- a **task markdown path** if it is a single existing path ending in `.md` or `.markdown`; Shortcut is used only for a `task_provider: shortcut` project whose file has complete `# Story details`
 - a **manual task name** otherwise (preserve spaces)
 
 Examples:
@@ -65,7 +65,7 @@ In manual mode, create a local task folder inside the selected project and creat
 
 Shortcut is used only in explicit Shortcut mode for projects whose registry entry has `task_provider: shortcut`: a numeric story ID, an inferred branch story ID, or an existing `task.md` whose first `# Story details` section has both `Name:` and `Epic:`. Projects with `task_provider: local` never call Shortcut; all selectors and task files remain local/manual.
 
-For `draftNN` and task markdown path mode, inspect the existing file. If it has complete `# Story details`, create a Shortcut story and rename the folder to `<story_id>-<slug>`. Otherwise, treat it as a local-only draft/task and rename the folder to a sequential local task folder such as `0004-<slug>`.
+For `draftNN` and task markdown path mode, inspect the existing file. A `task_provider: shortcut` project with complete `# Story details` creates a Shortcut story and renames the folder to `<story_id>-<slug>`. A `task_provider: local` project never creates a Shortcut story; it remains a local-only task and is renamed to a sequential local task folder such as `0004-<slug>`.
 
 ## Project and branch resolution
 
@@ -242,11 +242,11 @@ creates project roots or code checkouts.
 
 ## Task markdown path mode
 
-This mode converts an existing task file into either a local task folder or a Shortcut story, depending only on the file contents.
+This mode converts an existing task file according to both the selected project's `task_provider` and the file contents. The provider is checked first; file contents can enable Shortcut conversion only for `task_provider: shortcut` projects.
 
 ### Shortcut conversion format
 
-Shortcut conversion runs only when the file includes a first-level section named exactly:
+For a project with `task_provider: shortcut`, Shortcut conversion runs only when the file includes a first-level section named exactly:
 
 ```md
 # Story details
@@ -279,7 +279,7 @@ Build polling for enriched Clay data.
 - Errors are surfaced clearly
 ```
 
-If this section is absent or missing either `Name:` or `Epic:`, do not call Shortcut. Use Local task-file conversion instead.
+If the project has `task_provider: local`, never call Shortcut regardless of file contents. For `task_provider: shortcut` projects, if this section is absent or missing either `Name:` or `Epic:`, do not call Shortcut; use Local task-file conversion instead.
 
 ### Description extraction for Shortcut conversion
 

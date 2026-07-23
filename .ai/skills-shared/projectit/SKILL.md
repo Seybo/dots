@@ -148,6 +148,7 @@ After this, the project can be used with:
    - require the default layout at `~/.config/tmuxinator/default.yml`
    - create one project-level layout at `~/.config/tmuxinator/<project>.yml` by copying the default layout
    - change only the layout's `name` to `<project>`; keep its workspace-root and task-root ERB settings
+   - the default layout creates titled shell panes for Autowork; it does not choose or launch a Pi/Claude profile. Start the desired `pi-p`, `pi-w`, or `claude` wrapper manually in those panes.
    - add or verify one entry in `~/.ai/skills-shared/components/projects.yml`:
      ```yaml
      <project>:
