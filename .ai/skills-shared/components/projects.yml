@@ -11,21 +11,21 @@ projects:
     is_infrastructure: true
   misc_kaamp:
     code_root: /Volumes/dev/projects/misc/misc_kaamp
-    tmux_layout: standard
-    agent_command: pi-p
+    tmux_layout: misc_kaamp
+    task_provider: local
   my_finance:
     code_root: /Volumes/dev/projects/mydev/my_finance
-    tmux_layout: standard
-    agent_command: pi-p
+    tmux_layout: my_finance
+    task_provider: local
   my_health:
     code_root: /Volumes/dev/projects/mydev/my_health
-    tmux_layout: standard
-    agent_command: pi-p
+    tmux_layout: my_health
+    task_provider: local
   shaka_gtm:
     code_root: /Volumes/dev/projects/shaka/gtm
-    tmux_layout: agent
-    agent_command: pi-w
+    tmux_layout: shaka_gtm
+    task_provider: shortcut
   shaka_trp:
     code_root: /Volumes/dev/projects/shaka/trp
-    tmux_layout: agent
-    agent_command: pi-w
+    tmux_layout: shaka_trp
+    task_provider: local
