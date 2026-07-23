@@ -159,6 +159,30 @@ RSpec.describe Autowork do
       expect(context.code_dir).to eq('/Volumes/dev/projects/shaka/gtm/1st')
     end
 
+    it 'supports arbitrary numbered workspaces for any registered project' do
+      task_root = File.join(@tmpdir, '_tasks')
+      FileUtils.mkdir_p(File.join(task_root, 'shaka_trp', '12345-test-task'))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+
+      context = described_class.new(%w[shaka_trp28 12345], cwd: @tmpdir).resolve
+
+      expect(context.project).to eq('shaka_trp')
+      expect(context.code_dir).to eq('/Volumes/dev/projects/shaka/trp/28th')
+    end
+
+    it 'infers a numbered workspace from the current project path' do
+      task_root = File.join(@tmpdir, '_tasks')
+      FileUtils.mkdir_p(File.join(task_root, 'shaka_trp', '12345-test-task'))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+
+      context = described_class.new(['12345'], cwd: '/Volumes/dev/projects/shaka/trp/7th/plugins').resolve
+
+      expect(context.project).to eq('shaka_trp')
+      expect(context.code_dir).to eq('/Volumes/dev/projects/shaka/trp/7th')
+    end
+
     it 'accepts a full base branch/ref as the second argument when project is inferred' do
       task_root, task_folder = make_env_task(task_id: '1234')
       dots_repo = make_git_repo

@@ -1,0 +1,109 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'shellwords'
+require 'yaml'
+
+DOTS_DIR = ENV.fetch('STOW_DIR', File.expand_path('~/.dots'))
+REPO_REGISTRY_PATH = File.join(DOTS_DIR, '.ai', 'skills-shared', 'components', 'projects.yml')
+RUNTIME_REGISTRY_PATH = File.expand_path('~/.ai/skills-shared/components/projects.yml')
+REGISTRY_PATH = File.file?(REPO_REGISTRY_PATH) ? REPO_REGISTRY_PATH : RUNTIME_REGISTRY_PATH
+ORDINAL_PATTERN = /\A(\d+)(st|nd|rd|th)\z/
+
+class WorkspaceError < StandardError; end
+
+def ordinal(number)
+  number = Integer(number, 10)
+  raise WorkspaceError, 'workspace number must be positive' unless number.positive?
+
+  suffix = if (11..13).cover?(number % 100)
+    'th'
+  else
+    { 1 => 'st', 2 => 'nd', 3 => 'rd' }.fetch(number % 10, 'th')
+  end
+  "#{number}#{suffix}"
+end
+
+def project_workspace(target, projects)
+  projects.keys.sort_by { |project| -project.length }.each do |project|
+    next if projects.fetch(project)['is_infrastructure']
+
+    match = target.match(/\A#{Regexp.escape(project)}(\d+)\z/)
+    return [project, ordinal(match[1])] if match && Integer(match[1], 10).positive?
+  end
+  nil
+end
+
+def shell_command(command)
+  "zsh -lic #{Shellwords.escape(command)}"
+end
+
+def tmux(*args)
+  return if system('tmux', *args)
+
+  raise WorkspaceError, "tmux command failed: #{args.join(' ')}"
+end
+
+def start_standard_layout(session, code_dir, task_root, agent_command)
+  tmux('new-session', '-d', '-s', session, '-n', 'git', '-c', code_dir, shell_command('lg'))
+  tmux('new-window', '-t', session, '-n', 'vim', '-c', code_dir, shell_command('v'))
+  tmux('new-window', '-t', session, '-n', 'pi', '-c', code_dir, shell_command(agent_command))
+  tmux('new-window', '-t', session, '-n', 'misc', '-c', task_root, shell_command('lg'))
+  tmux('split-window', '-t', "#{session}:misc", '-v', '-p', '20', '-c', task_root)
+end
+
+def start_agent_layout(session, code_dir, task_root, agent_command)
+  tmux('new-session', '-d', '-s', session, '-n', 'git', '-c', code_dir, shell_command('lg'))
+  tmux('new-window', '-t', session, '-n', 'vim', '-c', code_dir, shell_command('v'))
+  tmux('new-window', '-t', session, '-n', 'autowork', '-c', code_dir, shell_command(agent_command))
+  tmux('split-window', '-t', "#{session}:autowork", '-h', '-p', '65', '-c', code_dir, shell_command(agent_command))
+  tmux('split-window', '-t', "#{session}:autowork.1", '-v', '-p', '50', '-c', code_dir, shell_command('claude'))
+  tmux('select-pane', '-t', "#{session}:autowork.0", '-T', 'pi-manager')
+  tmux('select-pane', '-t', "#{session}:autowork.1", '-T', 'pi-worker')
+  tmux('select-pane', '-t', "#{session}:autowork.2", '-T', 'claude-worker')
+  tmux('new-window', '-t', session, '-n', 'misc', '-c', task_root, shell_command('lg'))
+  tmux('split-window', '-t', "#{session}:misc", '-v', '-p', '20', '-c', task_root)
+end
+
+def load_projects
+  data = YAML.safe_load(File.read(REGISTRY_PATH), permitted_classes: [], aliases: false)
+  data.fetch('projects').transform_keys(&:to_s)
+rescue Errno::ENOENT, Psych::Exception => e
+  raise WorkspaceError, "invalid project registry #{REGISTRY_PATH}: #{e.message}"
+end
+
+def main
+  check_only = ARGV.first == '--check'
+  target = check_only ? ARGV[1] : ARGV[0]
+  raise WorkspaceError, 'usage: start-workspace [--check] <project><workspace-number>' unless target
+
+  projects = load_projects
+  project_workspace_pair = project_workspace(target, projects)
+  exit 1 unless project_workspace_pair
+
+  project, workspace = project_workspace_pair
+  config = projects.fetch(project)
+  code_dir = File.join(config.fetch('code_root'), workspace)
+  exit 0 if check_only
+  raise WorkspaceError, "workspace does not exist: #{code_dir}" unless File.directory?(code_dir)
+
+  task_root = File.join('/Volumes/dev/_tasks', project)
+  raise WorkspaceError, "task project does not exist: #{task_root}" unless File.directory?(task_root)
+  raise WorkspaceError, "tmux session already exists: #{target}" if system('tmux', 'has-session', '-t', target, out: File::NULL, err: File::NULL)
+
+  case config.fetch('tmux_layout')
+  when 'standard'
+    start_standard_layout(target, code_dir, task_root, config.fetch('agent_command'))
+  when 'agent'
+    start_agent_layout(target, code_dir, task_root, config.fetch('agent_command'))
+  else
+    raise WorkspaceError, "unknown tmux layout for #{project}: #{config['tmux_layout'].inspect}"
+  end
+end
+
+begin
+  main
+rescue WorkspaceError => e
+  warn e.message
+  exit 1
+end

@@ -12,6 +12,7 @@ module Autowork
   ROOT = File.expand_path('..', __dir__)
   TASK_ROOT = '/Volumes/dev/_tasks'
   DOTS_REPO = '/Users/inseybo/.dots'
+  PROJECTS_FILE = File.expand_path('../components/projects.yml', ROOT)
   STEP_HEADING = /^## Step ([0-9]+)\b/.freeze
   MANAGER_REVIEW_SEVERITIES = %w[BLOCKER MINOR].freeze
   DEFAULT_MAX_TOTAL_COMMITS = 15
@@ -40,12 +41,103 @@ module Autowork
 
   TaskContext = Struct.new(:project, :task_id, :task_root, :task_folder, :code_dir, :review_base_ref, keyword_init: true)
   Pane = Struct.new(:id, :session, :window_id, :window_name, :active, :command, :title, :path, keyword_init: true)
+
+  class ProjectRegistry
+    ORDINAL_PATTERN = /\A(\d+)(st|nd|rd|th)\z/.freeze
+
+    def initialize(path)
+      data = YAML.safe_load(File.read(path), permitted_classes: [], aliases: false)
+      @projects = data.fetch('projects').transform_keys(&:to_s)
+    rescue Errno::ENOENT, Psych::Exception => e
+      raise Error, "Invalid project registry #{path}: #{e.message}"
+    end
+
+    def session_alias?(value)
+      !alias_parts(value).nil?
+    end
+
+    def normalize_alias(value)
+      parts = alias_parts(value)
+      return [value, nil] unless parts
+
+      project, number = parts
+      [project, ordinal(number)]
+    end
+
+    def project_and_workspace_for_path(path)
+      candidates = @projects.filter_map do |project, config|
+        root = config.fetch('code_root')
+        next unless path == root || path.start_with?("#{root}/")
+
+        [project, config, root]
+      end
+      project, config, root = candidates.max_by { |_, _, candidate_root| candidate_root.length }
+      return unless project
+      return [project, nil] if config['is_infrastructure']
+
+      relative_path = path.delete_prefix("#{root}/")
+      workspace = relative_path.split('/').first
+      return [project, workspace] if canonical_ordinal?(workspace)
+
+      [project, nil]
+    end
+
+    def code_dir(project, workspace)
+      config = @projects.fetch(project) { raise Error, "Project is not registered: #{project}" }
+      root = config.fetch('code_root')
+      return root if config['is_infrastructure']
+      raise Error, "#{project} workspace is ambiguous; pass #{project}<number>, such as #{project}1 or #{project}28" unless workspace
+
+      File.join(root, workspace)
+    end
+
+    def session_alias(project, workspace)
+      return project if @projects.fetch(project).fetch('is_infrastructure', false)
+
+      number = workspace.to_s[/\A\d+/]
+      raise Error, "Cannot infer #{project} session alias from workspace #{workspace.inspect}" unless number
+
+      "#{project}#{number}"
+    end
+
+    private
+
+    def alias_parts(value)
+      @projects.keys.sort_by { |project| -project.length }.each do |project|
+        match = value.match(/\A#{Regexp.escape(project)}(\d+)\z/)
+        return [project, match[1]] if match && positive_number?(match[1])
+      end
+      nil
+    end
+
+    def canonical_ordinal?(value)
+      match = value.to_s.match(ORDINAL_PATTERN)
+      match && ordinal(match[1]) == value
+    end
+
+    def positive_number?(value)
+      value.to_i.positive?
+    end
+
+    def ordinal(number)
+      number = number.to_i
+      raise Error, 'Workspace number must be positive' unless number.positive?
+
+      suffix = if (11..13).cover?(number % 100)
+        'th'
+      else
+        { 1 => 'st', 2 => 'nd', 3 => 'rd' }.fetch(number % 10, 'th')
+      end
+      "#{number}#{suffix}"
+    end
+  end
   RolePanes = Struct.new(:manager, :pi_worker, :claude_worker, keyword_init: true)
 
   class TaskResolver
-    def initialize(argv, cwd: Dir.pwd)
+    def initialize(argv, cwd: Dir.pwd, projects_file: PROJECTS_FILE)
       @argv = argv.dup
       @cwd = File.expand_path(cwd)
+      @registry = ProjectRegistry.new(projects_file)
     end
 
     def resolve
@@ -70,18 +162,18 @@ module Autowork
       when 0 then [nil, nil, nil]
       when 1
         token = @argv[0]
-        project_name?(token) || gtm_alias?(token) ? [token, nil, nil] : [nil, token, nil]
+        project_name?(token) || @registry.session_alias?(token) ? [token, nil, nil] : [nil, token, nil]
       when 2
-        if project_name?(@argv[0]) || gtm_alias?(@argv[0])
+        if project_name?(@argv[0]) || @registry.session_alias?(@argv[0])
           [@argv[0], @argv[1], nil]
         else
           [nil, @argv[0], @argv[1]]
         end
       when 3
-        raise Error, 'Usage: autowork [project-or-gtm-session] [task_id] [full-base-branch-or-ref]' unless project_name?(@argv[0]) || gtm_alias?(@argv[0])
+        raise Error, 'Usage: autowork [project-or-session] [task_id] [full-base-branch-or-ref]' unless project_name?(@argv[0]) || @registry.session_alias?(@argv[0])
 
         [@argv[0], @argv[1], @argv[2]]
-      else raise Error, 'Usage: autowork [project-or-gtm-session] [task_id] [full-base-branch-or-ref]'
+      else raise Error, 'Usage: autowork [project-or-session] [task_id] [full-base-branch-or-ref]'
       end
     end
 
@@ -89,66 +181,24 @@ module Autowork
       File.directory?(File.join(TASK_ROOT, value))
     end
 
-    def gtm_alias?(value)
-      %w[shaka_gtm1 shaka_gtm2 shaka_gtm3].include?(value)
-    end
-
     def normalize_project(value)
-      case value
-      when 'shaka_gtm1' then ['shaka_gtm', '1st']
-      when 'shaka_gtm2' then ['shaka_gtm', '2nd']
-      when 'shaka_gtm3' then ['shaka_gtm', '3rd']
-      else [value, nil]
-      end
+      @registry.normalize_alias(value)
     end
 
     def infer_project
-      case @cwd
-      when %r{\A/Volumes/dev/projects/shaka/gtm/(1st|2nd|3rd)(/|\z)}
-        ['shaka_gtm', Regexp.last_match(1)]
-      when %r{\A/Volumes/dev/projects/mydev/([^/]+)(/|\z)}
-        project = Regexp.last_match(1)
-        raise Error, "Cannot infer project from #{@cwd}; #{project.inspect} does not start with my_" unless project.start_with?('my_')
+      return ['env', nil] if @cwd == DOTS_REPO || @cwd.start_with?("#{DOTS_REPO}/")
 
-        [project, nil]
-      when %r{\A/Volumes/dev/projects/shaka/([^/]+)(/|\z)}
-        project = Regexp.last_match(1)
-        raise Error, "Cannot infer project from #{@cwd}; #{project.inspect} does not start with shaka_" unless project.start_with?('shaka_')
+      inferred = @registry.project_and_workspace_for_path(@cwd)
+      return inferred if inferred
 
-        [project, nil]
-      when %r{\A/Volumes/dev/projects/misc/([^/]+)(/|\z)}
-        project = Regexp.last_match(1)
-        raise Error, "Cannot infer project from #{@cwd}; #{project.inspect} does not start with misc_" unless project.start_with?('misc_')
-
-        [project, nil]
-      when %r{\A#{Regexp.escape(DOTS_REPO)}(/|\z)}
-        ['env', nil]
-      else
-        raise Error, "Could not infer project from #{@cwd}. Pass project explicitly."
-      end
+      raise Error, "Could not infer project from #{@cwd}. Pass project explicitly."
     end
 
     def code_dir_for(project, checkout)
-      case project
-      when 'shaka_gtm'
-        selected = checkout || infer_gtm_checkout_from_cwd
-        raise Error, 'GTM checkout is ambiguous. Invoke from a GTM checkout or pass shaka_gtm1/shaka_gtm2/shaka_gtm3.' unless selected
+      return DOTS_REPO if project == 'env'
 
-        "/Volumes/dev/projects/shaka/gtm/#{selected}"
-      when 'env'
-        DOTS_REPO
-      else
-        return "/Volumes/dev/projects/mydev/#{project}" if project.start_with?('my_')
-        return "/Volumes/dev/projects/shaka/#{project}" if project.start_with?('shaka_')
-        return "/Volumes/dev/projects/misc/#{project}" if project.start_with?('misc_')
-
-        raise Error, "No code directory mapping for project #{project.inspect}"
-      end
-    end
-
-    def infer_gtm_checkout_from_cwd
-      match = @cwd.match(%r{\A/Volumes/dev/projects/shaka/gtm/(1st|2nd|3rd)(/|\z)})
-      match && match[1]
+      selected = checkout || @registry.project_and_workspace_for_path(@cwd)&.last
+      @registry.code_dir(project, selected)
     end
 
     def infer_story_id(code_dir)
@@ -3174,13 +3224,13 @@ module Autowork
     end
 
     def project_selector(project, repo_dir)
-      return project unless project == 'shaka_gtm'
+      return project if project == 'env'
 
       checkout = File.basename(repo_dir)
-      index = { '1st' => '1', '2nd' => '2', '3rd' => '3' }.fetch(checkout) do
-        raise Error, "Cannot infer GTM session alias from repo_dir #{repo_dir.inspect}"
-      end
-      "shaka_gtm#{index}"
+      number = checkout.to_s[/\A\d+/]
+      return project unless number
+
+      "#{project}#{number}"
     end
 
     def mark_manager_review_routed(files, iteration, findings_path)
@@ -3487,9 +3537,9 @@ module Autowork
       <<~USAGE
         Usage:
           autowork [task_id] [full-base-branch-or-ref]
-          autowork [project-or-gtm-session] [task_id] [full-base-branch-or-ref]
+          autowork [project-or-session] [task_id] [full-base-branch-or-ref]
           autowork init [task_id] [full-base-branch-or-ref]
-          autowork init [project-or-gtm-session] [task_id] [full-base-branch-or-ref]
+          autowork init [project-or-session] [task_id] [full-base-branch-or-ref]
           autowork doctor [--no-send-test]
           autowork status <task_folder>
           autowork rebase-base [base-ref]

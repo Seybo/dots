@@ -14,85 +14,81 @@ Runtime path (both Pi and Claude): `~/.ai/skills-shared/components/task-resoluti
 
 - **Task folder root:** `/Volumes/dev/_tasks/<project>/` — where task definitions
   (`task.md`, `steps.md`, `draftNN/`, review artifacts) live for every project.
-- **Project names:** normal task-workflow projects must start with one of these
-  prefixes:
-  - `my_` — personal projects
-  - `shaka_` — Shaka projects
-  - `misc_` — miscellaneous projects
-- **Special local projects:** `env` is the task project for this dotfiles/dev-env repo.
-- **GTM session aliases:** `shaka_gtm1`, `shaka_gtm2`, and `shaka_gtm3` are Zellij/session aliases, not task project roots. When accepted by a task-workflow skill, normalize them to project `shaka_gtm` and select checkout `1st`, `2nd`, or `3rd` respectively.
-- **Code working directory** (where the actual repo checkout lives):
-  - `shaka_gtm`: one of `/Volumes/dev/projects/shaka/gtm/1st/`,
-    `/Volumes/dev/projects/shaka/gtm/2nd/`, or `/Volumes/dev/projects/shaka/gtm/3rd/` — three equal
-    full-clone checkouts under the Shaka projects root.
-  - `my_*`: `/Volumes/dev/projects/mydev/<project>/`.
-  - `shaka_*`: `/Volumes/dev/projects/shaka/<project>/`.
-  - `misc_*`: `/Volumes/dev/projects/misc/<project>/`.
-  - `env`: `/Users/inseybo/.dots/`.
+- **Project names:** normal task-workflow projects must start with `my_`, `shaka_`,
+  or `misc_`.
+- **Project registry:** `~/.ai/skills-shared/components/projects.yml` is the source
+  of truth for each project's code root.
+- **Normal code working directory:** every normal project checkout is an ordinal
+  workspace below its registered code root:
+  ```text
+  /project/1st/
+  /project/2nd/
+  /project/7th/
+  /project/28th/
+  ```
+  `1st` is required; any positive ordinal is valid, and additional workspaces do
+  not need to be provisioned in advance.
+- **Session aliases:** `<project><number>` selects the matching ordinal workspace:
+  `shaka_trp1` → `1st`, `shaka_trp7` → `7th`, and `shaka_trp28` → `28th`.
+  These aliases are session names, not task project roots.
+- **Infrastructure exception:** `env` maps directly to `/Users/inseybo/.dots/` and
+  is not moved below an ordinal workspace.
 
 For task-consuming skills, the normalized `<project>` name must match a first-level folder
-under `/Volumes/dev/_tasks/`. Those skills must never create project roots or code
-checkouts automatically; only `projectit` creates project roots and code working
-directories.
+under `/Volumes/dev/_tasks/`. The project registry must contain the project before a
+skill touches its code checkout. Task-consuming skills must not create code checkouts
+automatically.
 
 ## Resolving `<project>` from an explicit argument
 
-When a skill is given `<project>` directly, first normalize GTM session aliases:
+When a skill is given `<project>` directly, first match a trailing positive number
+against a registered project name. Normalize the number to its canonical ordinal suffix:
 
-- `shaka_gtm1` → project `shaka_gtm`, selected GTM checkout `1st`
-- `shaka_gtm2` → project `shaka_gtm`, selected GTM checkout `2nd`
-- `shaka_gtm3` → project `shaka_gtm`, selected GTM checkout `3rd`
+- `shaka_gtm1` → project `shaka_gtm`, workspace `1st`
+- `shaka_trp7` → project `shaka_trp`, workspace `7th`
+- `shaka_trp28` → project `shaka_trp`, workspace `28th`
 
 Then resolve:
 
 - task root → `/Volumes/dev/_tasks/<normalized-project>/`
-- code working directory → the mapping above, using the selected checkout when the normalized project is `shaka_gtm`.
-- `env` is a valid explicit project when `/Volumes/dev/_tasks/env/` exists; its code working directory is `/Users/inseybo/.dots/`.
+- code working directory → `<registered-code-root>/<ordinal>/`
+- `env` → `/Users/inseybo/.dots/`
 
-If the task root does not exist, stop and tell the user the project was not found. Do not look for `/Volumes/dev/_tasks/shaka_gtm1`, `/Volumes/dev/_tasks/shaka_gtm2`, or `/Volumes/dev/_tasks/shaka_gtm3`; those names are session aliases only.
+If the task root does not exist, stop and tell the user the project was not found.
+Do not look for session aliases as task roots.
 
 ## Inferring `<project>` from the current working directory
 
-When `<project>` is not given, infer it from the agent's current working directory:
+When `<project>` is not given, match the current directory against registered code roots.
+The first path component below a normal code root must be a canonical ordinal workspace;
+that workspace is selected for the task. A directory at the code root itself is ambiguous
+and must not be treated as a checkout.
 
-- inside `/Volumes/dev/projects/shaka/gtm/1st/`, `/Volumes/dev/projects/shaka/gtm/2nd/`, or
-  `/Volumes/dev/projects/shaka/gtm/3rd/` → project `shaka_gtm`; also remember that checkout
-  as the **selected GTM checkout**.
-- inside `/Volumes/dev/projects/mydev/<project>/` → that `<project>` when it starts with
-  `my_`.
-- inside `/Volumes/dev/projects/shaka/<project>/` → that `<project>` when it starts with
-  `shaka_`.
-- inside `/Volumes/dev/projects/misc/<project>/` → that `<project>` when it starts with
-  `misc_`.
-- inside `/Users/inseybo/.dots/` → project `env`.
-
-If the directory is inside one of the base roots but the inferred folder name does
-not use the required prefix, ask the user to pass `<project>` explicitly rather
-than guessing.
+The `env` project is inferred from `/Users/inseybo/.dots/`.
 
 ## Inferring the Shortcut story ID from the current branch
 
 Run `git -C <code-working-directory> branch --show-current` and extract the story
 ID from the first branch segment matching `sc-<digits>`.
 
-- Match with the regex `(?:^|/)sc-(\d+)(?:/|$)`; the captured digits are the story ID.
-- Example: cwd `/Volumes/dev/projects/shaka/gtm/2nd/` plus branch
-  `mikhail/sc-33498/remove-company-data-from-prospects` → project `shaka_gtm`,
-  selected checkout `2nd`, story ID `33498`.
+- Match with the regex `(?:^|/|^)sc-(\d+)(?:/|$)`; the captured digits are the story ID.
+- Example: cwd `/Volumes/dev/projects/shaka/trp/28th/` plus branch
+  `mikhail/sc-33498/report-warning` → project `shaka_trp`, workspace `28th`,
+  story ID `33498`.
 
 An inferred story ID is handled exactly like an explicitly passed story ID; `sc-`
 is branch-only and must not be expected in task folder names.
 
-## Selecting the GTM checkout
+## Selecting a workspace
 
-When the project is `shaka_gtm` and a code working directory is needed, choose the
-checkout in this order:
+Choose the workspace in this order:
 
-1. if an explicit GTM session alias selected a checkout (`shaka_gtm1` → `1st`, `shaka_gtm2` → `2nd`, `shaka_gtm3` → `3rd`), use it;
-2. else if branch/path inference already selected a GTM checkout, use it;
-3. else if the current working directory is inside one of the three checkouts, use it;
-4. otherwise ask the user which checkout to use: `1st`, `2nd`, or `3rd`.
+1. an explicit `<project><number>` session alias;
+2. workspace inferred from the current working directory;
+3. ask the user for a positive workspace number.
 
+Convert numbers using normal ordinal rules: `11th`, `12th`, and `13th` use `th`; otherwise
+`1st`, `2nd`, and `3rd` use their suffixes and all other numbers use `th`.
 ## Optional base branch/ref for stacked task branches
 
 Task-workflow skills that create or verify task branches (`taskit`, `workit`, and

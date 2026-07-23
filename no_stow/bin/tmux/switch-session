@@ -37,8 +37,14 @@ start_project() {
 
 switch_to() {
   local target="$1"
+  local workspace_launcher="${STOW_DIR:-$HOME/.dots}/no_stow/bin/tmux/start-workspace"
 
   if session_exists "$target"; then
+    switch_or_attach "$target"
+  fi
+
+  if [[ -x "$workspace_launcher" ]] && "$workspace_launcher" --check "$target"; then
+    "$workspace_launcher" "$target"
     switch_or_attach "$target"
   fi
 
@@ -46,7 +52,7 @@ switch_to() {
     start_project "$target"
   fi
 
-  echo "No tmux session or tmuxinator project found: $target" >&2
+  echo "No tmux session, workspace, or tmuxinator project found: $target" >&2
   exit 1
 }
 

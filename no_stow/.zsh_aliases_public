@@ -26,7 +26,25 @@ theme() {
 ### tmux ###
 alias tksv='tmux kill-server'
 alias tkss='tmux kill-session -t'
-alias mux='tmuxinator'
+mux() {
+  local workspace_launcher="${STOW_DIR:-$HOME/.dots}/no_stow/bin/tmux/start-workspace"
+  local target="${1:-}"
+
+  if [[ $# -eq 1 ]] && [[ -x "$workspace_launcher" ]] && "$workspace_launcher" --check "$target"; then
+    if ! tmux has-session -t "$target" 2>/dev/null; then
+      "$workspace_launcher" "$target" || return
+    fi
+
+    if [[ -n "${TMUX:-}" ]]; then
+      tmux switch-client -t "$target"
+    else
+      tmux attach-session -t "$target"
+    fi
+    return
+  fi
+
+  command tmuxinator "$@"
+}
 
 ### zellij ###
 zj() {

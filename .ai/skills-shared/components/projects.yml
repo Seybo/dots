@@ -1,0 +1,31 @@
+# Workspace registry for task projects.
+#
+# Every normal project checkout lives below its code_root in an ordinal folder:
+# 1st is required; additional clones may use any ordinal (2nd, 7th, 28th, ...).
+# The env project is the dotfiles repository and intentionally remains the one
+# infrastructure exception.
+version: 1
+projects:
+  env:
+    code_root: /Users/inseybo/.dots
+    is_infrastructure: true
+  misc_kaamp:
+    code_root: /Volumes/dev/projects/misc/misc_kaamp
+    tmux_layout: standard
+    agent_command: pi-p
+  my_finance:
+    code_root: /Volumes/dev/projects/mydev/my_finance
+    tmux_layout: standard
+    agent_command: pi-p
+  my_health:
+    code_root: /Volumes/dev/projects/mydev/my_health
+    tmux_layout: standard
+    agent_command: pi-p
+  shaka_gtm:
+    code_root: /Volumes/dev/projects/shaka/gtm
+    tmux_layout: agent
+    agent_command: pi-w
+  shaka_trp:
+    code_root: /Volumes/dev/projects/shaka/trp
+    tmux_layout: agent
+    agent_command: pi-w
