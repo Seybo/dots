@@ -58,6 +58,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 - Hermes Agent: `~/.hermes/skins/env-active.yaml` is a symlink to `~/.dots/themes/active/hermes.yaml`; `~/.hermes/config.yaml` sets `display.skin: env-active`.
 - tmux is supported for tmux-aware themes. `.tmux.conf` quiet-sources `themes/active/tmux.conf` when present, so themes without tmux files remain safe. Add `tmux.conf` only when tmux styling is in scope for that theme.
 - Alacritty is retired. Do not add Alacritty theme files.
+- Zellij integration is frozen. Preserve the existing `.config/zellij/`, `themes/*/zellij.kdl`, `themes/active/zellij.kdl`, and legacy theme-switcher touch behavior, but do not add or update Zellij integrations; use tmux for current workspace work.
 - Claude Code is wired through the symlink above, not by modifying the switcher or writing `~/.claude/settings.json` on every switch.
 
 ## Active generated-file header
