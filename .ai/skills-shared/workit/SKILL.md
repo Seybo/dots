@@ -20,16 +20,16 @@ In Pi, use either:
 ```text
 /skill:workit
 /workit
-/workit <project-or-gtm-session> [task_id]
-/workit <project-or-gtm-session> [task_id] --base <full-base-branch-or-ref>
-/workit <project-or-gtm-session> [task_id] create-steps-only
-/workit <project-or-gtm-session> [task_id] --base <full-base-branch-or-ref> create-steps-only
-/workit <project-or-gtm-session> [task_id] step <step_number>
+/workit <project-or-session> [task_id]
+/workit <project-or-session> [task_id] --base <full-base-branch-or-ref>
+/workit <project-or-session> [task_id] create-steps-only
+/workit <project-or-session> [task_id] --base <full-base-branch-or-ref> create-steps-only
+/workit <project-or-session> [task_id] step <step_number>
 ```
 
 With no arguments, infer the project from the current git checkout; if a Shortcut story ID can also be inferred from the branch, use it, otherwise list recent tasks for the inferred project.
-With one token, treat it as `<project-or-gtm-session>` only when it matches an existing task project or GTM session alias; otherwise infer `<project>` from the current working directory and treat the token as the task identifier.
-With `<project-or-gtm-session> <task_id>`, treat the first token after `/workit` as the project name or GTM session alias and the second token as the task identifier — must be **digits only**, matching either:
+With one token, treat it as `<project-or-session>` only when it matches an existing task project or registered session alias; otherwise infer `<project>` from the current working directory and treat the token as the task identifier.
+With `<project-or-session> <task_id>`, treat the first token after `/workit` as the project name or registered session alias and the second token as the task identifier — must be **digits only**, matching either:
 
 - a **Shortcut story ID** (e.g. `147831`)
 - a **local sequential task ID** (e.g. `0003`)
@@ -72,19 +72,19 @@ Companion to `/taskit` (which creates the folder). `/workit` consumes folders th
 
 ## Project and branch resolution
 
-Resolve `<project>`, the task/story ID, the code working directory, and the GTM
-checkout using the shared rules in
+Resolve `<project>`, the task/story ID, the code working directory, and the workspace
+using the shared rules in
 [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
 Read that file whenever any of these must be inferred or normalized. `<project>` resolves to two
 locations: the task folder root `/Volumes/dev/_tasks/<project>/` (where `task.md`
-lives) and the code working directory (see the shared doc's mapping). GTM session aliases
-`shaka_gtm1`, `shaka_gtm2`, and `shaka_gtm3` normalize to task project `shaka_gtm`
-and select checkout `1st`, `2nd`, or `3rd`. Applied to `/workit`:
+lives) and the code working directory (see the shared registry's mapping). Registered session
+aliases such as `shaka_gtm1`, `shaka_gtm7`, and `shaka_trp28` normalize to their task project
+and select the matching ordinal workspace. Applied to `/workit`:
 
 - With no arguments, infer `<project>` from the current working directory and infer the task/story ID from the current branch when possible; if the project is inferred but no task/story ID is found, keep the normal recent-task picker.
-- With `/workit <project-or-gtm-session>`, infer only the task/story ID from the current branch
+- With `/workit <project-or-session>`, infer only the task/story ID from the current branch
   when possible; if none can be inferred, keep the normal recent-task picker.
-- With `/workit <task_id>`, when the token is not an existing task project or GTM session alias, infer `<project>` from the current working directory and use the token as the task/story ID.
+- With `/workit <task_id>`, when the token is not an existing task project or registered session alias, infer `<project>` from the current working directory and use the token as the task/story ID.
 - With `--base <full-base-branch-or-ref>`, preserve the base ref exactly for branch setup/verification. Do not treat it as a task selector.
 - An inferred story ID is used as the same prefix-matched task identifier as an
   explicit `<task_id>`.
@@ -99,40 +99,36 @@ and select checkout `1st`, `2nd`, or `3rd`. Applied to `/workit`:
    - reject commands that combine `create-steps-only` with `step <step_number>`; these modes are mutually exclusive
    - if there are no tokens after `/workit`, infer `<project>` from the current checkout and infer `<task_id>` from the current branch when possible; if no story ID can be inferred, leave `<task_id>` missing
    - if there is exactly one token after `/workit`:
-     - if the token matches an existing task project or GTM session alias, treat it as `<project>` or a GTM session alias and try to infer `<task_id>` from the current branch; if no story ID can be inferred, leave `<task_id>` missing
+     - if the token matches an existing task project or registered session alias, treat it as `<project>` or a registered session alias and try to infer `<task_id>` from the current branch; if no story ID can be inferred, leave `<task_id>` missing
      - otherwise infer `<project>` from the current working directory and use the token as `<task_id>`
    - if there are two tokens after `/workit`:
-     - extract `<project>` or a GTM session alias as the first token after `/workit`
+     - extract `<project>` or a registered session alias as the first token after `/workit`
      - extract `<task_id>` as the second token
    - if `<project>` is missing, ask the user to use:
      ```text
      /workit
-     /workit <project-or-gtm-session> [task_id]
+     /workit <project-or-session> [task_id]
      ```
    - if `<task_id>` is present, validate that it matches `^\d+$` (digits only); otherwise ask the user to pass a Shortcut story ID or local sequential task ID such as `0003`
    - if `<task_id>` is missing, continue through project validation, then list recent tasks as described below
    - if `base_ref` is present, keep it as a full Git branch/ref string for branch setup; do not resolve it through task folders or Shortcut
 
 2. **Resolve and validate project:**
-   - first normalize any GTM session alias using the shared task-resolution rules:
-     - `shaka_gtm1` → project `shaka_gtm`, checkout `1st`
-     - `shaka_gtm2` → project `shaka_gtm`, checkout `2nd`
-     - `shaka_gtm3` → project `shaka_gtm`, checkout `3rd`
+   - normalize any registered session alias using the shared task-resolution rules; its trailing
+     number selects the matching ordinal workspace (`shaka_trp28` → `28th`)
    - resolve the task root from the normalized project as:
      ```text
      /Volumes/dev/_tasks/<project>/
      ```
-   - never look for `/Volumes/dev/_tasks/shaka_gtm1`, `/Volumes/dev/_tasks/shaka_gtm2`, or `/Volumes/dev/_tasks/shaka_gtm3`; those are session aliases, not task roots
+   - never look for a session alias under `/Volumes/dev/_tasks/`; session aliases are not task roots
    - if that folder does not exist, tell the user the project was not found
    - do not create project folders automatically
-   - resolve the code working directory from the shared project mapping; this is the only place where implementation work should happen:
+   - resolve the code working directory from the shared project registry; this is the only
+     place where implementation work should happen:
      ```text
-     /Volumes/dev/projects/shaka/gtm/<checkout>/ # when <project> is shaka_gtm; checkout is 1st, 2nd, or 3rd
-     /Volumes/dev/projects/mydev/<project>/      # when <project> starts with my_
-     /Volumes/dev/projects/shaka/<project>/      # when <project> starts with shaka_
-     /Volumes/dev/projects/misc/<project>/       # when <project> starts with misc_
+     <registered-code-root>/<ordinal-workspace>/
      ```
-   - For GTM, choose the checkout using the "Selecting the GTM checkout" rules in
+   - Choose the workspace using the "Selecting a workspace" rules in
      [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
      Do not fail if the resolved code working directory does not exist — just do not assume it.
 
@@ -167,32 +163,32 @@ and select checkout `1st`, `2nd`, or `3rd`. Applied to `/workit`:
      ```
    - **Never work on `main` except for the `env` project (`/Users/inseybo/.dots`).** If the current branch is `main` and the resolved project is not `env`, stop before editing and switch to a task branch. For `env`, working on `main` is allowed.
    - **Never work on `master` for non-`my_*` projects.** If the current branch is `master` and the resolved project does not start with `my_`, stop before editing and switch to a task branch. For `my_*` projects, working on `master` is allowed.
-   - For GTM Shortcut tasks, follow the branch setup rules from [`taskit` step 8: Set up the development branch](../taskit/SKILL.md#set-up-the-development-branch-gtm-project-shortcut-mode-only): fetch the Shortcut story, generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from the returned story `name`, verify whether it already exists, and create it when safe. Do not use the task folder suffix as the branch slug; existing task folders can have local/draft slugs that differ from Shortcut's Git Helper slug.
-   - If `base_ref` is present for a GTM Shortcut task:
+   - For registered workspace Shortcut tasks, follow the branch setup rules from [`taskit` step 8: Set up the development branch](../taskit/SKILL.md#set-up-the-development-branch-gtm-project-shortcut-mode-only): fetch the Shortcut story, generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from the returned story `name`, verify whether it already exists, and create it when safe. Do not use the task folder suffix as the branch slug; existing task folders can have local/draft slugs that differ from Shortcut's Git Helper slug.
+   - If `base_ref` is present for a registered workspace Shortcut task:
      - require a clean worktree before any checkout/branch creation:
        ```bash
-       git -C /Volumes/dev/projects/shaka/gtm/<checkout> status --short
+       git -C <code-root>/<workspace> status --short
        ```
        If dirty, stop and ask the user to clean/commit/stash manually; do not stash automatically.
      - fetch remote refs so remote base branches are available:
        ```bash
-       git -C /Volumes/dev/projects/shaka/gtm/<checkout> fetch origin
+       git -C <code-root>/<workspace> fetch origin
        ```
      - verify the exact base ref resolves to a commit:
        ```bash
-       git -C /Volumes/dev/projects/shaka/gtm/<checkout> rev-parse --verify --quiet <base_ref>^{commit}
+       git -C <code-root>/<workspace> rev-parse --verify --quiet <base_ref>^{commit}
        ```
        If it does not resolve, stop and ask for a valid full branch/ref.
      - if the generated task branch does not exist, create it from the exact base ref without configuring the base as Git upstream/tracking branch:
        ```bash
-       git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout --no-track -b <branch-name> <base_ref>
+       git -C <code-root>/<workspace> checkout --no-track -b <branch-name> <base_ref>
        ```
        `--no-track` is required because when `<base_ref>` is a remote branch, Git may otherwise set the task branch's upstream to the parent branch. The parent/base must stay in `/autowork` config, not Git upstream.
        Report that `<branch-name>` was created from `<base_ref>`.
      - if the generated task branch already exists and the current branch is not that branch, stop and ask before switching. When running as `/autowork` preflight, stop and report the needed branch decision instead of switching.
      - if the generated task branch already exists and the current branch is that branch, verify the base ref is already contained in the task branch:
        ```bash
-       git -C /Volumes/dev/projects/shaka/gtm/<checkout> merge-base --is-ancestor <base_ref> HEAD
+       git -C <code-root>/<workspace> merge-base --is-ancestor <base_ref> HEAD
        ```
        If this fails, the parent/base branch likely advanced or the branch was created from a different base. Stop and ask for explicit rebase or base-change instructions; do not rebase automatically.
    - If `base_ref` is not present and a task branch already exists, ask the user whether to switch to it unless the current branch already contains `sc-{task_id}` as a path segment. When running as `/autowork` preflight, stop and report the needed branch decision instead of continuing on the wrong branch.

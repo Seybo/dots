@@ -3,7 +3,7 @@ name: projectit
 description: >-
   Create a new project workspace for the task workflow. Creates the task root under
   /Volumes/dev/_tasks/<project>, creates the expected code directory, runs git init
-  there, and creates a matching Zellij layout. Command-only skill. In Pi, invoke
+  there, and registers the project workspace/layout mapping. Command-only skill. In Pi, invoke
   via /skill:projectit; /projectit is also accepted where that alias is exposed.
 disable-model-invocation: true
 ---
@@ -41,25 +41,22 @@ Create the filesystem roots needed by the task workflow skills:
 /Volumes/dev/_tasks/<project>/
 ```
 
-And create the expected code working directory, then initialize it as a git repository:
+And create the registered code root's required `1st` workspace, then initialize it as a git repository:
 
 ```text
-/Volumes/dev/projects/mydev/<project>/   # when <project> starts with my_
-/Volumes/dev/projects/shaka/<project>/   # when <project> starts with shaka_
-/Volumes/dev/projects/misc/<project>/    # when <project> starts with misc_
+/Volumes/dev/projects/mydev/<project>/1st/   # when <project> starts with my_
+/Volumes/dev/projects/shaka/<project>/1st/   # when <project> starts with shaka_
+/Volumes/dev/projects/misc/<project>/1st/    # when <project> starts with misc_
 ```
 
-Also create a matching Zellij layout:
+Register the project workspace/layout mapping in:
 
 ```text
-/Users/inseybo/.dots/.config/zellij/layouts/<project>.kdl
+/Users/inseybo/.ai/skills-shared/components/projects.yml
 ```
 
-The layout name and session name are both `<project>`, so the project can be opened with:
-
-```bash
-zj <project>
-```
+Additional workspaces use any positive ordinal (`2nd`, `7th`, `28th`, ...). Tmux sessions
+use `<project><number>` and are started by the generic workspace launcher.
 
 After this, the project can be used with:
 
@@ -81,9 +78,9 @@ After this, the project can be used with:
         - /Volumes/dev/projects/mydev/<project>/ when the project starts with my_
         - /Volumes/dev/projects/shaka/<project>/ when the project starts with shaka_
         - /Volumes/dev/projects/misc/<project>/ when the project starts with misc_
-     4. /projectit runs git init in the code directory.
-     5. /projectit creates /Users/inseybo/.dots/.config/zellij/layouts/<project>.kdl.
-     6. Open or attach the project Zellij session with zj <project>.
+     4. /projectit runs git init in the `1st` workspace.
+     5. /projectit registers the project in `~/.ai/skills-shared/components/projects.yml`.
+     6. Start a workspace through the generic tmux launcher/session manager.
      7. Then use /draftit, /taskit, and /workit with that project.
      ```
    - otherwise require exactly one token after `/projectit`
@@ -96,7 +93,7 @@ After this, the project can be used with:
    - `<project>` must be a single safe path segment
    - allow only letters, numbers, underscores, and hyphens
    - require one of these prefixes: `my_`, `shaka_`, or `misc_`
-   - reserve `shaka_gtm` for the existing GTM multi-checkout project; do not create it with `/projectit`
+   - do not create `env` with `/projectit`; it is the dotfiles infrastructure project
    - do not allow whitespace, `/`, `.` path segments, `..`, or shell metacharacters
    - if invalid, stop and ask for a safe prefixed project name such as:
      ```text
@@ -110,15 +107,15 @@ After this, the project can be used with:
      ```text
      /Volumes/dev/_tasks/<project>/
      ```
-   - code working directory:
+   - code root and required first workspace:
      ```text
-     /Volumes/dev/projects/mydev/<project>/   # when <project> starts with my_
-     /Volumes/dev/projects/shaka/<project>/   # when <project> starts with shaka_
-     /Volumes/dev/projects/misc/<project>/    # when <project> starts with misc_
+     /Volumes/dev/projects/mydev/<project>/1st/   # when <project> starts with my_
+     /Volumes/dev/projects/shaka/<project>/1st/   # when <project> starts with shaka_
+     /Volumes/dev/projects/misc/<project>/1st/    # when <project> starts with misc_
      ```
-   - Zellij layout:
+   - project registry:
      ```text
-     /Users/inseybo/.dots/.config/zellij/layouts/<project>.kdl
+     /Users/inseybo/.ai/skills-shared/components/projects.yml
      ```
 
 4. **Validate base directories:**
@@ -126,94 +123,57 @@ After this, the project can be used with:
    - require `/Volumes/dev/projects/mydev/` to exist when `<project>` starts with `my_`
    - require `/Volumes/dev/projects/shaka/` to exist when `<project>` starts with `shaka_`
    - require `/Volumes/dev/projects/misc/` to exist when `<project>` starts with `misc_`
-   - require `/Users/inseybo/.dots/.config/zellij/layouts/` to exist
    - if a required base directory is missing, stop and report it
-   - do not create `/Volumes/dev`, `/Volumes/dev/_tasks`, `/Volumes/dev/projects/mydev`, `/Volumes/dev/projects/shaka`, `/Volumes/dev/projects/misc`, or `/Users/inseybo/.dots/.config/zellij/layouts`
+   - do not create `/Volumes/dev`, `/Volumes/dev/_tasks`, `/Volumes/dev/projects/mydev`, `/Volumes/dev/projects/shaka`, or `/Volumes/dev/projects/misc`
 
 5. **Create directories safely:**
    - create the task root if it does not exist
-   - create the code working directory if it does not exist
+   - create the code root and required `1st` workspace if they do not exist
    - if either path exists as a file or non-directory, stop and report it
    - if either directory already exists, leave it in place and report that it already existed
    - do not overwrite or delete anything
    - do not create task folders, draft folders, `task.md`, or `steps.md`
 
 6. **Initialize git:**
-   - inspect the code working directory after it exists
+   - inspect `<code-root>/1st/` after it exists
    - if it already contains a `.git` directory or file, report that git was already initialized and do not run `git init`
    - otherwise run:
      ```bash
-     git -C <code-working-directory> init
+     git -C <code-root>/1st init
      ```
    - if `git init` fails, report the error and leave the created directories in place
 
-7. **Create the Zellij layout:**
-   - layout path:
-     ```text
-     /Users/inseybo/.dots/.config/zellij/layouts/<project>.kdl
+7. **Register the project:**
+   - add or verify one entry in `~/.ai/skills-shared/components/projects.yml`:
+     ```yaml
+     <project>:
+       code_root: <code-root>
+       tmux_layout: standard
+       agent_command: pi-w
      ```
-   - if the layout path exists as a file, leave it unchanged and report that it already existed
-   - if the layout path exists as a directory or other non-file, stop and report it
-   - otherwise create the layout file with this exact structure, substituting the resolved paths:
-     ```kdl
-     layout {
-         cwd "<code-working-directory>"
-
-         default_tab_template {
-             pane size=1 borderless=true {
-                 plugin location="zellij:compact-bar"
-             }
-             children
-         }
-
-         tab name="git" {
-             pane command="zsh" {
-                 args "-lic" "lg"
-             }
-         }
-
-         tab name="vim" {
-             pane command="zsh" {
-                 args "-lic" "v"
-             }
-         }
-
-         tab name="pi" {
-             pane command="zsh" {
-                 args "-lic" "pi-w"
-             }
-         }
-
-         tab name="misc" split_direction="horizontal" {
-             pane size="80%" cwd="<task-root>" command="zsh" {
-                 args "-lic" "lg"
-             }
-             pane name="misc"
-         }
-     }
-     ```
-   - if content does not end with a newline, add exactly one trailing newline
+   - preserve an existing project entry instead of overwriting its layout or command
+   - do not create per-workspace configuration files; the generic launcher derives every ordinal workspace
 
 8. **Return paths clearly:**
    - show whether the task root was created or already existed
-   - show whether the code working directory was created or already existed
+   - show whether the code root and `1st` workspace were created or already existed
    - show whether git was initialized or already present
-   - show whether the Zellij layout was created or already existed
+   - show whether the registry entry was created or already existed
    - show the full task root path
-   - show the full code working directory path
-   - show the full Zellij layout path
-   - remind the user they can now run:
+   - show the full `1st` workspace path
+   - show the project registry path
+   - remind the user they can now start tmux workspaces and run:
      ```text
-     zj <project>
      /draftit <project> ...
      /taskit <project> ...
+     /workit <project><number> ...
      ```
 
 ## Important Notes
 
 - Do not auto-use this skill without the explicit `/projectit` command
-- Create only project-level roots and the matching Zellij layout; do not create any task-specific files or folders
+- Create only project-level roots, the required `1st` workspace, and the registry entry; do not create task-specific files or folders
 - Never overwrite, delete, or rename existing files or directories
-- Do not create parent/base directories; only create the project task root and project code directory under existing bases
-- Do not update Zellij keybindings or create per-project shell aliases; `zj <project>` is the scalable open/attach command
-- Running `git init` in an existing non-git code directory is allowed only after confirming `.git` is absent
+- Do not create parent/base directories; only create the project task root and project code root under existing bases
+- Do not create per-workspace tmuxinator files, Ghostty shortcuts, or shell aliases
+- Running `git init` in an existing non-git `1st` workspace is allowed only after confirming `.git` is absent

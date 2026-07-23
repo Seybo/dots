@@ -32,7 +32,7 @@ In Pi, use either:
 With no arguments, infer both the project and Shortcut story ID from the current git checkout and branch.
 With one token, treat it as `<project>` only when it matches an existing task project; otherwise infer `<project>` from the current working directory and treat the token as the selector/task name.
 With two or more tokens, treat the first token as `<project>` only when it matches an existing task project; otherwise infer `<project>` from the current working directory and treat all tokens as the selector/task name.
-`--base <full-base-branch-or-ref>` is optional for GTM Shortcut mode. It tells `/taskit` to create the generated task branch from that exact base branch/ref. Do not infer a base from a numeric parent task/story ID.
+`--base <full-base-branch-or-ref>` is optional for registered workspace Shortcut mode. It tells `/taskit` to create the generated task branch from that exact base branch/ref. Do not infer a base from a numeric parent task/story ID.
 
 The selector/task name is interpreted as either:
 
@@ -70,14 +70,14 @@ For `draftNN` and task markdown path mode, inspect the existing file. If it has 
 ## Project and branch resolution
 
 Resolve `<project>`, the Shortcut story ID, the code working directory, and the
-GTM checkout using the shared rules in
+workspace using the shared rules in
 [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
 Read that file whenever any of these must be inferred. In short:
 
 - `<project>` must match a first-level folder under `/Volumes/dev/_tasks/`.
 - When the first token is not an existing task project, infer `<project>` from the current working directory and treat the whole input as the selector/task name.
 - Infer the Shortcut story ID from the current branch's `sc-<digits>` segment.
-- Preserve an optional `--base <full-base-branch-or-ref>` exactly for GTM Shortcut branch creation; do not interpret it as part of the selector/task name.
+- Preserve an optional `--base <full-base-branch-or-ref>` exactly for registered workspace branch creation; do not interpret it as part of the selector/task name.
 - An inferred story ID is handled exactly like Shortcut mode.
 - If a needed project cannot be inferred, ask the user to pass it explicitly. A story ID is needed only for no-argument or one-project Shortcut inference.
 
@@ -177,15 +177,15 @@ creates project roots or code checkouts.
    - show the full `task.md` path
    - in Task markdown path mode, show the old and new task folder paths; if Shortcut conversion happened, also show the created Shortcut story ID and URL
 
-8. **Set up the development branch (GTM project, Shortcut mode only):**
-   - This step runs only when `<project>` is `shaka_gtm` AND the mode is Shortcut. Skip for other projects or Manual mode.
-   - GTM has multiple full-clone checkouts under:
+8. **Set up the development branch (registered workspace project, Shortcut mode only):**
+   - This step runs for registered ordinal-workspace projects when the mode is Shortcut. Skip for Manual mode.
+   - Each registered project has a code root with ordinal workspaces under it:
      ```text
-     /Volumes/dev/projects/shaka/gtm/1st/
-     /Volumes/dev/projects/shaka/gtm/2nd/
-     /Volumes/dev/projects/shaka/gtm/3rd/
+     <code-root>/1st/
+     <code-root>/7th/
+     <code-root>/28th/
      ```
-   - Choose the checkout using the "Selecting the GTM checkout" rules in
+   - Choose the workspace using the "Selecting a workspace" rules in
      [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
    - Generate the branch name manually from the Shortcut story name:
      ```text
@@ -200,39 +200,39 @@ creates project roots or code checkouts.
        ```
      - Do not use the task folder suffix, `# Story details` local name, draft name, or any other local task title for the branch slug. Local task folders can drift from Shortcut titles; the branch slug must match Shortcut's Git Helper name.
      - Do NOT call `mcp__shortcut__stories-get-branch-name` — the MCP returns incorrect names (triple dashes, truncation).
-   - Check the current branch in the selected checkout with `git -C /Volumes/dev/projects/shaka/gtm/<checkout> branch --show-current`.
+   - Check the current branch in the selected workspace with `git -C <code-root>/<workspace> branch --show-current`.
      - If the current branch contains `sc-{story_id}` as a path segment, treat branch setup as already done and do not create or switch branches.
      - If the current branch differs from the generated branch name, report both the current branch and generated branch name.
    - If `base_ref` is present:
      - require a clean worktree before any checkout/branch creation:
        ```bash
-       git -C /Volumes/dev/projects/shaka/gtm/<checkout> status --short
+       git -C <code-root>/<workspace> status --short
        ```
        If dirty, stop and ask the user to clean/commit/stash manually; do not stash automatically.
      - fetch remote refs so remote base branches are available:
        ```bash
-       git -C /Volumes/dev/projects/shaka/gtm/<checkout> fetch origin
+       git -C <code-root>/<workspace> fetch origin
        ```
      - verify the exact base ref resolves to a commit:
        ```bash
-       git -C /Volumes/dev/projects/shaka/gtm/<checkout> rev-parse --verify --quiet <base_ref>^{commit}
+       git -C <code-root>/<workspace> rev-parse --verify --quiet <base_ref>^{commit}
        ```
        If it does not resolve, stop and ask for a valid full branch/ref.
    - Verify whether the generated branch already exists in the selected checkout:
      ```bash
-     git -C /Volumes/dev/projects/shaka/gtm/<checkout> rev-parse --verify --quiet <branch-name>
+     git -C <code-root>/<workspace> rev-parse --verify --quiet <branch-name>
      ```
    - If the generated branch exists (exit 0):
      - If the current branch is not the generated branch, stop and ask the user how to proceed; do not switch silently.
      - If the current branch is the generated branch and `base_ref` is present, verify the base ref is contained in the task branch:
        ```bash
-       git -C /Volumes/dev/projects/shaka/gtm/<checkout> merge-base --is-ancestor <base_ref> HEAD
+       git -C <code-root>/<workspace> merge-base --is-ancestor <base_ref> HEAD
        ```
        If that fails, stop and ask for explicit rebase or base-change instructions; do not rebase automatically.
    - If the generated branch does not exist (exit 1), create and check it out with exactly one of these forms — `-C` flag required, no `cd`, no bare `git`:
      ```bash
-     git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout --no-track -b <branch-name> <base_ref>
-     git -C /Volumes/dev/projects/shaka/gtm/<checkout> checkout -b <branch-name>
+     git -C <code-root>/<workspace> checkout --no-track -b <branch-name> <base_ref>
+     git -C <code-root>/<workspace> checkout -b <branch-name>
      ```
      Use the first form when `base_ref` is present; use the second form only when `base_ref` is absent. `--no-track` is required for explicit bases because when `<base_ref>` is a remote branch, Git may otherwise set the new task branch's upstream to the parent branch. The parent/base must stay in task/autowork config, not Git upstream.
    - Report the selected checkout, branch name, and base ref (when present) alongside the created paths from step 7.
@@ -378,4 +378,4 @@ Do not update `task.md` contents in this mode unless the user explicitly asks fo
 - Do not add extra sections to `task.md`
 - For implementation-oriented tasks, later planning should use TDD where it makes sense, with specs focused on edge cases, boundaries, regressions, and acceptance criteria rather than only happy paths
 - Do not auto-use this skill without the explicit `/taskit` command
-- Step 8 (branch setup) is GTM-specific and Shortcut-mode-only. For Manual mode in `shaka_gtm`, or any non-GTM project, do not touch git.
+- Step 8 branch setup applies to registered ordinal-workspace projects in Shortcut mode. Manual tasks do not touch git automatically.

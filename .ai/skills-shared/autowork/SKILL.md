@@ -18,7 +18,7 @@ In Pi, use either:
 /skill:autowork
 /autowork
 /autowork <task_id> <full-base-branch-or-ref>
-/autowork <project-or-gtm-session> [task_id] [full-base-branch-or-ref]
+/autowork <project-or-session> [task_id] [full-base-branch-or-ref]
 /autowork doctor
 /autowork doctor --no-send-test
 /autowork rebase-base
@@ -107,7 +107,7 @@ Base branch/ref rules:
   ```text
   /autowork <task_id>
   /autowork <task_id> <full-base-branch-or-ref>
-  /autowork <project-or-gtm-session> <task_id> <full-base-branch-or-ref>
+  /autowork <project-or-session> <task_id> <full-base-branch-or-ref>
   ```
 - Store the initial resolved base in `<task_folder>/autowork-log/config.yml` as `original_review_base_ref` and `original_review_base_commit`.
 - Store the active/current review base separately as `review_base_ref`, `review_base_ref_is_explicit`, and `review_base_commit`; run the final review against `review_base_ref...HEAD`.
@@ -197,12 +197,12 @@ Use the shared task-resolution rules from:
 
 Preflight before running the Ruby helper:
 
-1. resolve the same `<project-or-gtm-session> [task_id] [full-base-branch-or-ref]` arguments that `/autowork` will pass to the helper
+1. resolve the same `<project-or-session> [task_id] [full-base-branch-or-ref]` arguments that `/autowork` will pass to the helper
 2. if a full base branch/ref was supplied, preserve it exactly; do not infer it from a numeric task/story ID
 3. if `<task_folder>/steps.md` is missing, a base branch/ref was supplied, or branch setup/verification is needed, invoke `/workit ... create-steps-only` before the Ruby helper:
    ```text
-   /workit <project-or-gtm-session> [task_id] create-steps-only
-   /workit <project-or-gtm-session> [task_id] --base <full-base-branch-or-ref> create-steps-only
+   /workit <project-or-session> [task_id] create-steps-only
+   /workit <project-or-session> [task_id] --base <full-base-branch-or-ref> create-steps-only
    ```
    Use the `--base` form when `/autowork` was invoked with a full base branch/ref. If project is inferred, pass the inferred task selector with `--base`, e.g. `/workit <task_id> --base <full-base-branch-or-ref> create-steps-only`.
 4. rely on `/workit create-steps-only` to use the documented `/workit`/`/taskit` branch rules; for GTM Shortcut tasks this means the branch slug comes from the current Shortcut story `name`, fetched through the shared Shortcut CLI, not from the task folder suffix
@@ -499,7 +499,7 @@ git commit -m "Manager review fix M"
 
 Also allowed by `/autowork` invocation during preflight only:
 
-- `/workit ... create-steps-only` may perform its documented task-branch setup/verification, including the GTM Shortcut branch create/switch path from `/taskit` when safe and unambiguous.
+- `/workit ... create-steps-only` may perform its documented task-branch setup/verification, including the registered-workspace Shortcut branch create/switch path from `/taskit` when safe and unambiguous.
 
 Still forbidden unless separately approved:
 
