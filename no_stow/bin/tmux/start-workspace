@@ -91,13 +91,21 @@ def main
   raise WorkspaceError, "task project does not exist: #{task_root}" unless File.directory?(task_root)
   raise WorkspaceError, "tmux session already exists: #{target}" if system('tmux', 'has-session', '-t', target, out: File::NULL, err: File::NULL)
 
-  case config.fetch('tmux_layout')
-  when 'standard'
-    start_standard_layout(target, code_dir, task_root, config.fetch('agent_command'))
-  when 'agent'
-    start_agent_layout(target, code_dir, task_root, config.fetch('agent_command'))
-  else
-    raise WorkspaceError, "unknown tmux layout for #{project}: #{config['tmux_layout'].inspect}"
+  layout_started = false
+  begin
+    case config.fetch('tmux_layout')
+    when 'standard'
+      start_standard_layout(target, code_dir, task_root, config.fetch('agent_command'))
+    when 'agent'
+      start_agent_layout(target, code_dir, task_root, config.fetch('agent_command'))
+    else
+      raise WorkspaceError, "unknown tmux layout for #{project}: #{config['tmux_layout'].inspect}"
+    end
+    layout_started = true
+  ensure
+    unless layout_started
+      system('tmux', 'kill-session', '-t', target, out: File::NULL, err: File::NULL)
+    end
   end
 end
 
