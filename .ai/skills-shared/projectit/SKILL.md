@@ -74,10 +74,10 @@ After this, the project can be used with:
      Project setup flow:
      1. Run /projectit <project> with a project name starting with my_, shaka_, or misc_.
      2. /projectit creates /Volumes/dev/_tasks/<project>/.
-     3. /projectit also creates the expected code directory:
-        - /Volumes/dev/projects/mydev/<project>/ when the project starts with my_
-        - /Volumes/dev/projects/shaka/<project>/ when the project starts with shaka_
-        - /Volumes/dev/projects/misc/<project>/ when the project starts with misc_
+     3. /projectit also creates the expected first workspace:
+        - /Volumes/dev/projects/mydev/<project>/1st/ when the project starts with my_
+        - /Volumes/dev/projects/shaka/<project>/1st/ when the project starts with shaka_
+        - /Volumes/dev/projects/misc/<project>/1st/ when the project starts with misc_
      4. /projectit runs git init in the `1st` workspace.
      5. /projectit registers the project in `~/.ai/skills-shared/components/projects.yml`.
      6. Start a workspace through the generic tmux launcher/session manager.

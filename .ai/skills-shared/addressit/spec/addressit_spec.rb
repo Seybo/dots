@@ -26,6 +26,39 @@ RSpec.describe Addressit do
     end
   end
 
+  describe Addressit::TaskResolver do
+    it 'resolves projects and arbitrary workspaces from the shared registry' do
+      code_root = File.join(@tmpdir, 'projects', 'shaka', 'trp')
+      FileUtils.mkdir_p(code_root)
+      code_root = File.realpath(code_root)
+      repo_root = File.join(code_root, '28th')
+      task_root = File.join(@tmpdir, 'tasks')
+      task_folder = File.join(task_root, 'shaka_trp', '1234-task')
+      registry = File.join(@tmpdir, 'projects.yml')
+      FileUtils.mkdir_p(repo_root)
+      FileUtils.mkdir_p(task_folder)
+      File.write(File.join(task_folder, 'task.md'), '# Task\n')
+      File.write(registry, <<~YAML)
+        projects:
+          shaka_trp:
+            code_root: #{code_root}
+            tmux_layout: agent
+            agent_command: pi-w
+      YAML
+
+      shell = class_double(Autowork::Shell)
+      allow(shell).to receive(:capture!).with('git', '-C', anything, 'rev-parse', '--show-toplevel').and_return(repo_root)
+      allow(shell).to receive(:capture!).with('git', '-C', repo_root, 'branch', '--show-current').and_return('sc-1234/fix')
+
+      stub_const('Addressit::TASK_ROOT', task_root)
+      context = described_class.new(cwd: repo_root, shell: shell, projects_file: registry).resolve
+
+      expect(context.project).to eq('shaka_trp')
+      expect(context.task_folder).to eq(task_folder)
+      expect(context.repo_root).to eq(repo_root)
+    end
+  end
+
   describe Addressit::Ledger do
     let(:state) { { 'comment_ledger' => [] } }
     let(:comment) { { 'id' => 42, 'updated_at' => '2026-07-22T12:00:00Z' } }

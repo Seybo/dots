@@ -18,9 +18,10 @@ module Addressit
   Context = Struct.new(:project, :task_id, :task_folder, :repo_root, :branch, :pr_repo, :pr_number, keyword_init: true)
 
   class TaskResolver
-    def initialize(cwd: Dir.pwd, shell: Autowork::Shell)
+    def initialize(cwd: Dir.pwd, shell: Autowork::Shell, projects_file: Autowork::PROJECTS_FILE)
       @cwd = File.expand_path(cwd)
       @shell = shell
+      @registry = Autowork::ProjectRegistry.new(projects_file)
     end
 
     def resolve
@@ -50,21 +51,9 @@ module Addressit
     def infer_project(path)
       return 'env' if path == DOTS_REPO || path.start_with?("#{DOTS_REPO}/")
 
-      mappings = {
-        %r{\A/Volumes/dev/projects/shaka/gtm/(?:1st|2nd|3rd)(?:/|\z)} => 'shaka_gtm',
-        %r{\A/Volumes/dev/projects/mydev/([^/]+)(?:/|\z)} => ->(match) { match[1] },
-        %r{\A/Volumes/dev/projects/shaka/([^/]+)(?:/|\z)} => ->(match) { match[1] },
-        %r{\A/Volumes/dev/projects/misc/([^/]+)(?:/|\z)} => ->(match) { match[1] }
-      }
-      mappings.each do |pattern, value|
-        match = path.match(pattern)
-        next unless match
+      project_and_workspace = @registry.project_and_workspace_for_path(path)
+      return project_and_workspace.first if project_and_workspace
 
-        project = value.respond_to?(:call) ? value.call(match) : value
-        raise Error, "Cannot infer project from #{path.inspect}." unless project == 'shaka_gtm' || project.match?(/\A(?:my_|shaka_|misc_)/)
-
-        return project
-      end
       raise Error, "Could not infer project from #{path.inspect}. Pass a checkout in a known project."
     end
 
