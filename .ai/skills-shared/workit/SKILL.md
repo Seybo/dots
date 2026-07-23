@@ -163,7 +163,8 @@ and select the matching ordinal workspace. Applied to `/workit`:
      ```
    - **Never work on `main` except for the `env` project (`/Users/inseybo/.dots`).** If the current branch is `main` and the resolved project is not `env`, stop before editing and switch to a task branch. For `env`, working on `main` is allowed.
    - **Never work on `master` for non-`my_*` projects.** If the current branch is `master` and the resolved project does not start with `my_`, stop before editing and switch to a task branch. For `my_*` projects, working on `master` is allowed.
-   - For registered workspace Shortcut tasks, follow the branch setup rules from [`taskit` step 8: Set up the development branch](../taskit/SKILL.md#set-up-the-development-branch-gtm-project-shortcut-mode-only): fetch the Shortcut story, generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from the returned story `name`, verify whether it already exists, and create it when safe. Do not use the task folder suffix as the branch slug; existing task folders can have local/draft slugs that differ from Shortcut's Git Helper slug.
+   - For registered workspace tasks whose registry entry has `task_provider: shortcut`, follow the branch setup rules from [`taskit` step 8: Set up the development branch](../taskit/SKILL.md#set-up-the-development-branch-task_provider-shortcut-projects-shortcut-mode-only): fetch the Shortcut story, generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from the returned story `name`, verify whether it already exists, and create it when safe. Do not use the task folder suffix as the branch slug; existing task folders can have local/draft slugs that differ from Shortcut's Git Helper slug.
+   - For `task_provider: local` projects, never fetch Shortcut stories or create/switch Shortcut branches.
    - If `base_ref` is present for a registered workspace Shortcut task:
      - require a clean worktree before any checkout/branch creation:
        ```bash

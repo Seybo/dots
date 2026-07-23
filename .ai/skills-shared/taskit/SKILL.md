@@ -29,7 +29,7 @@ In Pi, use either:
 /taskit <project> draftNN
 ```
 
-With no arguments, infer both the project and Shortcut story ID from the current git checkout and branch.
+With no arguments, infer the project from the current git checkout and infer a Shortcut story ID from the branch only when the project's registry entry has `task_provider: shortcut`.
 With one token, treat it as `<project>` only when it matches an existing task project; otherwise infer `<project>` from the current working directory and treat the token as the selector/task name.
 With two or more tokens, treat the first token as `<project>` only when it matches an existing task project; otherwise infer `<project>` from the current working directory and treat all tokens as the selector/task name.
 `--base <full-base-branch-or-ref>` is optional for registered workspace Shortcut mode. It tells `/taskit` to create the generated task branch from that exact base branch/ref. Do not infer a base from a numeric parent task/story ID.
@@ -63,7 +63,7 @@ Do not auto-use this skill from a general task-management request. Wait for the 
 
 In manual mode, create a local task folder inside the selected project and create a `task.md` file inside it.
 
-Shortcut is used only in explicit Shortcut mode: a numeric story ID, an inferred branch story ID, or an existing `task.md` whose first `# Story details` section has both `Name:` and `Epic:`.
+Shortcut is used only in explicit Shortcut mode for projects whose registry entry has `task_provider: shortcut`: a numeric story ID, an inferred branch story ID, or an existing `task.md` whose first `# Story details` section has both `Name:` and `Epic:`. Projects with `task_provider: local` never call Shortcut; all selectors and task files remain local/manual.
 
 For `draftNN` and task markdown path mode, inspect the existing file. If it has complete `# Story details`, create a Shortcut story and rename the folder to `<story_id>-<slug>`. Otherwise, treat it as a local-only draft/task and rename the folder to a sequential local task folder such as `0004-<slug>`.
 
@@ -78,8 +78,8 @@ Read that file whenever any of these must be inferred. In short:
 - When the first token is not an existing task project, infer `<project>` from the current working directory and treat the whole input as the selector/task name.
 - Infer the Shortcut story ID from the current branch's `sc-<digits>` segment.
 - Preserve an optional `--base <full-base-branch-or-ref>` exactly for registered workspace branch creation; do not interpret it as part of the selector/task name.
-- An inferred story ID is handled exactly like Shortcut mode.
-- If a needed project cannot be inferred, ask the user to pass it explicitly. A story ID is needed only for no-argument or one-project Shortcut inference.
+- An inferred story ID is handled exactly like Shortcut mode only when the project has `task_provider: shortcut`.
+- If a needed project cannot be inferred, ask the user to pass it explicitly. A story ID is needed only for no-argument or one-project Shortcut inference on `task_provider: shortcut` projects.
 
 `taskit` only creates task folders under `/Volumes/dev/_tasks/<project>/`; it never
 creates project roots or code checkouts.
@@ -88,15 +88,17 @@ creates project roots or code checkouts.
 
 1. **Parse command arguments:**
    - detect and remove an optional `--base <full-base-branch-or-ref>` pair before resolving `<project>` / selector; call the value `base_ref` when present; reject `--base` without a following value
-   - if there are no tokens after `/taskit`, infer `<project>` and `<story_id>` from the current checkout and branch; if successful, use Shortcut mode
+   - if there are no tokens after `/taskit`, infer `<project>` from the current checkout; infer `<story_id>` and use Shortcut mode only when the selected project has `task_provider: shortcut`
    - if there is exactly one token after `/taskit`:
-     - if the token matches an existing task project, treat it as `<project>` and infer `<story_id>` from the current branch; if successful, use Shortcut mode; if no story ID can be inferred, ask the user for a task name, story ID, `draftNN`, or task markdown path
+     - if the token matches an existing task project, treat it as `<project>`; infer `<story_id>` and use Shortcut mode only when the project has `task_provider: shortcut`; otherwise ask for a local task name, `draftNN`, or task markdown path
      - otherwise infer `<project>` from the current working directory and use the token as the selector/task name
    - if there are two or more tokens after `/taskit`:
      - if the first token matches an existing task project, extract it as `<project>` and use all remaining text as the selector/task name
      - otherwise infer `<project>` from the current working directory and use the full argument string as the selector/task name
+   - read the selected project's `task_provider` from `~/.ai/skills-shared/components/projects.yml` before selecting a mode
    - decide the mode for the selector/task name in this order:
-     - **Shortcut mode** if it is a single token matching `^\d+$`
+     - **Shortcut mode** if the project has `task_provider: shortcut` and the selector is a single token matching `^\d+$`
+     - for a project with `task_provider: local`, never call Shortcut; use Manual mode for ordinary selectors and local task markdown
      - **Draft reference mode** if it is a single token matching `^draft\d{2}$`; resolve it to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then handle it exactly like Task markdown path mode
      - **Task markdown path mode** if it is a single existing path ending in `.md` or `.markdown`
      - **Manual mode** otherwise
@@ -121,9 +123,10 @@ creates project roots or code checkouts.
 
 3. **Resolve task name and slug:**
    - **Manual mode:** use the remainder as the task name
-   - **Shortcut mode:** call `mcp__shortcut__stories-get-by-id` with the story ID; use the story's `name` as the task name and the story's `description` as the body. If the call fails or the story is missing, stop and report the error.
+   - **Shortcut mode for `task_provider: shortcut` projects:** call `mcp__shortcut__stories-get-by-id` with the story ID; use the story's `name` as the task name and the story's `description` as the body. If the call fails or the story is missing, stop and report the error.
+   - **Local/manual mode for `task_provider: local` projects:** do not call Shortcut, even if a selector is numeric or a task file contains Story details.
    - **Draft reference mode:** resolve `draftNN` to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then follow Task markdown path mode.
-   - **Task markdown path mode:** read the existing task file. If the first section named exactly `# Story details` has both `Name:` and `Epic:`, use Shortcut conversion and use the parsed `Name` as the task name. Otherwise use Local task-file conversion and derive the task name from the first meaningful heading or first non-empty content line; if no useful name can be derived, ask the user for a task name.
+   - **Task markdown path mode:** read the existing task file. If the selected project has `task_provider: shortcut` and the first section named exactly `# Story details` has both `Name:` and `Epic:`, use Shortcut conversion and use the parsed `Name` as the task name. For `task_provider: local` projects, always use Local task-file conversion and derive the task name from the first meaningful heading or first non-empty content line; if no useful name can be derived, ask the user for a task name.
    - slugify the task name:
      - lowercase everything
      - replace spaces with `-`
@@ -177,8 +180,8 @@ creates project roots or code checkouts.
    - show the full `task.md` path
    - in Task markdown path mode, show the old and new task folder paths; if Shortcut conversion happened, also show the created Shortcut story ID and URL
 
-8. **Set up the development branch (registered workspace project, Shortcut mode only):**
-   - This step runs for registered ordinal-workspace projects when the mode is Shortcut. Skip for Manual mode.
+8. **Set up the development branch (`task_provider: shortcut` projects, Shortcut mode only):**
+   - This step runs only for registered ordinal-workspace projects whose registry entry has `task_provider: shortcut` and only in Shortcut mode. Skip for `task_provider: local` projects and Manual mode.
    - Each registered project has a code root with ordinal workspaces under it:
      ```text
      <code-root>/1st/
@@ -378,4 +381,4 @@ Do not update `task.md` contents in this mode unless the user explicitly asks fo
 - Do not add extra sections to `task.md`
 - For implementation-oriented tasks, later planning should use TDD where it makes sense, with specs focused on edge cases, boundaries, regressions, and acceptance criteria rather than only happy paths
 - Do not auto-use this skill without the explicit `/taskit` command
-- Step 8 branch setup applies to registered ordinal-workspace projects in Shortcut mode. Manual tasks do not touch git automatically.
+- Step 8 branch setup applies only to registered ordinal-workspace projects with `task_provider: shortcut` in Shortcut mode. `task_provider: local` projects and Manual tasks do not touch git automatically.

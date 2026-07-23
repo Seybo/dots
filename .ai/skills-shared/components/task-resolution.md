@@ -17,7 +17,10 @@ Runtime path (both Pi and Claude): `~/.ai/skills-shared/components/task-resoluti
 - **Project names:** normal task-workflow projects must start with `my_`, `shaka_`,
   or `misc_`.
 - **Project registry:** `~/.ai/skills-shared/components/projects.yml` is the source
-  of truth for each project's code root.
+  of truth for each project's code root, layout, and task provider.
+- **Task providers:** `task_provider: shortcut` permits Shortcut story and branch
+  workflows; `task_provider: local` is local/manual-only and is the default for new
+  projects.
 - **Normal code working directory:** every normal project checkout is an ordinal
   workspace below its registered code root:
   ```text

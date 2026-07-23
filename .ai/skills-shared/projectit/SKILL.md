@@ -56,7 +56,8 @@ Register the project workspace/layout mapping in:
 ```
 
 Additional workspaces use any positive ordinal (`2nd`, `7th`, `28th`, ...). Tmux sessions
-use `<project><number>` and are started by the generic workspace launcher.
+use `<project><number>` and are started through the project's tmuxinator layout with the
+workspace root injected dynamically.
 
 After this, the project can be used with:
 
@@ -80,7 +81,7 @@ After this, the project can be used with:
         - /Volumes/dev/projects/misc/<project>/1st/ when the project starts with misc_
      4. /projectit runs git init in the `1st` workspace.
      5. /projectit registers the project in `~/.ai/skills-shared/components/projects.yml`.
-     6. Start a workspace through the generic tmux launcher/session manager.
+     6. Start a workspace with `mux <project>1`; the project-level tmuxinator layout is reused for later ordinals.
      7. Then use /draftit, /taskit, and /workit with that project.
      ```
    - otherwise require exactly one token after `/projectit`
@@ -143,16 +144,19 @@ After this, the project can be used with:
      ```
    - if `git init` fails, report the error and leave the created directories in place
 
-7. **Register the project:**
+7. **Create and register the project layout:**
+   - require the default layout at `~/.config/tmuxinator/default.yml`
+   - create one project-level layout at `~/.config/tmuxinator/<project>.yml` by copying the default layout
+   - change only the layout's `name` to `<project>`; keep its workspace-root and task-root ERB settings
    - add or verify one entry in `~/.ai/skills-shared/components/projects.yml`:
      ```yaml
      <project>:
        code_root: <code-root>
-       tmux_layout: standard
-       agent_command: pi-w
+       tmux_layout: <project>
+       task_provider: local
      ```
-   - preserve an existing project entry instead of overwriting its layout or command
-   - do not create per-workspace configuration files; the generic launcher derives every ordinal workspace
+   - preserve an existing project entry instead of overwriting its layout or task provider
+   - do not create per-workspace configuration files; all ordinals reuse the project layout
 
 8. **Return paths clearly:**
    - show whether the task root was created or already existed
@@ -172,7 +176,7 @@ After this, the project can be used with:
 ## Important Notes
 
 - Do not auto-use this skill without the explicit `/projectit` command
-- Create only project-level roots, the required `1st` workspace, and the registry entry; do not create task-specific files or folders
+- Create only project-level roots, the required `1st` workspace, the project-level tmuxinator layout, and the registry entry; do not create task-specific files or folders
 - Never overwrite, delete, or rename existing files or directories
 - Do not create parent/base directories; only create the project task root and project code root under existing bases
 - Do not create per-workspace tmuxinator files, Ghostty shortcuts, or shell aliases

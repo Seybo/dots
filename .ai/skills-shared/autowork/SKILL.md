@@ -499,7 +499,7 @@ git commit -m "Manager review fix M"
 
 Also allowed by `/autowork` invocation during preflight only:
 
-- `/workit ... create-steps-only` may perform its documented task-branch setup/verification, including the registered-workspace Shortcut branch create/switch path from `/taskit` when safe and unambiguous.
+- `/workit ... create-steps-only` may perform its documented task-branch setup/verification, including the Shortcut branch create/switch path for projects registered with `task_provider: shortcut` when safe and unambiguous.
 
 Still forbidden unless separately approved:
 
