@@ -1,9 +1,18 @@
 ---
 name: claude-super-review
-description: Multi-agent code review for PR / branch / diff in any repo. Runs 6 parallel Claude subagents (3 generic adversarial + 1 Architecture + 1 Security + 1 Deployment) + an independent Codex pass when Codex preflight succeeds. Convergence filter (≥2 agents confirmed = valid issue; Critical/HIGH = always surfaced). Surface Critical / High / Medium with mandatory short writeup "what's wrong / code / why it matters / fix". Senior architect voice, output ready to paste into a GitHub comment. Use this skill whenever the user writes "/claude-super-review", "review PR 247", "review my branch", "look at what X pushed", supplies a GitHub PR URL, or asks for a code review of uncommitted changes. Trigger even if "skill" isn't said explicitly - this is the default review workflow.
+description: >-
+  Explicit-only multi-agent code review for PRs, branches, commits, staged changes,
+  or diffs. Invoke only with /claude-super-review (or its exposed short alias).
+  Do not invoke for ordinary review requests; handle those with a direct review
+  unless the user explicitly requests this workflow.
 ---
 
 # code-review
+
+**Explicit invocation only:** run this skill only after `/claude-super-review`
+(or its exposed short alias). A plain request to review a PR, branch, commit, or
+working tree must not invoke this skill. Handle plain review requests directly
+unless the user explicitly asks for this multi-agent workflow.
 
 Multi-agent code review skill - runs 6 parallel Claude subagents (a mixed Opus+Sonnet panel, with the model set EXPLICITLY in each Task call) and a Codex pass on the same diff, filters via convergence, returns a ranked list with verdict. Optimized for AI-generated code where single-pass review misses blind spots, for cross-cutting issues that narrow specialists skip over, and for structural issues that need an architecture lens.
 
