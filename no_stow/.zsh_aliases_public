@@ -119,7 +119,13 @@ _run_with_agent_attention() {
     "$watcher" --agent-start "$TMUX_PANE" >/dev/null 2>&1 || true
   fi
 
-  command "$agent_command" "$@"
+  # Run the agent in a child shell so interrupt/term signals return here for cleanup.
+  (
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'exit 129' HUP
+    command "$agent_command" "$@"
+  )
   exit_status=$?
 
   if [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && [ -x "$watcher" ]; then
