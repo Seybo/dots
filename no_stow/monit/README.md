@@ -11,7 +11,7 @@ This setup differs slightly from generic snippets:
 - LaunchAgent runs `monit -I -c ...` so launchd supervises a foreground Monit process.
 - The Monit runtime config is copied to `~/Library/Application Support/monit` with chmod `600`, because Monit rejects loose config-file permissions.
 - Process rules are runtime-local by default so permissions stay valid.
-- Use `add` for a unique process. Use `add-scan` when many processes share the same name, such as Zellij sessions.
+- Use `add` for a unique process. Use `add-scan` when many processes share the same name, such as tmux processes.
 - Generated check-program wrappers live in `~/.local/state/monit/programs` because Monit does not reliably accept `check program` paths with spaces.
 
 ## Install
@@ -51,13 +51,12 @@ Check the regex before relying on it:
 For apps that spawn multiple processes with the same name, use `add-scan`. This scans all matching processes and notifies when any one PID stays above the threshold long enough.
 
 ```sh
-~/.dots/no_stow/bin/monit-cpu-alerts add-scan zellij '(^|/)zellij( |$)' 30 30 300
 ~/.dots/no_stow/bin/monit-cpu-alerts add-scan tmux '(^|/)tmux( |$)' 30 30 300
 ```
 
 Arguments:
 
-1. Monit program check name, e.g. `zellij`
+1. Monit program check name, e.g. `tmux`
 2. process regex matched against executable path/name and command args
 3. CPU percent, default `30`
 4. seconds over threshold, default `60`

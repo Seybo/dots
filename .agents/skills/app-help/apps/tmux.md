@@ -22,7 +22,7 @@
 ## Local gotchas
 
 - Local tmux keeps the default `Ctrl-b` prefix; Ghostty `Cmd-p` enters local pane mode, where `n` splits right and `N` splits down.
-- Local tmux theme loading currently expects `~/.dots/themes/active/tmux.conf`, but most current themes only have Zellij/Ghostty/etc. files.
+- Local tmux theme loading expects `~/.dots/themes/active/tmux.conf` when the active theme provides tmux styling; otherwise tmux keeps its base styling.
 - With local `allow-set-title on`, programs such as Pi and Claude can overwrite tmuxinator `select-pane -T` pane titles after startup.
 - Local config has `mouse on`; tmux's default `MouseDrag1Border` binding resizes panes and can be unbound while keeping mouse scroll/click support.
 - Local `claude`, `pi-p`, and `pi-w` shell wrappers start `no_stow/bin/tmux/agent-attention-notify --pane "$TMUX_PANE"`, which polls `tmux capture-pane` for approval/input notifications.
