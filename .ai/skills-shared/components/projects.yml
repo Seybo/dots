@@ -1,31 +1,35 @@
 # Workspace registry for task projects.
 #
-# Every normal project checkout lives below its code_root in an ordinal folder:
-# 1st is required; additional clones may use any ordinal (2nd, 7th, 28th, ...).
-# The env project is the dotfiles repository and intentionally remains the one
-# infrastructure exception.
-version: 1
+# `ordinal_workspaces` projects use numbered checkouts such as 1st/ and 28th/
+# below `code_root`. `direct` projects map one existing checkout directly.
+version: 2
 projects:
   env:
-    code_root: /Users/inseybo/.dots
+    checkout_layout: direct
+    checkout_path: /Users/inseybo/.dots
     is_infrastructure: true
   misc_kaamp:
+    checkout_layout: ordinal_workspaces
     code_root: /Volumes/dev/projects/misc/misc_kaamp
     tmux_layout: misc_kaamp
     task_provider: local
   my_finance:
-    code_root: /Volumes/dev/projects/mydev/my_finance
+    checkout_layout: ordinal_workspaces
+    code_root: /Volumes/dev/projects/my/my_finance
     tmux_layout: my_finance
     task_provider: local
   my_health:
-    code_root: /Volumes/dev/projects/mydev/my_health
+    checkout_layout: ordinal_workspaces
+    code_root: /Volumes/dev/projects/my/my_health
     tmux_layout: my_health
     task_provider: local
   shaka_gtm:
+    checkout_layout: ordinal_workspaces
     code_root: /Volumes/dev/projects/shaka/gtm
     tmux_layout: shaka_gtm
     task_provider: shortcut
   shaka_trp:
+    checkout_layout: ordinal_workspaces
     code_root: /Volumes/dev/projects/shaka/trp
     tmux_layout: shaka_trp
     task_provider: local

@@ -183,6 +183,30 @@ RSpec.describe Autowork do
       expect(context.code_dir).to eq('/Volumes/dev/projects/shaka/trp/7th')
     end
 
+    it 'infers a direct checkout project and resolves its local task id' do
+      task_root = File.join(@tmpdir, '_tasks')
+      repo = File.join(@tmpdir, 'rails')
+      task_folder = File.join(task_root, 'rails', '0001-fix-docs')
+      registry = File.join(@tmpdir, 'projects.yml')
+      FileUtils.mkdir_p(File.join(repo, 'docs'))
+      FileUtils.mkdir_p(task_folder)
+      File.write(registry, <<~YAML)
+        projects:
+          rails:
+            checkout_layout: direct
+            checkout_path: #{repo}
+            task_provider: local
+      YAML
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+
+      context = described_class.new(['0001'], cwd: File.join(repo, 'docs'), projects_file: registry).resolve
+
+      expect(context.project).to eq('rails')
+      expect(context.code_dir).to eq(repo)
+      expect(context.task_folder).to eq(task_folder)
+    end
+
     it 'accepts a full base branch/ref as the second argument when project is inferred' do
       task_root, task_folder = make_env_task(task_id: '1234')
       dots_repo = make_git_repo
@@ -562,6 +586,30 @@ RSpec.describe Autowork do
         .to raise_error(Autowork::Error, /Refusing to start with dirty worktree/)
     end
 
+    it 'refuses to initialize a direct project on master' do
+      task_root = File.join(@tmpdir, '_tasks')
+      repo = make_git_repo
+      task_folder = File.join(task_root, 'rails', '0001-fix-docs')
+      registry = File.join(@tmpdir, 'projects.yml')
+      FileUtils.mkdir_p(task_folder)
+      File.write(File.join(task_folder, 'task.md'), "# Task\n")
+      File.write(File.join(task_folder, 'steps.md'), "## Step 1: Fix docs\n")
+      File.write(registry, <<~YAML)
+        projects:
+          rails:
+            checkout_layout: direct
+            checkout_path: #{repo}
+            task_provider: local
+      YAML
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::PROJECTS_FILE', registry)
+
+      expect { Autowork::RunSetup.new(%w[rails 0001], tmux: tmux).prepare! }
+        .to raise_error(Autowork::Error, /protected branch "master"/)
+    end
+
     it 'creates config, state, and the first pi-worker prompt for a clean run' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
@@ -582,6 +630,7 @@ RSpec.describe Autowork do
       expect(config['pi_worker_target']).to eq('%2')
       expect(config['claude_worker_target']).to eq('%3')
       expect(config['branch_name']).not_to be_empty
+      expect(config['starting_head_commit']).to be_nil
       expect(config['super_review_status_timeout_minutes']).to eq(20)
       expect(config['max_total_commits']).to eq(15)
       expect(config['run_final_super_review']).to eq(true)
@@ -610,6 +659,7 @@ RSpec.describe Autowork do
       described_class.new(%w[env 0003 parent-feature]).run
 
       config = YAML.safe_load(File.read(Autowork::RunFiles.new(task_folder).config_path))
+      expect(config['starting_head_commit']).to eq(base_sha)
       expect(config['original_review_base_ref']).to eq('parent-feature')
       expect(config['original_review_base_commit']).to eq(base_sha)
       expect(config['review_base_ref']).to eq('parent-feature')

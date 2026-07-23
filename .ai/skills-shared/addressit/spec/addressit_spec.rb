@@ -27,6 +27,34 @@ RSpec.describe Addressit do
   end
 
   describe Addressit::TaskResolver do
+    it 'resolves a direct checkout with an explicit local task id' do
+      repo_root = File.join(@tmpdir, 'rails')
+      task_root = File.join(@tmpdir, 'tasks')
+      task_folder = File.join(task_root, 'rails', '0001-fix-docs')
+      registry = File.join(@tmpdir, 'projects.yml')
+      FileUtils.mkdir_p(repo_root)
+      FileUtils.mkdir_p(task_folder)
+      File.write(File.join(task_folder, 'task.md'), '# Task\n')
+      File.write(registry, <<~YAML)
+        projects:
+          rails:
+            checkout_layout: direct
+            checkout_path: #{File.realpath(repo_root)}
+            task_provider: local
+      YAML
+
+      shell = class_double(Autowork::Shell)
+      allow(shell).to receive(:capture!).with('git', '-C', anything, 'rev-parse', '--show-toplevel').and_return(repo_root)
+      allow(shell).to receive(:capture!).with('git', '-C', File.realpath(repo_root), 'branch', '--show-current').and_return('fix-docs')
+
+      stub_const('Addressit::TASK_ROOT', task_root)
+      context = described_class.new(cwd: repo_root, shell: shell, projects_file: registry).resolve(task_id: '0001')
+
+      expect(context.project).to eq('rails')
+      expect(context.task_folder).to eq(task_folder)
+      expect(context.branch).to eq('fix-docs')
+    end
+
     it 'resolves projects and arbitrary workspaces from the shared registry' do
       code_root = File.join(@tmpdir, 'projects', 'shaka', 'trp')
       FileUtils.mkdir_p(code_root)

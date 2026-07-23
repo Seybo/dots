@@ -66,14 +66,14 @@ module Autowork
 
     def project_and_workspace_for_path(path)
       candidates = @projects.filter_map do |project, config|
-        root = config.fetch('code_root')
+        root = checkout_root(config)
         next unless path == root || path.start_with?("#{root}/")
 
         [project, config, root]
       end
       project, config, root = candidates.max_by { |_, _, candidate_root| candidate_root.length }
       return unless project
-      return [project, nil] if config['is_infrastructure']
+      return [project, nil] if config['is_infrastructure'] || direct_checkout?(config)
 
       relative_path = path.delete_prefix("#{root}/")
       workspace = relative_path.split('/').first
@@ -84,15 +84,16 @@ module Autowork
 
     def code_dir(project, workspace)
       config = @projects.fetch(project) { raise Error, "Project is not registered: #{project}" }
-      root = config.fetch('code_root')
-      return root if config['is_infrastructure']
+      root = checkout_root(config)
+      return root if config['is_infrastructure'] || direct_checkout?(config)
       raise Error, "#{project} workspace is ambiguous; pass #{project}<number>, such as #{project}1 or #{project}28" unless workspace
 
       File.join(root, workspace)
     end
 
     def session_alias(project, workspace)
-      return project if @projects.fetch(project).fetch('is_infrastructure', false)
+      config = @projects.fetch(project)
+      return project if config.fetch('is_infrastructure', false) || direct_checkout?(config)
 
       number = workspace.to_s[/\A\d+/]
       raise Error, "Cannot infer #{project} session alias from workspace #{workspace.inspect}" unless number
@@ -104,10 +105,21 @@ module Autowork
 
     def alias_parts(value)
       @projects.keys.sort_by { |project| -project.length }.each do |project|
+        config = @projects.fetch(project)
+        next if direct_checkout?(config) || config['is_infrastructure']
+
         match = value.match(/\A#{Regexp.escape(project)}(\d+)\z/)
         return [project, match[1]] if match && positive_number?(match[1])
       end
       nil
+    end
+
+    def checkout_root(config)
+      direct_checkout?(config) ? config.fetch('checkout_path') : config.fetch('code_root')
+    end
+
+    def direct_checkout?(config)
+      config['checkout_layout'] == 'direct'
     end
 
     def canonical_ordinal?(value)
@@ -242,6 +254,10 @@ module Autowork
 
     def head_sha
       Shell.capture!('git', '-C', root, 'rev-parse', 'HEAD').strip
+    end
+
+    def head_sha_if_exists
+      ref_exists?('HEAD') ? head_sha : nil
     end
 
     def add_all
@@ -1518,6 +1534,7 @@ module Autowork
       @context = TaskResolver.new(@argv).resolve
       @repo = GitRepo.new(context.code_dir)
       raise Error, "Refusing to start with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+      ensure_safe_branch!
 
       @steps = Steps.new(File.join(context.task_folder, 'steps.md'))
       @roles = @tmux.discover_roles(repo.root)
@@ -1531,6 +1548,13 @@ module Autowork
 
     private
 
+    def ensure_safe_branch!
+      return if context.project == 'env'
+      return unless %w[main master].include?(repo.branch)
+
+      raise Error, "Refusing to run autowork on protected branch #{repo.branch.inspect} for #{context.project}. Switch to a task branch first."
+    end
+
     def write_config
       config = {
         'task_folder' => context.task_folder,
@@ -1538,6 +1562,7 @@ module Autowork
         'task_id' => context.task_id,
         'repo_dir' => repo.root,
         'branch_name' => repo.branch,
+        'starting_head_commit' => repo.head_sha_if_exists,
         'steps_count' => steps.count,
         'pi_manager_target' => roles.manager.id,
         'pi_worker_target' => roles.pi_worker.id,

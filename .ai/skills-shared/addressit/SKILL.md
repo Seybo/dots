@@ -34,14 +34,14 @@ from anywhere in those arguments, ignoring conversational filler, and pass the
 PR target first to the helper. The helper requires:
 
 ```text
-addressit <pr-number-or-github-url> [filters]
+addressit <pr-number-or-github-url> [filters] [--task <local-task-id>]
 ```
 
 ## Invocation
 
 ```text
-/skill:addressit <pr-number-or-github-url> [filters]
-/addressit <pr-number-or-github-url> [filters]
+/skill:addressit <pr-number-or-github-url> [filters] [--task <local-task-id>]
+/addressit <pr-number-or-github-url> [filters] [--task <local-task-id>]
 ```
 
 Examples:
@@ -52,6 +52,7 @@ Examples:
 /addressit 123 comments from @octocat
 /addressit 123 comments since 12 hours ago
 /addressit 123 comments from @octocat since 2026-06-04T09:00:00Z
+/addressit 123 --task 0001
 ```
 
 Do not auto-use this skill from a general review-related request. Wait for an
@@ -62,9 +63,9 @@ explicit `/addressit` invocation.
 Addressit uses the current checkout and the same project/task resolution rules as
 `/autowork` and `/workit`:
 
-1. infer the project from the current checkout
-2. infer the task/story ID from the current branch (`sc-<digits>` or a local
-   four-digit task prefix)
+1. infer the project from the current checkout using the shared registry
+2. use `--task <local-task-id>` for an arbitrary local/ad-hoc branch, or infer
+   the task/story ID from `sc-<digits>` or a local four-digit branch prefix
 3. require exactly one matching folder under `/Volumes/dev/_tasks/<project>/`
 4. require that folder to contain `task.md`
 5. require a clean worktree

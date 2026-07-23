@@ -30,7 +30,7 @@ In Pi, use either:
 With no arguments, infer both `<project>` and the story ID from the current
 checkout and branch. With only `<project>`, infer the story ID from the current
 branch. When arguments are given, the first token is `<project>` only if it
-matches an existing folder under `/Volumes/dev/_tasks/`; otherwise infer
+matches a registered project key; otherwise infer
 `<project>` from the current working directory and treat the token as the selector.
 
 Resolve `<project>` and the story ID with
@@ -76,7 +76,7 @@ Use the task text as the source of truth. The output is meant to be pasted into 
 
 Resolve `<project>` and the story ID (explicit or inferred) using the shared rules in
 [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
-`<project>` must match a first-level folder under `/Volumes/dev/_tasks/`.
+`<project>` must be registered in `~/.ai/skills-shared/components/projects.yml`.
 
 Do not create project folders, task folders, or files.
 
@@ -84,7 +84,7 @@ Do not create project folders, task folders, or files.
 
 1. **Parse command arguments:**
    - if there are no tokens after `/sumit`, infer both `<project>` and the story ID from the current checkout and branch; the inferred story ID is the selector
-   - if there is exactly one token, and it matches an existing folder under `/Volumes/dev/_tasks/`, treat it as `<project>` and infer the story ID from the current branch as the selector; otherwise infer `<project>` from the current working directory and treat the token as the selector
+   - if there is exactly one token, and it matches a registered project key, treat it as `<project>` and infer the story ID from the current branch as the selector; otherwise infer `<project>` from the current working directory and treat the token as the selector
    - if there are two or more tokens, extract `<project>` as the first token and the remaining text as the selector
    - resolve inference with [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md)
    - if the project or selector is still missing, ask the user to use:
@@ -101,7 +101,8 @@ Do not create project folders, task folders, or files.
      ```text
      /Volumes/dev/_tasks/<project>/
      ```
-   - if that folder does not exist, tell the user the project was not found
+   - if the project is not registered, tell the user to add it to `~/.ai/skills-shared/components/projects.yml`
+   - if its task root does not exist, report that no tasks have been created for the registered project
    - do not create folders automatically
 
 3. **Locate the task file:**

@@ -109,6 +109,7 @@ Base branch/ref rules:
   /autowork <task_id> <full-base-branch-or-ref>
   /autowork <project-or-session> <task_id> <full-base-branch-or-ref>
   ```
+- Store the initial branch snapshot in `<task_folder>/autowork-log/config.yml` as `branch_name` and `starting_head_commit`.
 - Store the initial resolved base in `<task_folder>/autowork-log/config.yml` as `original_review_base_ref` and `original_review_base_commit`.
 - Store the active/current review base separately as `review_base_ref`, `review_base_ref_is_explicit`, and `review_base_commit`; run the final review against `review_base_ref...HEAD`.
 - `original_review_base_*` is audit/debug context and must not change after run initialization. `review_base_*` may change after an explicit rebase/base update.
@@ -740,6 +741,7 @@ max_super_review_fix_iterations: 3
 max_manager_review_fix_iterations: 5
 max_total_commits: 15
 max_runtime_hours_per_run: 1
+starting_head_commit: <sha>
 worker_status_timeout_minutes: 10
 super_review_status_timeout_minutes: 20
 run_final_super_review: true

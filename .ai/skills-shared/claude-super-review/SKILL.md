@@ -711,8 +711,8 @@ After printing the Phase 3 markdown, ALWAYS persist the SAME markdown verbatim t
 **Where to write it** (first match wins):
 
 1. **Task folder** - resolve it deterministically, do NOT eyeball or improvise. Resolution follows the shared task-resolution logic (`~/.ai/skills-shared/components/task-resolution.md`):
-   - **Project**: if the user passed a `task.md` path or task-folder path, use that folder directly. Otherwise infer the project from the review's working dir — e.g. any of `/Volumes/dev/projects/shaka/gtm/{1st,2nd,3rd}/` → project `shaka_gtm`; task root is `/Volumes/dev/_tasks/<project>/`.
-   - **Story ID**: from the branch name, capture with `(?:^|/)sc-(\d+)(?:/|$)` (e.g. `mikhail/sc-33672/...` → `33672`). Task folders are named `<id>-<slug>` with NO `sc-` prefix.
+   - **Project**: if the user passed a `task.md` path or task-folder path, use that folder directly. Otherwise infer the project from the review's working dir using `~/.ai/skills-shared/components/projects.yml`. This supports both ordinal workspaces (for example `/Volumes/dev/projects/shaka/gtm/2nd/` → `shaka_gtm`) and registered direct checkouts (for example `/Volumes/dev/oss/rails/` → `rails`); task root is `/Volumes/dev/_tasks/<project>/`.
+   - **Task ID**: from a branch `sc-<digits>` segment when available (e.g. `mikhail/sc-33672/...` → `33672`). For an arbitrary local branch, do not guess a task ID; the user must pass the task folder/path directly. Task folders are named `<id>-<slug>` with NO `sc-` prefix.
    - **Find the folder** with `find`, never a shell glob (a bare zsh glob aborts the whole command on a non-matching pattern and prints `no matches found`, which looks like a real negative but is a broken command):
      ```bash
      find "/Volumes/dev/_tasks/<project>" -maxdepth 1 -type d -name '<id>-*'

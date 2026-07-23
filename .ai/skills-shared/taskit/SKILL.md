@@ -30,8 +30,8 @@ In Pi, use either:
 ```
 
 With no arguments, infer the project from the current git checkout and infer a Shortcut story ID from the branch only when the project's registry entry has `task_provider: shortcut`.
-With one token, treat it as `<project>` only when it matches an existing task project; otherwise infer `<project>` from the current working directory and treat the token as the selector/task name.
-With two or more tokens, treat the first token as `<project>` only when it matches an existing task project; otherwise infer `<project>` from the current working directory and treat all tokens as the selector/task name.
+With one token, treat it as `<project>` only when it matches a registered task project; otherwise infer `<project>` from the current working directory and treat the token as the selector/task name.
+With two or more tokens, treat the first token as `<project>` only when it matches a registered task project; otherwise infer `<project>` from the current working directory and treat all tokens as the selector/task name.
 `--base <full-base-branch-or-ref>` is optional for registered workspace Shortcut mode. It tells `/taskit` to create the generated task branch from that exact base branch/ref. Do not infer a base from a numeric parent task/story ID.
 
 The selector/task name is interpreted as either:
@@ -74,8 +74,8 @@ workspace using the shared rules in
 [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
 Read that file whenever any of these must be inferred. In short:
 
-- `<project>` must match a first-level folder under `/Volumes/dev/_tasks/`.
-- When the first token is not an existing task project, infer `<project>` from the current working directory and treat the whole input as the selector/task name.
+- `<project>` must be registered in `~/.ai/skills-shared/components/projects.yml`.
+- When the first token is not a registered task project, infer `<project>` from the current working directory and treat the whole input as the selector/task name.
 - Infer the Shortcut story ID from the current branch's `sc-<digits>` segment.
 - Preserve an optional `--base <full-base-branch-or-ref>` exactly for registered workspace branch creation; do not interpret it as part of the selector/task name.
 - An inferred story ID is handled exactly like Shortcut mode only when the project has `task_provider: shortcut`.
@@ -90,10 +90,10 @@ creates project roots or code checkouts.
    - detect and remove an optional `--base <full-base-branch-or-ref>` pair before resolving `<project>` / selector; call the value `base_ref` when present; reject `--base` without a following value
    - if there are no tokens after `/taskit`, infer `<project>` from the current checkout; infer `<story_id>` and use Shortcut mode only when the selected project has `task_provider: shortcut`
    - if there is exactly one token after `/taskit`:
-     - if the token matches an existing task project, treat it as `<project>`; infer `<story_id>` and use Shortcut mode only when the project has `task_provider: shortcut`; otherwise ask for a local task name, `draftNN`, or task markdown path
+     - if the token matches a registered task project, treat it as `<project>`; infer `<story_id>` and use Shortcut mode only when the project has `task_provider: shortcut`; otherwise ask for a local task name, `draftNN`, or task markdown path
      - otherwise infer `<project>` from the current working directory and use the token as the selector/task name
    - if there are two or more tokens after `/taskit`:
-     - if the first token matches an existing task project, extract it as `<project>` and use all remaining text as the selector/task name
+     - if the first token matches a registered task project, extract it as `<project>` and use all remaining text as the selector/task name
      - otherwise infer `<project>` from the current working directory and use the full argument string as the selector/task name
    - read the selected project's `task_provider` from `~/.ai/skills-shared/components/projects.yml` before selecting a mode
    - decide the mode for the selector/task name in this order:
@@ -118,8 +118,8 @@ creates project roots or code checkouts.
      ```text
      /Volumes/dev/_tasks/<project>/
      ```
-   - if that folder does not exist, tell the user the project was not found
-   - do not create project folders automatically
+   - if the project is not registered, tell the user to add it to `~/.ai/skills-shared/components/projects.yml`
+   - if the registered project root does not exist, create it before creating the task folder
 
 3. **Resolve task name and slug:**
    - **Manual mode:** use the remainder as the task name
@@ -376,7 +376,7 @@ Do not update `task.md` contents in this mode unless the user explicitly asks fo
 - Preserve the original task name text only for slugification input; folder name uses the slugified form
 - Local task IDs use zero-padded 4-digit IDs (`0001`, `0002`, ...). To choose the next local ID, scan first-level task folders under `/Volumes/dev/_tasks/<project>/` matching `^\d{4}-`, then use one greater than the highest existing local ID; if none exist, start at `0001`. Ignore `draftNN` folders and Shortcut story ID folders when assigning local IDs.
 - If the generated folder already exists, stop and ask the user how to proceed rather than overwriting anything
-- Do not create project folders automatically; only create task folders inside an existing project folder
+- Do not register projects automatically; create a missing task root only for an already registered project
 - Do not add extra files
 - Do not add extra sections to `task.md`
 - For implementation-oriented tasks, later planning should use TDD where it makes sense, with specs focused on edge cases, boundaries, regressions, and acceptance criteria rather than only happy paths

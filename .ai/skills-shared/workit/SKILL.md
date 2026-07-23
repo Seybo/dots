@@ -28,7 +28,7 @@ In Pi, use either:
 ```
 
 With no arguments, infer the project from the current git checkout; if a Shortcut story ID can also be inferred from the branch, use it, otherwise list recent tasks for the inferred project.
-With one token, treat it as `<project-or-session>` only when it matches an existing task project or registered session alias; otherwise infer `<project>` from the current working directory and treat the token as the task identifier.
+With one token, treat it as `<project-or-session>` only when it matches a registered task project or registered session alias; otherwise infer `<project>` from the current working directory and treat the token as the task identifier.
 With `<project-or-session> <task_id>`, treat the first token after `/workit` as the project name or registered session alias and the second token as the task identifier — must be **digits only**, matching either:
 
 - a **Shortcut story ID** (e.g. `147831`)
@@ -84,7 +84,7 @@ and select the matching ordinal workspace. Applied to `/workit`:
 - With no arguments, infer `<project>` from the current working directory and infer the task/story ID from the current branch when possible; if the project is inferred but no task/story ID is found, keep the normal recent-task picker.
 - With `/workit <project-or-session>`, infer only the task/story ID from the current branch
   when possible; if none can be inferred, keep the normal recent-task picker.
-- With `/workit <task_id>`, when the token is not an existing task project or registered session alias, infer `<project>` from the current working directory and use the token as the task/story ID.
+- With `/workit <task_id>`, when the token is not a registered task project or registered session alias, infer `<project>` from the current working directory and use the token as the task/story ID.
 - With `--base <full-base-branch-or-ref>`, preserve the base ref exactly for branch setup/verification. Do not treat it as a task selector.
 - An inferred story ID is used as the same prefix-matched task identifier as an
   explicit `<task_id>`.
@@ -99,7 +99,7 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - reject commands that combine `create-steps-only` with `step <step_number>`; these modes are mutually exclusive
    - if there are no tokens after `/workit`, infer `<project>` from the current checkout and infer `<task_id>` from the current branch when possible; if no story ID can be inferred, leave `<task_id>` missing
    - if there is exactly one token after `/workit`:
-     - if the token matches an existing task project or registered session alias, treat it as `<project>` or a registered session alias and try to infer `<task_id>` from the current branch; if no story ID can be inferred, leave `<task_id>` missing
+     - if the token matches a registered task project or registered session alias, treat it as `<project>` or a registered session alias and try to infer `<task_id>` from the current branch; if no story ID can be inferred, leave `<task_id>` missing
      - otherwise infer `<project>` from the current working directory and use the token as `<task_id>`
    - if there are two tokens after `/workit`:
      - extract `<project>` or a registered session alias as the first token after `/workit`
@@ -121,7 +121,8 @@ and select the matching ordinal workspace. Applied to `/workit`:
      /Volumes/dev/_tasks/<project>/
      ```
    - never look for a session alias under `/Volumes/dev/_tasks/`; session aliases are not task roots
-   - if that folder does not exist, tell the user the project was not found
+   - if the project is not registered, tell the user to add it to `~/.ai/skills-shared/components/projects.yml`
+   - if its task root does not exist, report that no tasks have been created for the registered project
    - do not create project folders automatically
    - resolve the code working directory from the shared project registry; this is the only
      place where implementation work should happen:
@@ -161,8 +162,7 @@ and select the matching ordinal workspace. Applied to `/workit`:
      ```bash
      git -C <code-working-directory> branch --show-current
      ```
-   - **Never work on `main` except for the `env` project (`/Users/inseybo/.dots`).** If the current branch is `main` and the resolved project is not `env`, stop before editing and switch to a task branch. For `env`, working on `main` is allowed.
-   - **Never work on `master` for non-`my_*` projects.** If the current branch is `master` and the resolved project does not start with `my_`, stop before editing and switch to a task branch. For `my_*` projects, working on `master` is allowed.
+   - **Never work on `main` or `master` except for the `env` project (`/Users/inseybo/.dots`).** If the current branch is protected and the resolved project is not `env`, stop before editing and switch to a task branch.
    - For registered workspace tasks whose registry entry has `task_provider: shortcut`, follow the branch setup rules from [`taskit` step 8: Set up the development branch](../taskit/SKILL.md#set-up-the-development-branch-task_provider-shortcut-projects-shortcut-mode-only): fetch the Shortcut story, generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from the returned story `name`, verify whether it already exists, and create it when safe. Do not use the task folder suffix as the branch slug; existing task folders can have local/draft slugs that differ from Shortcut's Git Helper slug.
    - For `task_provider: local` projects, never fetch Shortcut stories or create/switch Shortcut branches.
    - If `base_ref` is present for a registered workspace Shortcut task:
@@ -194,7 +194,7 @@ and select the matching ordinal workspace. Applied to `/workit`:
        If this fails, the parent/base branch likely advanced or the branch was created from a different base. Stop and ask for explicit rebase or base-change instructions; do not rebase automatically.
    - If `base_ref` is not present and a task branch already exists, ask the user whether to switch to it unless the current branch already contains `sc-{task_id}` as a path segment. When running as `/autowork` preflight, stop and report the needed branch decision instead of continuing on the wrong branch.
    - If `base_ref` is not present and the generated task branch does not exist, create it from the current HEAD using the existing taskit branch rules.
-   - If the task is manual or the correct branch name is unclear, ask the user for the branch name. Do not guess and do not continue on `master` or `main`, except that `main` is allowed for the `env` project (`/Users/inseybo/.dots`). When running as `/autowork` preflight, stop and report that a branch decision is required.
+   - For a `task_provider: local` task, use the currently checked-out branch as-is after applying the protected-branch rules above. Do not infer, create, rename, or switch branches. When running as `/autowork` preflight, stop if the current branch is protected.
 
 7. **Create or load the steps plan before implementation:**
    - before writing or updating `steps.md`, inspect existing implementation patterns relevant to the task:

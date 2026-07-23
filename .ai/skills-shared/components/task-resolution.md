@@ -1,128 +1,141 @@
 # Task resolution (shared)
 
-Single source of truth for how the task-workflow skills resolve a **project**, a
-**Shortcut story / task ID**, and a **code working directory** — from explicit
-arguments, from the current working directory, and from the current git branch.
+Single source of truth for resolving a task project, task ID, and code checkout.
+Used by task-workflow skills including `draftit`, `taskit`, `workit`, `sumit`,
+`autowork`, `addressit`, and PR-description/review tooling.
 
-Used by `projectit`, `draftit`, `taskit`, `workit`, `sumit`, `revit`, and
-`pr-description-from-task`. Those skills link here instead of restating this
-logic. When the rules change, change them here only.
+Runtime files:
 
-Runtime path (both Pi and Claude): `~/.ai/skills-shared/components/task-resolution.md`.
+- registry: `~/.ai/skills-shared/components/projects.yml`
+- task root: `/Volumes/dev/_tasks/<project>/`
 
-## Filesystem layout
+## Project registry
 
-- **Task folder root:** `/Volumes/dev/_tasks/<project>/` — where task definitions
-  (`task.md`, `steps.md`, `draftNN/`, review artifacts) live for every project.
-- **Project names:** normal task-workflow projects must start with `my_`, `shaka_`,
-  or `misc_`.
-- **Project registry:** `~/.ai/skills-shared/components/projects.yml` is the source
-  of truth for each project's code root, layout, and task provider.
-- **Task providers:** `task_provider: shortcut` permits Shortcut story and branch
-  workflows; `task_provider: local` is local/manual-only and is the default for new
-  projects.
-- **Normal code working directory:** every normal project checkout is an ordinal
-  workspace below its registered code root:
-  ```text
-  /project/1st/
-  /project/2nd/
-  /project/7th/
-  /project/28th/
-  ```
-  `1st` is required; any positive ordinal is valid, and additional workspaces do
-  not need to be provisioned in advance.
-- **Session aliases:** `<project><number>` selects the matching ordinal workspace:
-  `shaka_trp1` → `1st`, `shaka_trp7` → `7th`, and `shaka_trp28` → `28th`.
-  These aliases are session names, not task project roots.
-- **Infrastructure exception:** `env` maps directly to `/Users/inseybo/.dots/` and
-  is not moved below an ordinal workspace.
+`projects.yml` is the source of truth. Project keys are friendly local names:
+they must start with a lowercase letter and may contain lowercase letters,
+digits, `_`, and `-`. The key is also the task-root directory name.
 
-For task-consuming skills, the normalized `<project>` name must match a first-level folder
-under `/Volumes/dev/_tasks/`. The project registry must contain the project before a
-skill touches its code checkout. Task-consuming skills must not create code checkouts
-automatically.
+Every project has a `checkout_layout` and defaults to `task_provider: local`.
 
-## Resolving `<project>` from an explicit argument
+### Direct checkout
 
-When a skill is given `<project>` directly, first match a trailing positive number
-against a registered project name. Normalize the number to its canonical ordinal suffix:
+Use `direct` for an existing standalone checkout, including an ad-hoc GitHub
+clone:
 
-- `shaka_gtm1` → project `shaka_gtm`, workspace `1st`
-- `shaka_trp7` → project `shaka_trp`, workspace `7th`
-- `shaka_trp28` → project `shaka_trp`, workspace `28th`
+```yaml
+rails:
+  checkout_layout: direct
+  checkout_path: /Volumes/dev/oss/rails
+  task_provider: local
+```
 
-Then resolve:
+Any directory inside `checkout_path` resolves to `rails`; the code working
+directory is exactly `checkout_path`. A direct project has one checkout path.
+To relocate or reclone it, update `checkout_path` manually.
 
-- task root → `/Volumes/dev/_tasks/<normalized-project>/`
-- code working directory → `<registered-code-root>/<ordinal>/`
-- `env` → `/Users/inseybo/.dots/`
+### Ordinal workspaces
 
-If the task root does not exist, stop and tell the user the project was not found.
-Do not look for session aliases as task roots.
+Use `ordinal_workspaces` for the existing multi-checkout layout:
 
-## Inferring `<project>` from the current working directory
+```yaml
+shaka_gtm:
+  checkout_layout: ordinal_workspaces
+  code_root: /Volumes/dev/projects/shaka/gtm
+  task_provider: shortcut
+```
 
-When `<project>` is not given, match the current directory against registered code roots.
-The first path component below a normal code root must be a canonical ordinal workspace;
-that workspace is selected for the task. A directory at the code root itself is ambiguous
-and must not be treated as a checkout.
+Checkouts live below `code_root` in canonical ordinal folders such as `1st`,
+`2nd`, and `28th`. A session alias selects one workspace:
 
-The `env` project is inferred from `/Users/inseybo/.dots/`.
+```text
+shaka_gtm2 -> project shaka_gtm, workspace 2nd
+```
 
-## Inferring the Shortcut story ID from the current branch
+`env` is a direct infrastructure project mapped to `/Users/inseybo/.dots`.
 
-Run `git -C <code-working-directory> branch --show-current` and extract the story
-ID from the first branch segment matching `sc-<digits>`.
+## Registering a direct project
 
-- Match with the regex `(?:^|/|^)sc-(\d+)(?:/|$)`; the captured digits are the story ID.
-- Example: cwd `/Volumes/dev/projects/shaka/trp/28th/` plus branch
-  `mikhail/sc-33498/report-warning` → project `shaka_trp`, workspace `28th`,
-  story ID `33498`.
+Registration is manual. Do not infer a project from a Git remote or mutate the
+registry automatically. Add a direct entry to `projects.yml` with the friendly
+name and checkout path you choose.
 
-An inferred story ID is handled exactly like an explicitly passed story ID; `sc-`
-is branch-only and must not be expected in task folder names.
+On first `/taskit` or `/draftit` use for a registered project, create its
+missing task root at `/Volumes/dev/_tasks/<project>/`. Task-consuming/reporting
+skills never create missing task roots.
 
-## Selecting a workspace
+## Resolving a project
 
-Choose the workspace in this order:
+1. An explicit project argument uses the matching registry key. Ordinal session
+   aliases are valid only for `ordinal_workspaces` projects.
+2. Without an explicit project, match the current directory against registered
+   checkout paths. A direct checkout resolves to its root. An ordinal checkout
+   resolves to the canonical ordinal folder below its code root.
+3. If no project matches, stop and ask the user to register the checkout in
+   `projects.yml` or pass a registered project explicitly. Do not guess.
 
-1. an explicit `<project><number>` session alias;
-2. workspace inferred from the current working directory;
-3. ask the user for a positive workspace number.
+An explicit project maps to `/Volumes/dev/_tasks/<project>/`. A direct project
+needs no workspace selection. An ordinal project selects a workspace in this
+order: explicit session alias, workspace inferred from the current directory,
+then user input.
 
-Convert numbers using normal ordinal rules: `11th`, `12th`, and `13th` use `th`; otherwise
-`1st`, `2nd`, and `3rd` use their suffixes and all other numbers use `th`.
+## Task selection
+
+Task folders remain directly below the project task root:
+
+```text
+/Volumes/dev/_tasks/<project>/<task-id>-<slug>/
+```
+
+Local/manual tasks use zero-padded four-digit IDs such as `0001`. Shortcut
+projects use Shortcut story IDs. Select a task explicitly by its numeric ID,
+which is matched as a folder prefix:
+
+```text
+/workit 0001
+/autowork 0001
+```
+
+When the project can be inferred from the current direct checkout, the project
+name is not needed. Branch inference remains a convenience only for branches
+with an `sc-<digits>` segment. Do not infer a local task from an arbitrary
+branch name.
+
+## Local task branch rules
+
+For `task_provider: local`, task skills use the currently checked-out branch.
+They do not infer, create, rename, or switch branches. Refuse `main` and
+`master` for local/ad-hoc work, except:
+
+- `env` may use either branch.
+
+`/autowork` records the branch, its initial `HEAD` SHA, and the review-base ref
+and SHA at run initialization.
+
+## Shortcut story ID inference
+
+For Shortcut projects, extract the first branch segment matching `sc-<digits>`:
+
+```text
+mikhail/sc-33498/report-warning -> 33498
+```
+
+An inferred story ID is handled like an explicit task ID. `sc-` is branch-only;
+task folders use the numeric ID without that prefix.
+
 ## Optional base branch/ref for stacked task branches
 
-Task-workflow skills that create or verify task branches (`taskit`, `workit`, and
-`autowork` preflight through `workit`) may accept an explicit full base branch/ref
-for stacked work.
+Task-workflow skills that create or verify Shortcut task branches may accept an
+explicit full base branch/ref. Do not infer it from a task ID. Preserve it
+exactly, verify it resolves to a commit, and record it as the review base for
+`/autowork`. Do not use Git upstream as the task base.
 
-Rules:
+If a recorded base moves, stop for explicit rebase/base-change instructions.
+`/autowork` owns updating its recorded base after an intentional change.
 
-- The base branch/ref is a full Git ref string such as
-  `origin/team/sc-111/parent-task` or `team/sc-111/parent-task`.
-- Do not infer a base from a numeric task/story ID. If the base is not `main` or
-  `master`, the user must pass the whole branch/ref.
-- The base branch/ref is used for branch creation/verification and, for
-  `/autowork`, for final super-review diff scope.
-- Do not rely on Git upstream/tracking branch as the task's base. Upstream is
-  normally the branch's push/pull target and can change after `git push -u`.
-  When creating a task branch from an explicit remote base, use `git checkout
-  --no-track -b <branch-name> <base_ref>` so Git does not set the parent/base
-  branch as the new branch's upstream.
-- If an explicit base branch/ref is given and existing branch state contradicts it,
-  stop and report the mismatch instead of silently switching bases.
-- If the parent/base branch has advanced and the task branch needs a rebase, stop
-  and ask for explicit approval before rebasing; rebase rewrites commit history.
-- For `/autowork`, record the exact base commit at run setup. If the base ref later
-  resolves to a different commit, pause before starting more work. After the user
-  intentionally rebases or changes the task base, update the recorded base with
-  `autowork update-base <task_folder> <new-base-ref>`.
+## Safety fallbacks
 
-## Fallbacks
-
-- If a required project or story ID cannot be inferred, ask the user to pass it
-  explicitly rather than guessing.
-- Do not fail a skill just because the code working directory does not exist on
-  disk; only require it when the skill actually needs to touch the repo.
+- Never create code checkouts automatically.
+- Never guess an unregistered project or an arbitrary-branch task mapping.
+- Stop on ambiguous task-folder prefix matches.
+- Registered direct projects default to `task_provider: local`; Shortcut is an
+  explicit registry choice.

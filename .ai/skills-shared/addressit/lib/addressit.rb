@@ -24,15 +24,15 @@ module Addressit
       @registry = Autowork::ProjectRegistry.new(projects_file)
     end
 
-    def resolve
+    def resolve(task_id: nil)
       repo_root = File.realpath(@shell.capture!('git', '-C', @cwd, 'rev-parse', '--show-toplevel').strip)
       project = infer_project(repo_root)
       task_root = File.join(TASK_ROOT, project)
       raise Error, "Task project not found: #{task_root}" unless File.directory?(task_root)
 
       branch = @shell.capture!('git', '-C', repo_root, 'branch', '--show-current').strip
-      task_id = infer_task_id(branch)
-      raise Error, "No task folder found for branch #{branch.inspect}." unless task_id
+      task_id ||= infer_task_id(branch)
+      raise Error, "No task folder found for branch #{branch.inspect}. Pass --task <local-task-id>." unless task_id
 
       matches = Dir.glob(File.join(task_root, "#{task_id}*")).select { |path| File.directory?(path) }
       raise Error, "No task folder found for #{project}/#{task_id}." if matches.empty?
@@ -920,6 +920,7 @@ module Addressit
     def initialize(argv, cwd: Dir.pwd)
       @argv = argv.dup
       @cwd = cwd
+      @task_id = extract_task_id!
     end
 
     def run
@@ -945,8 +946,19 @@ module Addressit
 
     private
 
+    def extract_task_id!
+      index = @argv.index('--task')
+      return unless index
+
+      task_id = @argv[index + 1]
+      raise Error, 'Usage: addressit <pr-number-or-github-url> [filters] [--task <local-task-id>]' unless task_id&.match?(/\A\d+\z/)
+
+      @argv.slice!(index, 2)
+      task_id
+    end
+
     def resolve_context
-      TaskResolver.new(cwd: @cwd).resolve
+      TaskResolver.new(cwd: @cwd).resolve(task_id: @task_id)
     end
 
     def files_and_state(context)
