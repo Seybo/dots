@@ -185,6 +185,29 @@ addressit resolve <task_folder> <resolution-json>
 
 The resolution JSON uses `finding_id` and `decision` (`accept` or `skip`).
 
+## Waiting-stage banners
+
+While Pi-manager waits for a worker status file, addressit prints the current stage in this format:
+
+```text
+==================
+[PI WORKER IMPLEMENTATION — Round 1]
+==================
+```
+
+The stage names are:
+
+- `PI WORKER IMPLEMENTATION`
+- `PI MANAGER FIX`
+- `CLAUDE REVIEW`
+- `CLAUDE FIX REVIEW`
+- `PI FINDING CLASSIFICATION`
+- `CLAUDE DEBATE`
+- `PI DEBATE`
+- `PI FIX`
+
+Each banner includes the current review round and, when applicable, the worker iteration.
+
 ## Checks and manager gate
 
 Reuse `/autowork`'s configured final-check rules:

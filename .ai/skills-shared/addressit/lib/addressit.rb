@@ -545,6 +545,17 @@ module Addressit
   end
 
   class Orchestrator
+    WAITING_STAGE_NAMES = {
+      'waiting_for_pi' => 'PI WORKER IMPLEMENTATION',
+      'waiting_for_manager_fix' => 'PI MANAGER FIX',
+      'waiting_for_claude' => 'CLAUDE REVIEW',
+      'waiting_for_fix_review' => 'CLAUDE FIX REVIEW',
+      'waiting_for_classify' => 'PI FINDING CLASSIFICATION',
+      'waiting_for_claude_debate' => 'CLAUDE DEBATE',
+      'waiting_for_pi_debate' => 'PI DEBATE',
+      'waiting_for_fix' => 'PI FIX'
+    }.freeze
+
     def initialize(context, files, state, tmux: Autowork::Tmux.new, shell: Autowork::Shell)
       @context = context
       @files = files
@@ -954,6 +965,7 @@ module Addressit
     end
 
     def wait_for(agent, phase, iteration = nil)
+      print_waiting_stage(agent, phase, iteration)
       status_path = @files.status_path(@state.fetch('current_round'), agent, phase, iteration)
       timeout = @state.fetch('worker_status_timeout_minutes', 10).to_i * 60
       deadline = Time.now + timeout
@@ -971,6 +983,17 @@ module Addressit
         yield
         save_state
       end
+    end
+
+    def print_waiting_stage(agent, phase, iteration)
+      stage_name = WAITING_STAGE_NAMES.fetch(@state.fetch('phase')) { "#{agent}:#{phase}".upcase.tr('_', ' ') }
+      context = ["Round #{@state.fetch('current_round')}"]
+      context << "Iteration #{iteration}" if iteration
+
+      puts
+      puts '=================='
+      puts "[#{stage_name} — #{context.join(' — ')}]"
+      puts '=================='
     end
 
     def read_status(agent, phase, iteration = nil)
