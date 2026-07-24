@@ -100,6 +100,12 @@ name is not needed. Branch inference remains a convenience only for branches
 with an `sc-<digits>` segment. Do not infer a local task from an arbitrary
 branch name.
 
+When a workflow needs task context but the current branch has no inferable task
+ID, use the workflow's explicit task-selector fallback (normally
+`--task <digits>`). Resolve that selector exactly like any other task identifier:
+require one matching task folder and its `task.md`; never guess from the branch
+name or from the newest task.
+
 ## Local task branch rules
 
 For `task_provider: local`, task skills use the currently checked-out branch.

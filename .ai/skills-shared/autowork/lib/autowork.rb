@@ -269,6 +269,15 @@ module Autowork
       head_sha
     end
 
+    def squash_commits(base_ref, message)
+      raise Error, 'Cannot squash commits with a dirty worktree' unless clean?
+      return head_sha if head_sha == ref_commit(base_ref)
+      raise Error, "Cannot squash commits: #{base_ref} is not an ancestor of HEAD" unless ancestor?(base_ref, 'HEAD')
+
+      Shell.capture!('git', '-C', root, 'reset', '--soft', base_ref)
+      commit(message)
+    end
+
     def ref_exists?(ref)
       Shell.capture('git', '-C', root, 'rev-parse', '--verify', '--quiet', ref).success?
     end
@@ -3337,8 +3346,9 @@ module Autowork
     end
 
     def run
-      requested_target_base_ref = parse_target_base_ref
-      context = TaskResolver.new([], cwd: @cwd).resolve
+      requested_target_base_ref, task_id = parse_args
+      resolver_args = task_id ? [task_id] : []
+      context = TaskResolver.new(resolver_args, cwd: @cwd).resolve
       files = RunFiles.new(context.task_folder)
       raise Error, "Missing autowork config: #{files.config_path}" unless File.file?(files.config_path)
       raise Error, "Autowork run is active; stop it before rebasing: #{files.lock_path}" if File.file?(files.lock_path)
@@ -3381,11 +3391,21 @@ module Autowork
 
     private
 
-    def parse_target_base_ref
-      return nil if @argv.empty?
-      return @argv[0] if @argv.length == 1 && !@argv[0].to_s.empty? && !@argv[0].start_with?('-')
+    def parse_args
+      args = @argv.dup
+      task_id = nil
+      if (task_index = args.index('--task'))
+        raise Error, 'Usage: autowork rebase-base [base-ref] [--task <task_id>]' if task_index == args.length - 1 || args[(task_index + 1)..].include?('--task')
 
-      raise Error, 'Usage: autowork rebase-base [base-ref]'
+        task_id = args.delete_at(task_index + 1)
+        args.delete_at(task_index)
+      end
+      raise Error, 'Usage: autowork rebase-base [base-ref] [--task <task_id>]' unless args.length <= 1
+      target_base_ref = args.first
+      if target_base_ref && target_base_ref.empty?
+        raise Error, 'Usage: autowork rebase-base [base-ref] [--task <task_id>]'
+      end
+      [target_base_ref, task_id]
     end
 
     def resolve_target_base_ref(repo, base_ref)
@@ -3567,7 +3587,7 @@ module Autowork
           autowork init [project-or-session] [task_id] [full-base-branch-or-ref]
           autowork doctor [--no-send-test]
           autowork status <task_folder>
-          autowork rebase-base [base-ref]
+          autowork rebase-base [base-ref] [--task <task_id>]
           autowork update-base <task_folder> <new-base-ref>
           autowork manager-review-fix <task_folder>
           autowork manager-review-pass <task_folder>

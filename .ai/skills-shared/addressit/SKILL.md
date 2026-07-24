@@ -2,8 +2,8 @@
 name: addressit
 description: >-
   Pi-manager command that fetches GitHub PR review comments, asks the operator to
-  approve a classified batch, coordinates Pi and Claude workers in tmux, commits
-  one combined fix round, and waits for final Pi-manager review.
+  approve a classified batch, coordinates Pi and Claude workers in tmux, consolidates
+  each review round into one commit, and waits for final Pi-manager review.
   Command-only skill. In Pi, invoke via /skill:addressit; /addressit is also
   accepted where that alias is exposed.
 disable-model-invocation: true
@@ -137,14 +137,17 @@ Approval JSON shape:
 ```
 
 The selected comments are one task batch. Pi-worker receives one prompt for all
-approved comments and leaves changes unstaged/uncommitted. Addressit creates one
-combined implementation commit:
+approved comments and leaves changes unstaged/uncommitted. Addressit may create
+temporary commits while workers iterate, but it squashes every commit made in the
+review round at the manager gate into exactly one final commit:
 
 ```text
-Address PR #<number> round <N>
+Add review updates #<N>
 ```
 
-It does not create or modify `steps.md` and does not invoke `/workit`.
+The final commit contains the implementation, Claude-requested fixes, and any
+Pi-manager fixes from that round. It does not create or modify `steps.md` and does
+not invoke `/workit`.
 
 ## Claude review and fix loop
 
@@ -163,9 +166,10 @@ If Claude reports findings:
 1. Pi-worker classifies every finding as accept, alternative fix, dispute,
    follow-up, or needs-user.
 2. Accepted findings are fixed together in one Pi turn.
-3. Addressit commits them as `Address PR #<number> round <N> fix <M>`.
+3. Addressit commits them temporarily and tracks them as part of round `<N>`.
 4. Claude reviews the fix commit again.
-5. Repeat within the configured fix limit.
+5. Repeat within the configured fix limit; all round commits are squashed at the
+   final manager gate into `Add review updates #<N>`.
 
 If Pi and Claude disagree, use the bounded debate flow from `/autowork`. Do not
 silently choose a winner. Pause for operator arbitration when the configured
@@ -190,8 +194,9 @@ Reuse `/autowork`'s configured final-check rules:
 
 After Claude accepts and final checks pass, addressit stops at the final
 Pi-manager gate. Pi-manager must review the original comments, classifications,
-approvals, diff, commits, Claude reviews, and final checks using manager-only
-conversation context. Write the result to:
+approvals, diff, temporary commits, Claude reviews, and final checks using
+manager-only conversation context. The manager pass then squashes all commits from
+the round into `Add review updates #<N>`. Write the result to:
 
 ```text
 <task_folder>/addressit-log/manager_review.md

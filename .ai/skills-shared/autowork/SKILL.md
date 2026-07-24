@@ -23,6 +23,7 @@ In Pi, use either:
 /autowork doctor --no-send-test
 /autowork rebase-base
 /autowork rebase-base <base-ref>
+/autowork rebase-base <base-ref> --task <task_id>
 autowork update-base <task_folder> <new-base-ref>
 autowork manager-review-fix <task_folder>
 autowork manager-review-pass <task_folder>
@@ -130,6 +131,7 @@ Invocation:
 ```text
 /autowork rebase-base
 /autowork rebase-base <base-ref>
+/autowork rebase-base <base-ref> --task <task_id>
 ```
 
 Examples:
@@ -142,6 +144,10 @@ Examples:
   ```text
   /autowork rebase-base master
   ```
+- The branch has no task-ID segment, so identify the task explicitly:
+  ```text
+  /autowork rebase-base main --task 0001
+  ```
 - Task should move from one stacked parent to another:
   ```text
   /autowork rebase-base origin/example-parent-branch
@@ -149,7 +155,7 @@ Examples:
 
 Rules:
 
-1. Infer the task from the current repo/branch using normal task-resolution rules.
+1. Infer the task from the current repo/branch using normal task-resolution rules. If the branch has no inferable task-ID segment, require the explicit `--task <task_id>` fallback.
 2. Load `<task_folder>/autowork-log/config.yml`.
 3. Require `repo_dir`, `review_base_ref`, and `review_base_commit`; preserve `original_review_base_ref` and `original_review_base_commit` unchanged.
 4. Require the repo worktree to be clean.

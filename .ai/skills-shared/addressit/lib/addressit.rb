@@ -482,7 +482,14 @@ module Addressit
       @state['current_round'] = (@state['rounds'].map { |round| round['number'] }.max || 0) + 1
       round = @state['current_round']
       File.write(@files.comments_path(round), JSON.pretty_generate(candidates) + "\n")
-      @state['rounds'] << { 'number' => round, 'selected_ids' => candidates.map { |comment| comment['id'].to_s }, 'baseline_head' => @repo.head_sha, 'status' => 'awaiting_approval' }
+      @state['rounds'] << {
+        'number' => round,
+        'selected_ids' => candidates.map { |comment| comment['id'].to_s },
+        'baseline_head' => @repo.head_sha,
+        'round_start_head' => @repo.head_sha,
+        'commit_shas' => [],
+        'status' => 'awaiting_approval'
+      }
       @state['phase'] = candidates.empty? ? 'no_new_comments' : 'awaiting_round_approval'
       save_state
       print_selection(candidates, round)
@@ -581,6 +588,7 @@ module Addressit
       round_state['baseline_head'] = @repo.head_sha
       path = PromptWriter.new(@files, @context, @state).pi_manager_fix(iteration, findings)
       send_prompt(path)
+      @state['phase'] = 'waiting_for_manager_fix'
       save_state
       run
     rescue JSON::ParserError => e
@@ -622,12 +630,14 @@ module Addressit
 
       round = @state.fetch('current_round')
       comments = JSON.parse(File.read(@files.comments_path(round)))
-      approved_ids = @state['rounds'].find { |entry| entry['number'] == round }.fetch('approved_ids')
+      round_state = @state['rounds'].find { |entry| entry['number'] == round }
+      squash_round_commits!(round_state)
+      approved_ids = round_state.fetch('approved_ids')
       ledger = Ledger.new(@state)
       comments.select { |comment| approved_ids.include?(comment['id'].to_s) }.each do |comment|
         ledger.save(comment, state: 'addressed')
       end
-      @state['rounds'].find { |entry| entry['number'] == round }['status'] = 'addressed'
+      round_state['status'] = 'addressed'
       @state['phase'] = 'complete'
       save_state
       puts "Addressit round #{round} complete. Marked #{approved_ids.length} comment(s) addressed."
@@ -642,13 +652,34 @@ module Addressit
       save_state
     end
 
+    def record_commit(commit_sha)
+      @state['commits'] << commit_sha
+      round_state = @state['rounds'].find { |entry| entry['number'] == @state.fetch('current_round') }
+      round_state['commit_shas'] ||= []
+      round_state['commit_shas'] << commit_sha
+    end
+
+    def squash_round_commits!(round_state)
+      commit_shas = Array(round_state['commit_shas'])
+      raise Error, 'Cannot finalize review round without recorded commits' if commit_shas.empty?
+
+      base_sha = round_state.fetch('round_start_head')
+      message = "Add review updates ##{round_state.fetch('number')}"
+      squashed_sha = @repo.squash_commits(base_sha, message)
+      @state['commits'] = @state.fetch('commits').reject { |sha| commit_shas.include?(sha) }
+      @state['commits'] << squashed_sha
+      round_state['commit_shas'] = [squashed_sha]
+      round_state['squashed_from'] = commit_shas
+      round_state['squashed_commit'] = squashed_sha
+    end
+
     def commit_implementation
       ensure_clean_before_commit!
       raise Error, 'Pi-worker reported completion but produced no repository changes' if @repo.clean?
 
       @repo.add_all
       commit_sha = @repo.commit("Address PR ##{@context.pr_number} round #{@state.fetch('current_round')}")
-      @state['commits'] << commit_sha
+      record_commit(commit_sha)
       @state['review_iteration'] = 1
       send_claude
     end
@@ -713,7 +744,7 @@ module Addressit
 
       @repo.add_all
       sha = @repo.commit("Address PR ##{@context.pr_number} round #{@state.fetch('current_round')} manager fix #{@state.fetch('manager_fix_iteration')}")
-      @state['commits'] << sha
+      record_commit(sha)
       @state['review_iteration'] = (@state['review_iteration'] || 0) + 1
       send_claude
     end
@@ -808,7 +839,7 @@ module Addressit
 
       @repo.add_all
       commit_sha = @repo.commit("Address PR ##{@context.pr_number} round #{@state.fetch('current_round')} fix #{@state.fetch('fix_iteration')}")
-      @state['commits'] << commit_sha
+      record_commit(commit_sha)
       @state['review_iteration'] += 1
       send_claude
     end

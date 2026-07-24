@@ -76,6 +76,24 @@ RSpec.describe Autowork do
     )
   end
 
+  describe Autowork::GitRepo do
+    it 'squashes review commits onto the round start with the requested message' do
+      repo = make_git_repo
+      base_sha = commit_file(repo, 'base.txt', "base\n", 'base')
+      commit_file(repo, 'first.txt', "first\n", 'first review update')
+      commit_file(repo, 'second.txt', "second\n", 'second review update')
+
+      squashed_sha = described_class.new(repo).squash_commits(base_sha, 'Add review updates #1')
+
+      expect(`git -C #{repo} log -1 --format=%s`.strip).to eq('Add review updates #1')
+      expect(`git -C #{repo} rev-list --count HEAD`.strip).to eq('2')
+      expect(squashed_sha).to eq(`git -C #{repo} rev-parse HEAD`.strip)
+      expect(File.read(File.join(repo, 'first.txt'))).to eq("first\n")
+      expect(File.read(File.join(repo, 'second.txt'))).to eq("second\n")
+      expect(described_class.new(repo)).to be_clean
+    end
+  end
+
   describe Autowork::Steps do
     it 'parses step numbers from canonical headings' do
       path = File.join(@tmpdir, 'steps.md')
@@ -820,14 +838,14 @@ RSpec.describe Autowork do
       expect(Autowork::GitRepo.new(repo).ancestor?('parent-task', 'HEAD')).to be(true)
     end
 
-    it 'rebases onto a positional new base and preserves the original base' do
+    it 'rebases onto a positional new base with an explicit task selector' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
       add_origin_remote(repo)
       base_sha = commit_file(repo, 'base.txt', "base\n", 'base')
       system('git', '-C', repo, 'branch', '-M', 'master', out: File::NULL, err: File::NULL)
       system('git', '-C', repo, 'branch', 'parent-task', base_sha, out: File::NULL, err: File::NULL)
-      system('git', '-C', repo, 'checkout', '-b', 'mikhail/sc-0003/task', 'parent-task', out: File::NULL, err: File::NULL)
+      system('git', '-C', repo, 'checkout', '-b', 'feature-without-task-id', 'parent-task', out: File::NULL, err: File::NULL)
       tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
 
       stub_const('Autowork::TASK_ROOT', task_root)
@@ -837,9 +855,9 @@ RSpec.describe Autowork do
       system('git', '-C', repo, 'checkout', 'master', out: File::NULL, err: File::NULL)
       master_sha = commit_file(repo, 'master.txt', "master\n", 'advance master')
       system('git', '-C', repo, 'push', 'origin', 'master', out: File::NULL, err: File::NULL)
-      system('git', '-C', repo, 'checkout', 'mikhail/sc-0003/task', out: File::NULL, err: File::NULL)
+      system('git', '-C', repo, 'checkout', 'feature-without-task-id', out: File::NULL, err: File::NULL)
 
-      Autowork::BaseRebaser.new(%w[master], cwd: repo).run
+      Autowork::BaseRebaser.new(%w[master --task 0003], cwd: repo).run
 
       files = Autowork::RunFiles.new(task_folder)
       config = YAML.safe_load(File.read(files.config_path))
