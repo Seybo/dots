@@ -308,7 +308,7 @@ module Autowork
   class StatusValidator
     ALLOWED_STATUSES = %w[done needs_user failed].freeze
     ALLOWED_AGENTS = %w[pi claude].freeze
-    ALLOWED_PHASES = %w[implement review classify fix debate final_checks super_review super_fix super_fix_review manager_fix manager_fix_review].freeze
+    ALLOWED_PHASES = %w[implement review classify fix debate final_checks super_review final_review super_fix super_fix_review manager_fix manager_fix_review].freeze
 
     Result = Struct.new(:valid, :errors, :data, keyword_init: true) do
       def valid?
@@ -608,6 +608,7 @@ module Autowork
     def final_checks_path = File.join(log_dir, 'final_checks.md')
     def final_summary_path = File.join(log_dir, 'final_summary.md')
     def super_review_path = File.join(log_dir, 'super-review.md')
+    def pi_final_review_path = File.join(log_dir, 'pi-final-review.md')
     def manager_review_path = File.join(log_dir, 'manager_review.md')
     def manager_review_iteration_path(iteration) = File.join(log_dir, 'manager_reviews', "manager_review#{iteration}.md")
     def manager_findings_path(iteration) = File.join(log_dir, 'manager_reviews', "manager_review#{iteration}_findings.json")
@@ -1149,6 +1150,69 @@ module Autowork
       path
     end
 
+    def pi_final_review(iteration, review_base_ref)
+      status_path = @files.status_path(0, 'pi', 'final_review', iteration)
+      path = @files.prompt_path("final_pi_review#{iteration}_request.md")
+      FileUtils.rm_f(@files.pi_final_review_path)
+      FileUtils.rm_f(status_path)
+      File.write(path, <<~PROMPT)
+        # Autowork: final Pi review #{iteration}
+
+        You are the Pi review agent participating in `/autowork` as `pi-worker`.
+
+        review all the changes and try to find issues, gaps, and improvement opportunities. But ignore very minor issues
+
+        Scope:
+        - repo: #{@repo.root}
+        - diff base: #{review_base_ref}
+        - diff: `#{review_base_ref}...HEAD`
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+        - final checks: #{@files.final_checks_path}
+        - Claude's final super-review: #{@files.super_review_path}
+        - autowork state: #{@files.state_path}
+
+        Rules:
+        - Review the entire final branch diff, not only the latest commit.
+        - Treat Claude's super-review as a separate signal, not as proof that the branch is correct.
+        - Do not edit repo files, stage, commit, push, switch branches, stash, or edit PR/MR metadata.
+        - Ignore formatting, naming, and other very minor issues.
+        - Report actionable issues as `BLOCKER` or `MINOR`; use `MINOR` only for local, low-risk fixes.
+        - Write the human-readable review to:
+          #{@files.pi_final_review_path}
+        - Write the review file before status JSON.
+        - Write valid JSON status last to:
+          #{status_path}
+        - #{final_status_action_note}
+
+        Required status JSON shape:
+
+        ```json
+        {
+          "status": "done",
+          "agent": "pi",
+          "phase": "final_review",
+          "step": 0,
+          "summary": "...",
+          "findings": [
+            {
+              "id": "PI1",
+              "severity": "BLOCKER",
+              "title": "Short title",
+              "body": "What is wrong and why it matters",
+              "recommendation": "Concrete suggested fix"
+            }
+          ]
+        }
+        ```
+
+        Use an empty `"findings": []` array when there are no actionable findings. If you need user input, use `"status": "needs_user"` and include a `"question"` string. If review failed, use `"status": "failed"` and explain in `"summary"`.
+      PROMPT
+      path
+    end
+
     def pi_super_review_fix(iteration, findings, review_findings)
       result_path = @files.super_fix_result_path(iteration)
       status_path = @files.status_path(0, 'pi', 'super_fix', iteration)
@@ -1645,6 +1709,23 @@ module Autowork
   end
 
   class Orchestrator
+    WAITING_STAGE_NAMES = {
+      'pi:implement' => 'PI WORKER IMPLEMENTATION',
+      'claude:review' => 'CLAUDE STEP REVIEW',
+      'pi:classify' => 'PI FINDING CLASSIFICATION',
+      'pi:fix' => 'PI STEP FIX',
+      'claude:debate' => 'CLAUDE DEBATE',
+      'pi:debate' => 'PI DEBATE',
+      'claude:final_checks' => 'CLAUDE FINAL-CHECK REVIEW',
+      'pi:final_checks' => 'PI FINAL-CHECK FIX',
+      'claude:super_review' => 'CLAUDE FINAL SUPER-REVIEW',
+      'pi:final_review' => 'PI FINAL REVIEW',
+      'pi:super_fix' => 'PI SUPER-REVIEW FIX',
+      'claude:super_fix_review' => 'CLAUDE SUPER-REVIEW FIX REVIEW',
+      'pi:manager_fix' => 'PI MANAGER FIX',
+      'claude:manager_fix_review' => 'CLAUDE MANAGER-FIX REVIEW'
+    }.freeze
+
     def initialize(argv, tmux: Tmux.new, sleeper: Kernel.method(:sleep))
       @argv = argv
       @tmux = tmux
@@ -1679,6 +1760,7 @@ module Autowork
     def run_state_machine(context, repo, files)
       raise Error, "Autowork is paused: #{files.pause_path}" if File.file?(files.pause_path)
 
+      @task_folder = context.task_folder
       config = YAML.safe_load(File.read(files.config_path))
       store = StateStore.new(files.state_path)
       state = store.read
@@ -1720,6 +1802,10 @@ module Autowork
         send_final_super_review(context, repo, files, config, store, state)
       when 'waiting_for_final_super_review'
         wait_for_final_super_review(context, repo, files, config, store, state)
+      when 'ready_to_send_pi_final_review'
+        send_pi_final_review(context, repo, files, config, store, state)
+      when 'waiting_for_pi_final_review'
+        wait_for_pi_final_review(context, repo, files, config, store, state)
       when 'ready_to_send_pi_super_review_fix'
         send_pi_super_review_fix(context, repo, files, config, store, state)
       when 'waiting_for_pi_super_review_fix'
@@ -2215,6 +2301,11 @@ module Autowork
         state['next_action'] = 'send_final_super_review_prompt'
         store.write(state)
         send_final_super_review(context, repo, files, config, store, state)
+      elsif final_pi_review_required?(config, state)
+        state['phase'] = 'ready_to_send_pi_final_review'
+        state['next_action'] = 'send_pi_final_review_prompt'
+        store.write(state)
+        send_pi_final_review(context, repo, files, config, store, state)
       else
         complete_run(context, repo, files, store, state, results)
       end
@@ -2222,6 +2313,10 @@ module Autowork
 
     def final_super_review_required?(config, state)
       config.fetch('run_final_super_review', true) && !state['final_super_reviewed']
+    end
+
+    def final_pi_review_required?(config, state)
+      config.fetch('run_final_super_review', true) && state['final_super_reviewed'] && !state['final_pi_reviewed']
     end
 
     def send_final_super_review(context, repo, files, config, store, state)
@@ -2258,13 +2353,47 @@ module Autowork
       if findings.empty?
         state['final_super_reviewed'] = true
         store.write(state)
-        complete_run(context, repo, files, store, state, state.fetch('final_checks'))
+        send_pi_final_review(context, repo, files, config, store, state)
       else
         state['phase'] = 'ready_to_send_pi_super_review_fix'
         state['next_action'] = 'send_pi_super_review_fix_prompt'
         store.write(state)
         send_pi_super_review_fix(context, repo, files, config, store, state)
       end
+    end
+
+    def send_pi_final_review(context, repo, files, config, store, state)
+      raise Error, "Refusing to send Pi final review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      iteration = (state['final_pi_review_iteration'] || 0) + 1
+      prompt = PromptWriter.new(files, context, repo).pi_final_review(iteration, config.fetch('review_base_ref'))
+      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      state['status'] = 'running'
+      state['final_pi_review_iteration'] = iteration
+      state['phase'] = 'waiting_for_pi_final_review'
+      state['next_action'] = 'wait_for_pi_final_review_status'
+      store.write(state)
+      puts "Sent final Pi review #{iteration} prompt to pi-worker: #{prompt}"
+      wait_for_pi_final_review(context, repo, files, config, store, state)
+    end
+
+    def wait_for_pi_final_review(context, repo, files, config, store, state)
+      iteration = state.fetch('final_pi_review_iteration')
+      result = wait_for_status(
+        files.status_path(0, 'pi', 'final_review', iteration),
+        expected: { agent: 'pi', phase: 'final_review', step: 0 },
+        config: config
+      )
+      handle_agent_status!(result, files, store, state)
+      require_nonempty_artifact!(files.pi_final_review_path, 'Pi final review')
+      raise Error, "Pi final review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+
+      pi_findings = actionable_findings(result.data)
+      state['final_pi_review_summary'] = result.data['summary']
+      state['final_pi_review_findings'] = pi_findings
+      state['final_pi_reviewed'] = true
+      store.write(state)
+      complete_run(context, repo, files, store, state, state.fetch('final_checks'))
     end
 
     def send_pi_super_review_fix(context, repo, files, config, store, state)
@@ -2369,7 +2498,7 @@ module Autowork
         state.delete('pending_super_review_fix_review')
         state.delete('super_review_fix_review_findings')
         store.write(state)
-        complete_run(context, repo, files, store, state, state.fetch('final_checks'))
+        send_pi_final_review(context, repo, files, config, store, state)
       else
         state['super_review_fix_review_findings'] = findings
         state.delete('pending_super_review_fix_review')
@@ -2546,7 +2675,8 @@ module Autowork
       puts "- manager review checklist: #{files.manager_review_path}"
       puts "- summary: #{files.final_summary_path}"
       puts "- final checks: #{files.final_checks_path}"
-      puts "- super-review: #{files.super_review_path}"
+      puts "- Claude super-review: #{files.super_review_path}"
+      puts "- Pi final review: #{files.pi_final_review_path}" if state['final_pi_reviewed']
       puts "- repo: #{repo.root}"
       puts "If clean, run: autowork manager-review-pass #{files.task_folder}"
       puts "If findings exist, write: #{files.manager_findings_path(iteration)}"
@@ -2568,7 +2698,8 @@ module Autowork
         - steps: #{File.join(context.task_folder, 'steps.md')}
         - final summary: #{files.final_summary_path}
         - final checks: #{files.final_checks_path}
-        - final super-review: #{files.super_review_path}
+        - final Claude super-review: #{files.super_review_path}
+        - final Pi review: #{files.pi_final_review_path}
         - super-review fix artifacts: #{File.join(files.log_dir, 'super_fixes')}
         - repo: #{repo.root}
 
@@ -2923,8 +3054,10 @@ module Autowork
     def summary_super_review_markdown(files, state)
       return '- Disabled by config.' unless state['final_super_reviewed']
 
-      lines = ["- Report: #{files.super_review_path}"]
-      lines << "- Initial report: #{state['final_super_review_summary']}" if state['final_super_review_summary']
+      lines = ["- Claude report: #{files.super_review_path}"]
+      lines << "- Claude summary: #{state['final_super_review_summary']}" if state['final_super_review_summary']
+      lines << "- Pi report: #{files.pi_final_review_path}" if state['final_pi_reviewed']
+      lines << "- Pi summary: #{state['final_pi_review_summary']}" if state['final_pi_review_summary']
       lines << "- Fix commits: #{super_review_fix_commits(state).count}"
       lines << '- Final outcome: accepted.'
       lines.join("\n")
@@ -2971,6 +3104,7 @@ module Autowork
     end
 
     def wait_for_status(path, expected:, config:, timeout_seconds: nil)
+      print_waiting_stage(expected)
       validator = StatusValidator.new
       deadline = Time.now + (timeout_seconds || worker_status_timeout_seconds(config))
       last_invalid_result = nil
@@ -2987,6 +3121,36 @@ module Autowork
         raise Error, "Invalid status JSON at #{path}: #{last_invalid_result.errors.join('; ')}"
       end
       raise Error, "Worker status timeout while waiting for status JSON: #{path}\nUse `autowork status <task_folder>` or inspect autowork-log/state.json for read-only status. Rerunning `/autowork` resumes orchestration and may stage/commit if the worker has finished. If the manager process was killed by an outer shell/tool timeout, do not rerun automatically; ask the operator for a fresh explicit continue/resume instruction."
+    end
+
+    def print_waiting_stage(expected)
+      agent = expected[:agent] || expected['agent']
+      phase = expected[:phase] || expected['phase']
+      stage_name = WAITING_STAGE_NAMES.fetch("#{agent}:#{phase}") { phase.to_s.upcase.tr('_', ' ') }
+      step = expected[:step] || expected['step']
+      if step.to_i.positive?
+        step_label = "Step #{step}"
+        step_title = current_step_title(step)
+        step_label += ": #{step_title}" if step_title
+        stage_name = "#{stage_name} — #{step_label}"
+      end
+
+      puts
+      puts '=================='
+      puts "[#{stage_name}]"
+      puts '=================='
+    end
+
+    def current_step_title(step)
+      return nil unless @task_folder
+
+      steps_path = File.join(@task_folder, 'steps.md')
+      return nil unless File.file?(steps_path)
+
+      line = File.foreach(steps_path).find { |candidate| candidate.match?(/\A## Step #{Regexp.escape(step.to_s)}\b/) }
+      match = line&.match(/\A## Step #{Regexp.escape(step.to_s)}\b(?::\s*(.+))?/)
+      title = match && match[1]&.strip
+      title unless title.to_s.empty?
     end
 
     def require_nonempty_artifact!(path, label)

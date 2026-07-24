@@ -28,6 +28,9 @@
   - commit accepted code changes as `Super-review fix N`
   - rerun final checks after super-review fixes
   - send super-review fix commits to Claude for a normal scoped review, not another full super-review
+  - wait until Claude accepts the complete super-review/fix loop
+  - send the exact final-review prompt to `pi-worker` after Claude's loop
+  - save Pi's final review separately for the manager gate; do not combine its findings with Claude's
   - do not rerun full super-review by default
 - final manager-context production-readiness review gate:
   - stop at `ready_for_manager_final_review` after final checks, super-review, and scoped fix review pass
@@ -37,7 +40,7 @@
   - return to a fresh manager gate after Claude accepts; never auto-pass manager context after a fix
   - require pi-manager to decide whether the final result is production-ready if the user does not perform another review
   - mark complete only through `autowork manager-review-pass <task_folder>`
-- deterministic specs for task resolution, state, status JSON, locks, pane discovery, doctor, first-cycle send/commit/review prompt flow, accepted-fix flow, debate flow, final-check fix flow, final super-review flow, super-review fix flow, automated manager-fix flow, manager-context final review, and final summary
+- deterministic specs for task resolution, state, status JSON, locks, pane discovery, doctor, first-cycle send/commit/review prompt flow, waiting-stage banners, accepted-fix flow, debate flow, final-check fix flow, final super-review flow, super-review fix flow, automated manager-fix flow, manager-context final review, and final summary
 
 ## Intentional workflow boundaries
 
