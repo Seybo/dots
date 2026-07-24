@@ -140,4 +140,5 @@ if [ -n "$SSH_CONNECTION" ] && [ -z "$ZELLIJ" ]; then
   zj remote_dev
   exit
 fi
+export PI_AGENT_SHAKACODE_SESSIONS_DIR=~/.pi/work/agent/sessions
 export PATH="$HOME/.local/bin:$PATH"
