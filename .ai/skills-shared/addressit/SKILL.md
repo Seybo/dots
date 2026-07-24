@@ -145,7 +145,7 @@ temporary commits while workers iterate, but it squashes every commit made in th
 review round at the manager gate into exactly one final commit:
 
 ```text
-Add review updates #<N>
+Add review updates <N>
 ```
 
 The final commit contains the implementation, Claude-requested fixes, and any
@@ -172,7 +172,7 @@ If Claude reports findings:
 3. Addressit commits them temporarily and tracks them as part of round `<N>`.
 4. Claude reviews the fix commit again.
 5. Repeat within the configured fix limit; all round commits are squashed at the
-   final manager gate into `Add review updates #<N>`.
+   final manager gate into `Add review updates <N>`.
 
 If Pi and Claude disagree, use the bounded debate flow from `/autowork`. Do not
 silently choose a winner. Pause for operator arbitration when the configured
@@ -199,7 +199,7 @@ After Claude accepts and final checks pass, addressit stops at the final
 Pi-manager gate. Pi-manager must review the original comments, classifications,
 approvals, diff, temporary commits, Claude reviews, and final checks using
 manager-only conversation context. The manager pass then squashes all commits from
-the round into `Add review updates #<N>`. Write the result to:
+the round into `Add review updates <N>`. Write the result to:
 
 ```text
 <task_folder>/addressit-log/manager_review.md

@@ -745,7 +745,7 @@ module Addressit
       raise Error, 'Cannot finalize review round without recorded commits' if commit_shas.empty?
 
       base_sha = round_state.fetch('round_start_head')
-      message = "Add review updates ##{round_state.fetch('number')}"
+      message = "Add review updates #{round_state.fetch('number')}"
       squashed_sha = @repo.squash_commits(base_sha, message)
       @state['commits'] = @state.fetch('commits').reject { |sha| commit_shas.include?(sha) }
       @state['commits'] << squashed_sha
@@ -759,7 +759,7 @@ module Addressit
       raise Error, 'Pi-worker reported completion but produced no repository changes' if @repo.clean?
 
       @repo.add_all
-      commit_sha = @repo.commit("Address PR ##{@context.pr_number} round #{@state.fetch('current_round')}")
+      commit_sha = @repo.commit("Address PR #{@context.pr_number} round #{@state.fetch('current_round')}")
       record_commit(commit_sha)
       @state['review_iteration'] = 1
       send_claude
@@ -799,6 +799,7 @@ module Addressit
       status = read_status('pi', 'classify', @state.fetch('review_iteration'))
       resolutions = status.fetch('resolutions')
       disputes = resolutions.select { |resolution| %w[dispute needs_user].include?(resolution['decision']) }
+      accepted = resolutions.select { |resolution| %w[accept accept_with_alternative_fix].include?(resolution['decision']) }
       unless disputes.empty?
         @state['accepted_resolutions'] = accepted
         @state['debate_findings'] = @state.fetch('claude_findings').select { |finding| disputes.any? { |item| item['finding_id'] == finding['id'] } }
@@ -808,7 +809,6 @@ module Addressit
         save_state
         return
       end
-      accepted = resolutions.select { |resolution| %w[accept accept_with_alternative_fix].include?(resolution['decision']) }
       if accepted.empty?
         @state['phase'] = 'ready_for_final_checks'
       else
@@ -824,7 +824,7 @@ module Addressit
       raise Error, 'Pi-worker produced no changes for manager findings' if @repo.clean?
 
       @repo.add_all
-      sha = @repo.commit("Address PR ##{@context.pr_number} round #{@state.fetch('current_round')} manager fix #{@state.fetch('manager_fix_iteration')}")
+      sha = @repo.commit("Address PR #{@context.pr_number} round #{@state.fetch('current_round')} manager fix #{@state.fetch('manager_fix_iteration')}")
       record_commit(sha)
       @state['review_iteration'] = (@state['review_iteration'] || 0) + 1
       send_claude
@@ -919,7 +919,7 @@ module Addressit
       end
 
       @repo.add_all
-      commit_sha = @repo.commit("Address PR ##{@context.pr_number} round #{@state.fetch('current_round')} fix #{@state.fetch('fix_iteration')}")
+      commit_sha = @repo.commit("Address PR #{@context.pr_number} round #{@state.fetch('current_round')} fix #{@state.fetch('fix_iteration')}")
       record_commit(commit_sha)
       @state['review_iteration'] += 1
       send_claude
