@@ -218,7 +218,9 @@ module Autowork
 
       branch = Shell.capture('git', '-C', code_dir, 'branch', '--show-current').stdout.strip
       match = branch.match(%r{(?:^|/)sc-(\d+)(?:/|$)})
-      match && match[1]
+      return match[1] if match
+
+      nil
     end
 
     def resolve_task_folder(task_root, task_id)

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'digest'
 require 'fileutils'
 require 'json'
 require 'time'
@@ -61,8 +62,7 @@ module Addressit
       match = branch.match(%r{(?:^|/)sc-(\d+)(?:/|$)})
       return match[1] if match
 
-      match = branch.match(%r{(?:^|/)(\d{4})(?:-|/|$)})
-      match && match[1]
+      nil
     end
   end
 
@@ -136,6 +136,31 @@ module Addressit
     end
   end
 
+  class ClipboardReview
+    def initialize(shell: Autowork::Shell)
+      @shell = shell
+    end
+
+    def comments
+      text = @shell.capture!('pbpaste')
+      raise Error, 'Clipboard review is empty' if text.strip.empty?
+
+      id = "local-#{Digest::SHA256.hexdigest(text)[0, 16]}"
+      now = Time.now.iso8601
+      [{
+        'id' => id,
+        'kind' => 'local_review',
+        'path' => nil,
+        'line' => nil,
+        'body' => text,
+        'created_at' => now,
+        'updated_at' => now,
+        'user' => { 'login' => 'local-review' },
+        'html_url' => nil
+      }]
+    end
+  end
+
   class GitHub
     attr_reader :repo, :number
 
@@ -143,6 +168,8 @@ module Addressit
       @argv = argv.dup
       @shell = shell
       @repo, @number, @specific_comment, @specific_review = parse_target
+      @filters = parse_filters
+      raise Error, "Invalid comment filter: #{@argv.join(' ').inspect}" unless @filters
     end
 
     def comments
@@ -183,16 +210,21 @@ module Addressit
     end
 
     def include_all_comments?
-      @argv.join(' ').match?(/\ball\s+comments\b/i)
+      filters&.fetch(:all_comments, false)
     end
 
     private
 
     def parse_target
       target = @argv.shift
-      raise Error, 'Usage: addressit <pr-number-or-github-url> [filters]' unless target
+      unless target&.match?(/\A\d+\z/) || target&.match?(%r{\Ahttps?://github\.com/[^/]+/[^/]+/pull/\d+})
+        @argv.unshift(target) if target
+        raise Error, "Invalid PR target: #{target.inspect}" if target && !implicit_filter?
 
-      if target.match?(%r{\Ahttps?://github\.com/[^/]+/[^/]+/pull/\d+})
+        target = current_pull_request
+      end
+
+      if target&.match?(%r{\Ahttps?://github\.com/[^/]+/[^/]+/pull/\d+})
         match = target.match(%r{github\.com/([^/]+)/([^/]+)/pull/(\d+)(?:#(.*))?})
         fragment = match[4].to_s
         specific_comment = fragment[/discussion_r(\d+)/, 1]
@@ -200,34 +232,83 @@ module Addressit
         return ["#{match[1]}/#{match[2]}", match[3], specific_comment, specific_review]
       end
 
-      raise Error, "Invalid PR target: #{target.inspect}" unless target.match?(/\A\d+\z/)
+      raise Error, "Invalid PR target: #{target.inspect}" unless target&.match?(/\A\d+\z/)
 
       repository = @shell.capture!('gh', 'repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner').strip
       [repository, target, nil, nil]
     end
 
-    def apply_filters(comments)
-      text = @argv.join(' ')
-      if (match = text.match(/(?:comments\s+)?from\s+@?([A-Za-z0-9_-]+)/i))
-        comments = comments.select { |comment| comment.dig('user', 'login') == match[1] }
-      end
-      return comments unless (match = text.match(/since\s+(.+)\z/i))
+    def implicit_filter?
+      !filters.nil?
+    end
 
-      threshold = parse_time(match[1])
+    def filters
+      @filters ||= parse_filters
+    end
+
+    def parse_filters
+      text = @argv.join(' ').strip
+      return {} if text.empty?
+
+      prefix = text.match?(/\Aall\s+comments\b/i) ? 'all comments' : nil
+      text = text.sub(/\Aall\s+comments\s*/i, '') if prefix
+      conversational_comments = !prefix && text.match?(/\Acomments\z/i)
+      text = text.sub(/\Acomments(?:\s+|\z)/i, '') unless prefix
+      reviewer = nil
+      since = nil
+      if (match = text.match(/\Afrom\s+@?([A-Za-z0-9_-]+)(?:\s+since\s+(.+))?\z/i))
+        reviewer = match[1]
+        since = match[2]
+      elsif (match = text.match(/\Asince\s+(.+)\z/i))
+        since = match[1]
+      elsif !text.empty?
+        return nil
+      end
+      return nil if !prefix && !conversational_comments && !reviewer && !since
+      parse_time(since) if since
+
+      { all_comments: !prefix.nil?, reviewer: reviewer, since: since }
+    end
+
+    def current_pull_request
+      payload = JSON.parse(@shell.capture!('gh', 'pr', 'view', '--json', 'number,url'))
+      unless payload.is_a?(Hash) && payload['number'].to_s.match?(/\A\d+\z/) && payload['url'].is_a?(String) && payload['url'].match?(%r{\Ahttps?://github\.com/[^/]+/[^/]+/pull/\d+})
+        raise Error, 'Could not find a valid pull request for the current branch'
+      end
+
+      payload['url']
+    rescue JSON::ParserError => e
+      raise Error, "Could not parse current pull request: #{e.message}"
+    end
+
+    def apply_filters(comments)
+      filters = self.filters
+      raise Error, "Invalid comment filter: #{@argv.join(' ').inspect}" unless filters
+
+      if filters[:reviewer]
+        comments = comments.select { |comment| comment.dig('user', 'login') == filters[:reviewer] }
+      end
+      return comments unless filters[:since]
+
+      threshold = parse_time(filters[:since])
       comments.select do |comment|
         [comment['created_at'], comment['updated_at']].compact.any? { |value| Time.parse(value) >= threshold }
       end
     end
 
     def parse_time(value)
-      return Time.parse(value) if value.match?(/\d{4}-\d{2}-\d{2}T/)
+      begin
+        return Time.parse(value) if value.match?(/\d{4}-\d{2}-\d{2}T/)
 
-      seconds = case value.strip.downcase
-                when /^(\d+)\s+hours?\s+ago$/ then Regexp.last_match(1).to_i * 3600
-                when /^yesterday$/ then 86_400
-                else raise Error, "Could not parse since filter #{value.inspect}"
-                end
-      Time.now - seconds
+        seconds = case value.strip.downcase
+                  when /^(\d+)\s+hours?\s+ago$/ then Regexp.last_match(1).to_i * 3600
+                  when /^yesterday$/ then 86_400
+                  else raise Error, "Could not parse since filter #{value.inspect}"
+                  end
+        Time.now - seconds
+      rescue ArgumentError => e
+        raise Error, "Could not parse since filter #{value.inspect}: #{e.message}"
+      end
     end
   end
 
@@ -473,10 +554,10 @@ module Addressit
       @repo = Autowork::GitRepo.new(context.repo_root)
     end
 
-    def prepare_round!(github)
+    def prepare_round!(source)
       raise Error, "Refusing to start with dirty worktree in #{@context.repo_root}:\n#{@repo.status}" unless @repo.clean?
 
-      comments = github.comments
+      comments = source.comments
       candidates = comments.reject { |comment| Ledger.new(@state).addressed_or_skipped?(comment) }
       @state['github_comments_fetched_at'] = Time.now.iso8601
       @state['current_round'] = (@state['rounds'].map { |round| round['number'] }.max || 0) + 1
@@ -918,7 +999,7 @@ module Addressit
     end
 
     def print_selection(comments, round)
-      puts "Addressit round #{round}: #{comments.length} new inline review comment(s)."
+      puts "Addressit round #{round}: #{comments.length} new review item(s)."
       comments.each_with_index do |comment, index|
         location = comment['path'].to_s
         location += ":#{comment['line']}" if comment['line']
@@ -978,6 +1059,7 @@ module Addressit
     private
 
     def extract_task_id!
+      @review_clipboard = !!@argv.delete('--clipboard')
       index = @argv.index('--task')
       return unless index
 
@@ -986,6 +1068,10 @@ module Addressit
 
       @argv.slice!(index, 2)
       task_id
+    end
+
+    def review_source
+      @review_clipboard ? ClipboardReview.new : GitHub.new(@argv)
     end
 
     def resolve_context
@@ -1006,13 +1092,17 @@ module Addressit
       state = if File.file?(files.state_path)
                 Store.new(files.state_path).read
               else
-                github = GitHub.new(@argv)
-                repo, number = github.repo, github.number
+                repo, number = if @review_clipboard
+                  [nil, nil]
+                else
+                  github = GitHub.new(@argv)
+                  [github.repo, github.number]
+                end
                 final_commands = File.file?(File.join(context.repo_root, 'Gemfile')) ? ['bundle exec rubocop', 'bundle exec rspec'] : []
                 initial_state(context, repo, number, final_commands)
               end
       write_config(files, state) unless File.file?(files.config_path)
-      if state['pr_repo']
+      if state['pr_repo'] && !@review_clipboard
         # Existing state owns the PR target; reruns must not silently switch PRs.
         requested = GitHub.new(@argv)
         unless requested.repo == state['pr_repo'] && requested.number.to_s == state['pr_number'].to_s
@@ -1030,12 +1120,11 @@ module Addressit
       lock.acquire!
       begin
         if %w[complete no_new_comments round_skipped].include?(state['phase'])
-          github = GitHub.new(@argv)
           state['phase'] = 'ready_to_fetch'
           Store.new(files.state_path).write(state)
-          Orchestrator.new(context, files, state).prepare_round!(github)
+          Orchestrator.new(context, files, state).prepare_round!(review_source)
         elsif state['phase'] == 'ready_to_fetch'
-          Orchestrator.new(context, files, state).prepare_round!(GitHub.new(@argv))
+          Orchestrator.new(context, files, state).prepare_round!(review_source)
         else
           Orchestrator.new(context, files, state).run
         end
@@ -1143,7 +1232,7 @@ module Addressit
         'repo_root' => context.repo_root,
         'branch_name' => context.branch,
         'pr_repo' => repo,
-        'pr_number' => number.to_i,
+        'pr_number' => number&.to_i,
         'phase' => 'ready_to_fetch',
         'rounds' => [],
         'comment_ledger' => [],

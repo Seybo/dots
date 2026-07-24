@@ -146,6 +146,18 @@ RSpec.describe Autowork do
       expect(context.code_dir).to eq(dots_repo)
     end
 
+    it 'does not infer a task from an arbitrary branch name' do
+      task_root, = make_env_task
+      dots_repo = make_git_repo
+      system('git', '-C', dots_repo, 'checkout', '-b', 'release/2024-fixes', out: File::NULL, err: File::NULL)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', dots_repo)
+
+      expect { described_class.new([], cwd: dots_repo).resolve }
+        .to raise_error(Autowork::Error, /Could not infer task id/)
+    end
+
     it 'infers env project from cwd when passed only a task id' do
       task_root, task_folder = make_env_task
       dots_repo = make_git_repo

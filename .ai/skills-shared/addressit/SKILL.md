@@ -29,30 +29,32 @@ invoke it again or downgrade the request to a general review request.
 `disable-model-invocation: true` disables automatic invocation; it does not
 block explicit user invocation.
 
-Pi appends command arguments verbatim. Extract the PR number or GitHub PR URL
-from anywhere in those arguments, ignoring conversational filler, and pass the
-PR target first to the helper. The helper requires:
+Pi appends command arguments verbatim. With no PR target, the helper discovers
+the current branch's pull request through `gh pr view`. Pass an explicit PR
+number or GitHub PR URL only when addressing a different pull request. The helper
+accepts:
 
 ```text
-addressit <pr-number-or-github-url> [filters] [--task <local-task-id>]
+addressit [pr-number-or-github-url] [filters] [--task <local-task-id>] [--clipboard]
 ```
 
 ## Invocation
 
 ```text
-/skill:addressit <pr-number-or-github-url> [filters] [--task <local-task-id>]
-/addressit <pr-number-or-github-url> [filters] [--task <local-task-id>]
+/skill:addressit [pr-number-or-github-url] [filters] [--task <local-task-id>] [--clipboard]
+/addressit [pr-number-or-github-url] [filters] [--task <local-task-id>] [--clipboard]
 ```
 
 Examples:
 
 ```text
+/addressit
+/addressit --task 0001
 /addressit 123
 /addressit https://github.com/org/repo/pull/123
 /addressit 123 comments from @octocat
 /addressit 123 comments since 12 hours ago
 /addressit 123 comments from @octocat since 2026-06-04T09:00:00Z
-/addressit 123 --task 0001
 ```
 
 Do not auto-use this skill from a general review-related request. Wait for an
@@ -65,7 +67,7 @@ Addressit uses the current checkout and the same project/task resolution rules a
 
 1. infer the project from the current checkout using the shared registry
 2. use `--task <local-task-id>` for an arbitrary local/ad-hoc branch, or infer
-   the task/story ID from `sc-<digits>` or a local four-digit branch prefix
+   the task/story ID from an `sc-<digits>` branch segment
 3. require exactly one matching folder under `/Volumes/dev/_tasks/<project>/`
 4. require that folder to contain `task.md`
 5. require a clean worktree
@@ -84,8 +86,8 @@ again.
 The operator is the polling mechanism. Each explicit invocation handles one
 snapshot of unresolved/new comments:
 
-1. Fetch inline PR review comments through `gh api`.
-2. Apply the existing PR URL, reviewer, time, and specific-comment/review filters.
+1. Fetch inline PR review comments through `gh api`, or read the copied local review with `pbpaste` when `--clipboard` is used.
+2. Apply the existing PR URL, reviewer, time, and specific-comment/review filters in GitHub mode.
 3. Ignore a comment only when the local ledger records the same GitHub comment ID
    and the same `updated_at` as `addressed` or `skipped`.
 4. If a previously addressed/skipped comment was edited, treat the edited
@@ -94,7 +96,8 @@ snapshot of unresolved/new comments:
 6. Stop and show the concise selected-comment list. Do not launch Pi-worker yet.
 
 Review summaries and issue-level PR comments are not included by default. Use the
-existing explicit all-comments behavior when those are requested.
+existing explicit all-comments behavior when those are requested. A clipboard review is
+imported as one review item, preserving its full text for classification and worker prompts.
 
 A round has one universal approval gate. Pi-manager must read the saved full
 comment artifact, classify every selected comment, and present a concise table:
@@ -253,5 +256,7 @@ addressit approve <task_folder> <approval-json>
 Pi-manager uses this only after the operator has approved or skipped every
 selected comment.
 
-A later `/addressit <same-pr>` invocation fetches GitHub again and creates the
-next round from comment IDs/versions that are not addressed or skipped.
+A later `/addressit` invocation fetches the current branch's pull request again
+and creates the next round from comment IDs/versions that are not addressed or
+skipped. `--task <local-task-id>` remains available when the branch does not
+contain an inferable task ID.

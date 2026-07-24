@@ -26,6 +26,20 @@ RSpec.describe Addressit do
     end
   end
 
+  describe Addressit::ClipboardReview do
+    it 'imports the clipboard as one stable local review item' do
+      shell = double(capture!: "P1 — reserve before provider write\n")
+
+      comments = described_class.new(shell: shell).comments
+
+      expect(comments.length).to eq(1)
+      expect(comments.first['id']).to start_with('local-')
+      expect(comments.first['kind']).to eq('local_review')
+      expect(comments.first['body']).to include('reserve before provider write')
+      expect(comments.first['user']['login']).to eq('local-review')
+    end
+  end
+
   describe Addressit::TaskResolver do
     it 'resolves a direct checkout with an explicit local task id' do
       repo_root = File.join(@tmpdir, 'rails')
@@ -124,10 +138,140 @@ RSpec.describe Addressit do
       def capture!(*args)
         @calls << args
         return 'example/project' if args == ['gh', 'repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']
+        return JSON.generate({ 'number' => 123, 'url' => 'https://github.com/example/project/pull/123' }) if args == ['gh', 'pr', 'view', '--json', 'number,url']
         return JSON.generate(@payload) if args.first(2) == ['gh', 'api']
 
         raise "unexpected command: #{args.inspect}"
       end
+    end
+
+    it 'discovers the current pull request when no target is provided' do
+      github = described_class.new([], shell: shell = FakeShell.new([]))
+
+      expect(github.repo).to eq('example/project')
+      expect(github.number).to eq('123')
+      expect(shell.calls).to include(['gh', 'pr', 'view', '--json', 'number,url'])
+    end
+
+    it 'supports standalone since filters with implicit PR discovery' do
+      shell = FakeShell.new([
+        { 'id' => 1, 'user' => { 'login' => 'alice' }, 'created_at' => '2026-07-22T12:00:00Z', 'updated_at' => '2026-07-22T12:00:00Z' },
+        { 'id' => 2, 'user' => { 'login' => 'bob' }, 'created_at' => '2020-01-01T12:00:00Z', 'updated_at' => '2020-01-01T12:00:00Z' }
+      ])
+
+      comments = described_class.new(%w[since 2020-01-01T00:00:00Z], shell: shell).comments
+
+      expect(comments.map { |comment| comment['id'] }).to eq([2, 1])
+    end
+
+    it 'supports standalone since filters with an explicit PR target' do
+      shell = FakeShell.new([
+        { 'id' => 1, 'user' => { 'login' => 'alice' }, 'created_at' => '2026-07-22T12:00:00Z', 'updated_at' => '2026-07-22T12:00:00Z' },
+        { 'id' => 2, 'user' => { 'login' => 'bob' }, 'created_at' => '2020-01-01T12:00:00Z', 'updated_at' => '2020-01-01T12:00:00Z' }
+      ])
+
+      comments = described_class.new(%w[123 since 2020-01-01T00:00:00Z], shell: shell).comments
+
+      expect(comments.map { |comment| comment['id'] }).to eq([2, 1])
+    end
+
+    it 'keeps bare comments as a no-op filter' do
+      shell = FakeShell.new([
+        { 'id' => 1, 'user' => { 'login' => 'alice' }, 'created_at' => '2026-07-22T12:00:00Z', 'updated_at' => '2026-07-22T12:00:00Z' },
+        { 'id' => 2, 'user' => { 'login' => 'bob' }, 'created_at' => '2026-07-22T12:01:00Z', 'updated_at' => '2026-07-22T12:01:00Z' }
+      ])
+
+      comments = described_class.new(%w[comments], shell: shell).comments
+
+      expect(comments.map { |comment| comment['id'] }).to eq([1, 2])
+    end
+
+    it 'fetches all comment kinds for all-comments filters' do
+      shell = FakeShell.new([])
+
+      described_class.new(['all', 'comments'], shell: shell).comments
+
+      expect(shell.calls).to include(
+        ['gh', 'api', 'repos/example/project/pulls/123/comments', '--paginate'],
+        ['gh', 'api', 'repos/example/project/pulls/123/reviews', '--paginate'],
+        ['gh', 'api', 'repos/example/project/issues/123/comments', '--paginate']
+      )
+    end
+
+    it 'supports all-comments filters combined with a reviewer' do
+      shell = FakeShell.new([])
+
+      described_class.new(%w[123 all comments from alice], shell: shell).comments
+
+      expect(shell.calls.count { |call| call[0, 2] == ['gh', 'api'] }).to eq(3)
+    end
+
+    it 'rejects invalid since values before fetching comments' do
+      shell = FakeShell.new([])
+
+      expect { described_class.new(%w[123 since nonsense], shell: shell) }
+        .to raise_error(Addressit::Error, /Could not parse since filter/)
+      expect(shell.calls.none? { |call| call.first(2) == ['gh', 'api'] }).to be(true)
+    end
+
+    it 'rejects malformed ISO since values before fetching comments' do
+      shell = FakeShell.new([])
+
+      expect { described_class.new(%w[123 since 2026-99-99T00:00:00Z], shell: shell) }
+        .to raise_error(Addressit::Error, /Could not parse since filter/)
+      expect(shell.calls.none? { |call| call.first(2) == ['gh', 'api'] }).to be(true)
+    end
+
+    it 'rejects invalid filters before fetching comments' do
+      shell = FakeShell.new([])
+
+      expect { described_class.new(%w[123 comments typo], shell: shell) }
+        .to raise_error(Addressit::Error, /Invalid comment filter/)
+      expect(shell.calls.none? { |call| call.first(2) == ['gh', 'api'] }).to be(true)
+    end
+
+    it 'rejects an invalid target instead of treating it as a filter' do
+      expect { described_class.new(['123abc'], shell: FakeShell.new([])) }
+        .to raise_error(Addressit::Error, /Invalid PR target/)
+    end
+
+    it 'uses explicit pull request URL fragments to select a comment' do
+      shell = FakeShell.new([
+        { 'id' => 456, 'user' => { 'login' => 'alice' }, 'created_at' => '2026-07-22T12:00:00Z', 'updated_at' => '2026-07-22T12:00:00Z' },
+        { 'id' => 789, 'user' => { 'login' => 'bob' }, 'created_at' => '2026-07-22T12:01:00Z', 'updated_at' => '2026-07-22T12:01:00Z' }
+      ])
+      github = described_class.new(['https://github.com/example/project/pull/123#discussion_r456'], shell: shell)
+
+      expect(github.comments.map { |comment| comment['id'] }).to eq([456])
+    end
+
+    it 'discovers the current pull request before applying filters' do
+      shell = FakeShell.new([
+        { 'id' => 1, 'user' => { 'login' => 'alice' }, 'created_at' => '2026-07-22T12:00:00Z', 'updated_at' => '2026-07-22T12:00:00Z' },
+        { 'id' => 2, 'user' => { 'login' => 'bob' }, 'created_at' => '2026-07-22T12:01:00Z', 'updated_at' => '2026-07-22T12:01:00Z' }
+      ])
+
+      comments = described_class.new(%w[comments from alice], shell: shell).comments
+
+      expect(comments.map { |comment| comment['id'] }).to eq([1])
+      expect(shell.calls).to include(['gh', 'pr', 'view', '--json', 'number,url'])
+    end
+
+    it 'rejects malformed current pull request data' do
+      shell = Class.new(FakeShell) do
+        def initialize
+          super([])
+        end
+
+        def capture!(*args)
+          return '[]' if args == ['gh', 'pr', 'view', '--json', 'number,url']
+
+          super
+        end
+      end.new
+
+      expect { described_class.new([], shell: shell) }
+        .to raise_error(Addressit::Error, /valid pull request/)
     end
 
     it 'fetches and filters inline comments by reviewer' do

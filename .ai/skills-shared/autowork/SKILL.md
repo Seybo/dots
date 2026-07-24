@@ -17,7 +17,7 @@ In Pi, use either:
 ```text
 /skill:autowork
 /autowork
-/autowork <task_id> <full-base-branch-or-ref>
+/autowork <task_id> [full-base-branch-or-ref]
 /autowork <project-or-session> [task_id] [full-base-branch-or-ref]
 /autowork doctor
 /autowork doctor --no-send-test
@@ -200,7 +200,7 @@ Use the shared task-resolution rules from:
 /Users/inseybo/.ai/skills-shared/components/task-resolution.md
 ```
 
-`/autowork` requires the selected task folder to contain `task.md`. It also requires `steps.md` before the Ruby helper starts, but `/autowork` owns a preflight that creates or updates `steps.md` through `/workit` when needed.
+`/autowork` requires the selected task folder to contain `task.md`. It infers the project from the current checkout and the task ID from an `sc-<digits>` branch segment when possible. For arbitrary branch names, pass the task ID positionally, such as `/autowork 0001`. It also requires `steps.md` before the Ruby helper starts, but `/autowork` owns a preflight that creates or updates `steps.md` through `/workit` when needed.
 
 Preflight before running the Ruby helper:
 
