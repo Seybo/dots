@@ -23,6 +23,7 @@ windows:
 
   - misc:
       root: <%= @settings.fetch("task_root") %>
+      layout: 9ad5,156x45,0,0{128x45,0,0,59,27x45,129,0,62}
       panes:
         - lg
         -
