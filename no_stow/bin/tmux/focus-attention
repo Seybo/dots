@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+attention_panes=()
+while IFS= read -r pane_id; do
+  [[ -z "$pane_id" ]] && continue
+  if tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -Fxq -- "$pane_id"; then
+    attention_panes+=("$pane_id")
+  fi
+done < <(tmux list-windows -a -F '#{@agent-attention-pane}' 2>/dev/null)
+
+if (( ${#attention_panes[@]} == 0 )); then
+  tmux display-message 'No tmux pane needs attention'
+  exit 0
+fi
+
+current_pane="$(tmux display-message -p '#{pane_id}')"
+target_pane="${attention_panes[0]}"
+
+for index in "${!attention_panes[@]}"; do
+  if [[ "${attention_panes[$index]}" == "$current_pane" ]]; then
+    next_index=$((index + 1))
+    if (( next_index < ${#attention_panes[@]} )); then
+      target_pane="${attention_panes[$next_index]}"
+    else
+      target_pane="${attention_panes[0]}"
+    fi
+    break
+  fi
+done
+
+tmux switch-client -t "$target_pane"
