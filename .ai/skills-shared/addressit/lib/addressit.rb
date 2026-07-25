@@ -75,7 +75,7 @@ module Addressit
     end
 
     def mkdirs
-      %w[prompts reviews debates status rounds].each { |name| FileUtils.mkdir_p(File.join(log_dir, name)) }
+      %w[prompts reviews audits debates status rounds].each { |name| FileUtils.mkdir_p(File.join(log_dir, name)) }
     end
 
     def config_path = File.join(log_dir, 'config.yml')
@@ -90,6 +90,10 @@ module Addressit
     def triage_path(round) = round_path(round, 'triage.json')
     def approval_path(round) = round_path(round, 'approval.json')
     def review_path(round, iteration) = File.join(log_dir, 'reviews', "round#{round}_claude_review#{iteration}.md")
+    def audit_path(round, agent) = File.join(log_dir, 'audits', "round#{round}_#{agent}_blind_audit.md")
+    def manager_hypotheses_path(round) = File.join(log_dir, 'audits', "round#{round}_manager_initial_review_hypotheses.json")
+    def risk_manifest_path(round) = File.join(log_dir, 'audits', "round#{round}_risk_coverage_manifest.json")
+    def reconciliation_path(round) = File.join(log_dir, 'audits', "round#{round}_risk_reconciliation.json")
     def status_path(round, agent, phase, iteration = nil)
       suffix = iteration ? "#{phase}#{iteration}" : phase
       File.join(log_dir, 'status', "round#{round}_#{agent}_#{suffix}.json")
@@ -386,6 +390,35 @@ module Addressit
       path
     end
 
+    def pi_blind_audit
+      round = @state.fetch('current_round')
+      path = @files.prompt_path("round#{round}_pi_blind_audit_request.md")
+      status = @files.status_path(round, 'pi', 'audit')
+      audit = @files.audit_path(round, 'pi')
+      FileUtils.rm_f(status)
+      FileUtils.rm_f(audit)
+      File.write(path, <<~PROMPT)
+        # Addressit: blind whole-diff audit for round #{round}
+
+        You are the Pi review agent participating in `/addressit` as `pi-worker`.
+        Review the complete current diff in #{@context.repo_root} after the implementation commit.
+
+        Read:
+        - task: #{@context.task_folder}/task.md
+        - addressit state: #{@files.state_path}
+
+        This is an independent discovery pass. Do not read manager hypotheses, historical risk files, or other audit artifacts. Do not edit files and do not run tests, linters, or formatters.
+
+        Look for correctness, concurrency, idempotency, external-boundary, partial-failure, data-integrity, time/identity, and operator-behavior risks that the implementation introduced. Do not limit the review to the approved comments.
+
+        Write the concise human-readable audit to #{audit}. Write valid status JSON last to #{status}, then stop immediately.
+        Required status shape:
+        {"status":"done","agent":"pi","phase":"audit","step":0,"summary":"...","findings":[{"id":"P1","severity":"BLOCKER|MINOR","title":"...","body":"..."}]}
+        Use an empty findings array when no actionable findings remain. Use status `needs_user` with a question if input is required.
+      PROMPT
+      path
+    end
+
     def claude_review(iteration, commit_sha)
       round = @state.fetch('current_round')
       path = @files.prompt_path("round#{round}_claude_review#{iteration}_request.md")
@@ -405,7 +438,7 @@ module Addressit
         - approval: #{@files.approval_path(round)}
         - addressit state: #{@files.state_path}
 
-        Review every approved comment and inspect for regressions introduced by the commit. Do not edit files and do not run tests, linters, or formatters. Use read-only inspection and Pi's reported checks.
+        Review every approved comment and the complete current diff, not only the comment locations. Independently look for correctness, concurrency, idempotency, external-boundary, partial-failure, data-integrity, time/identity, and operator-behavior risks. Do not read manager hypotheses, historical risk files, or Pi's blind audit. Do not edit files and do not run tests, linters, or formatters. Use read-only inspection and Pi's reported checks.
         Write the full human-readable review to #{review} before the status JSON.
         Write valid status JSON last to #{status}, then stop immediately.
 
@@ -547,6 +580,7 @@ module Addressit
   class Orchestrator
     WAITING_STAGE_NAMES = {
       'waiting_for_pi' => 'PI WORKER IMPLEMENTATION',
+      'waiting_for_pi_audit' => 'PI BLIND AUDIT',
       'waiting_for_manager_fix' => 'PI MANAGER FIX',
       'waiting_for_claude' => 'CLAUDE REVIEW',
       'waiting_for_fix_review' => 'CLAUDE FIX REVIEW',
@@ -612,7 +646,7 @@ module Addressit
       destination = @files.approval_path(round)
       FileUtils.cp(approval_path, destination) unless File.expand_path(approval_path) == File.expand_path(destination)
       round_state = @state['rounds'].find { |entry| entry['number'] == round }
-      round_state.merge!('approved_ids' => approved, 'skipped_ids' => skipped, 'status' => approved.empty? ? 'skipped' : 'approved')
+      round_state.merge!('approved_ids' => approved, 'skipped_ids' => skipped, 'status' => approved.empty? ? 'skipped' : 'approved', 'risk_audit_required' => !approved.empty?)
       @state['phase'] = approved.empty? ? 'round_skipped' : 'ready_to_send_pi'
       save_state
       puts "Approved #{approved.length} comment(s); skipped #{skipped.length}."
@@ -628,6 +662,16 @@ module Addressit
           send_pi
         when 'waiting_for_pi'
           wait_for('pi', 'implement') { @state['phase'] = 'ready_to_commit' }
+        when 'ready_for_manager_hypotheses'
+          print_manager_hypotheses_gate
+          return
+        when 'ready_to_send_pi_audit'
+          send_pi_audit
+        when 'waiting_for_pi_audit'
+          wait_for('pi', 'audit') { handle_pi_audit }
+        when 'ready_for_risk_reconciliation'
+          print_risk_reconciliation_gate
+          return
         when 'waiting_for_manager_fix'
           wait_for('pi', 'manager_fix', @state.fetch('manager_fix_iteration')) { commit_manager_fix }
         when 'ready_to_commit'
@@ -663,6 +707,44 @@ module Addressit
           raise Error, "Unknown addressit phase: #{@state['phase'].inspect}"
         end
       end
+    end
+
+    def start_audit!(hypotheses_path)
+      raise Error, "Addressit is not waiting for manager hypotheses (phase #{@state['phase']})" unless @state['phase'] == 'ready_for_manager_hypotheses'
+
+      hypotheses = JSON.parse(File.read(hypotheses_path))
+      validate_hypotheses!(hypotheses)
+      destination = @files.manager_hypotheses_path(@state.fetch('current_round'))
+      FileUtils.cp(hypotheses_path, destination) unless File.expand_path(hypotheses_path) == File.expand_path(destination)
+      @state['phase'] = 'ready_to_send_pi_audit'
+      @state['manager_hypotheses_path'] = destination
+      save_state
+      run
+    rescue JSON::ParserError => e
+      raise Error, "Invalid manager hypotheses JSON: #{e.message}"
+    end
+
+    def reconcile_audit!(manifest_path)
+      raise Error, "Addressit is not waiting for risk reconciliation (phase #{@state['phase']})" unless @state['phase'] == 'ready_for_risk_reconciliation'
+
+      manifest = Autowork::ReviewRiskManifest.validate_file(manifest_path)
+      validate_hypothesis_coverage!(manifest)
+      gaps = manifest['coverage_gaps']
+      raise Error, 'Risk reconciliation has unresolved coverage gaps' unless gaps.empty?
+      destination = @files.risk_manifest_path(@state.fetch('current_round'))
+      FileUtils.cp(manifest_path, destination) unless File.expand_path(manifest_path) == File.expand_path(destination)
+      pi_findings = @state.fetch('review_iteration', 1) == 1 ? @state.fetch('pi_audit_findings', []) : []
+      findings = tagged_findings(pi_findings, 'PI') + tagged_findings(@state.fetch('claude_findings', []), 'CL') + Array(manifest['additional_findings'])
+      @state['audit_findings'] = findings.uniq { |finding| finding['id'] }
+      @state['risk_manifest_path'] = destination
+      @state['risk_reconciliation_path'] = @files.reconciliation_path(@state.fetch('current_round'))
+      File.write(@state['risk_reconciliation_path'], JSON.pretty_generate('summary' => manifest['summary'], 'coverage_gaps' => gaps, 'findings_count' => findings.length) + "\n")
+      @state['claude_findings'] = @state['audit_findings']
+      @state['phase'] = findings.empty? ? 'ready_for_final_checks' : 'ready_to_send_classify'
+      save_state
+      run
+    rescue JSON::ParserError => e
+      raise Error, "Invalid risk manifest JSON: #{e.message}"
     end
 
     def manager_fix!(findings_path)
@@ -719,11 +801,21 @@ module Addressit
     def manager_pass!
       raise Error, "Addressit is not waiting for manager review (phase #{@state['phase']})" unless @state['phase'] == 'ready_for_manager_review'
       raise Error, "Write #{@files.manager_review_path} before passing manager review" unless File.file?(@files.manager_review_path)
-
       round = @state.fetch('current_round')
       comments = JSON.parse(File.read(@files.comments_path(round)))
       round_state = @state['rounds'].find { |entry| entry['number'] == round }
+      manifest = nil
+      if round_state['risk_audit_required']
+        raise Error, "Complete risk reconciliation before passing manager review: #{@files.risk_manifest_path(round)}" unless File.file?(@files.risk_manifest_path(round)) && File.file?(@files.reconciliation_path(round))
+        manifest = Autowork::ReviewRiskManifest.validate_file(@files.risk_manifest_path(round))
+        raise Error, 'Risk reconciliation has unresolved coverage gaps' unless Array(manifest['coverage_gaps']).empty?
+      end
       squash_round_commits!(round_state)
+      Autowork::ReviewRiskRegistry.new(@context.project).apply!(
+        Array(manifest && manifest['registry_updates']),
+        task_id: @context.task_id,
+        round_id: "addressit-#{round}",
+      ) if manifest
       approved_ids = round_state.fetch('approved_ids')
       ledger = Ledger.new(@state)
       comments.select { |comment| approved_ids.include?(comment['id'].to_s) }.each do |comment|
@@ -773,6 +865,25 @@ module Addressit
       commit_sha = @repo.commit("Address PR #{@context.pr_number} round #{@state.fetch('current_round')}")
       record_commit(commit_sha)
       @state['review_iteration'] = 1
+      @state['phase'] = 'ready_for_manager_hypotheses'
+      save_state
+      print_manager_hypotheses_gate
+    end
+
+    def send_pi_audit
+      @state['next_agent'] = 'pi'
+      path = PromptWriter.new(@files, @context, @state).pi_blind_audit
+      send_prompt(path)
+      @state['phase'] = 'waiting_for_pi_audit'
+      save_state
+    end
+
+    def handle_pi_audit
+      status = read_status('pi', 'audit')
+      require_nonempty_artifact!(@files.audit_path(@state.fetch('current_round'), 'pi'), 'Pi blind audit')
+      @state['pi_audit_findings'] = actionable_findings(status['findings'])
+      @state['phase'] = 'ready_to_send_claude'
+      save_state
       send_claude
     end
 
@@ -789,13 +900,11 @@ module Addressit
       status = read_status('claude', 'review', @state.fetch('review_iteration'))
       if status['status'] == 'needs_user'
         pause_for_user(status.fetch('question'))
-      elsif Array(status['findings']).empty?
-        @state['phase'] = 'ready_for_final_checks'
-        save_state
       else
-        @state['claude_findings'] = status['findings']
-        @state['phase'] = 'ready_to_send_classify'
+        @state['claude_findings'] = actionable_findings(status['findings'])
+        @state['phase'] = 'ready_for_risk_reconciliation'
         save_state
+        print_risk_reconciliation_gate
       end
     end
 
@@ -936,6 +1045,67 @@ module Addressit
       send_claude
     end
 
+    def actionable_findings(findings)
+      Array(findings).select { |finding| %w[BLOCKER MINOR].include?(finding['severity']) }
+    end
+
+    def require_nonempty_artifact!(path, label)
+      return if File.file?(path) && !File.read(path).strip.empty?
+
+      raise Error, "#{label} artifact is missing or empty: #{path}. Agents must write artifacts before status JSON."
+    end
+
+    def validate_hypotheses!(data)
+      raise Error, 'Manager hypotheses must be a JSON object' unless data.is_a?(Hash)
+
+      hypotheses = data['hypotheses']
+      raise Error, 'Manager hypotheses must be a non-empty array' unless hypotheses.is_a?(Array) && !hypotheses.empty?
+
+      ids = hypotheses.map.with_index do |hypothesis, index|
+        unless hypothesis.is_a?(Hash)
+          raise Error, "Manager hypothesis #{index} must be an object"
+        end
+
+        %w[id kind check reason].each do |key|
+          unless hypothesis[key].is_a?(String) && !hypothesis[key].strip.empty?
+            raise Error, "Manager hypothesis #{index}.#{key} must be a non-empty string"
+          end
+        end
+        hypothesis['id']
+      end
+      raise Error, 'Manager hypothesis ids must be unique' unless ids.uniq.length == ids.length
+    end
+
+    def validate_hypothesis_coverage!(manifest)
+      hypotheses = JSON.parse(File.read(@state.fetch('manager_hypotheses_path')))['hypotheses']
+      coverage = manifest['hypothesis_coverage']
+      raise Error, 'Risk manifest hypothesis_coverage must be a present array' unless coverage.is_a?(Array)
+
+      expected_ids = hypotheses.map { |hypothesis| hypothesis.fetch('id') }
+      coverage.each_with_index do |item, index|
+        raise Error, "Risk manifest hypothesis_coverage[#{index}] must be an object" unless item.is_a?(Hash)
+        unless item['id'].is_a?(String) && !item['id'].strip.empty?
+          raise Error, "Risk manifest hypothesis_coverage[#{index}].id must be a non-empty string"
+        end
+        unless item['status'] == 'covered'
+          raise Error, "Risk manifest hypothesis_coverage[#{index}] status must be covered"
+        end
+        unless item['note'].is_a?(String) && !item['note'].strip.empty?
+          raise Error, "Risk manifest hypothesis_coverage[#{index}].note must be a non-empty string"
+        end
+      end
+      actual_ids = coverage.map { |item| item['id'] }
+      raise Error, 'Risk manifest hypothesis_coverage must acknowledge every hypothesis exactly once' unless actual_ids.uniq.length == actual_ids.length && actual_ids.sort == expected_ids.sort
+    rescue JSON::ParserError => e
+      raise Error, "Invalid manager hypotheses JSON: #{e.message}"
+    end
+
+    def tagged_findings(findings, prefix)
+      Array(findings).map do |finding|
+        finding.merge('id' => "#{prefix}-#{finding.fetch('id')}")
+      end
+    end
+
     def run_final_checks
       commands = Array(@state.fetch('final_check_commands', []))
       results = commands.map { |command| execute_check(command) }
@@ -1032,9 +1202,29 @@ module Addressit
       puts "Write approval JSON to #{@files.approval_path(round)} and run: addressit approve #{@context.task_folder} <approval-json>"
     end
 
+    def print_manager_hypotheses_gate
+      round = @state.fetch('current_round')
+      puts "Addressit round #{round}: pi-manager must write current-only review hypotheses."
+      puts "Do not read historical risk data yet. Write JSON with a hypotheses array to: #{@files.manager_hypotheses_path(round)}"
+      puts '{"hypotheses":[{"id":"H1","kind":"...","check":"...","reason":"..."}]}'
+      puts "Then run: addressit audit-start #{@context.task_folder} #{@files.manager_hypotheses_path(round)}"
+    end
+
+    def print_risk_reconciliation_gate
+      round = @state.fetch('current_round')
+      registry = File.join(Autowork::TASK_ROOT, @context.project, 'review-risk-registry.json')
+      puts "Addressit round #{round}: pi-manager must reconcile blind audits."
+      puts "Now read the project risk registry: #{registry}"
+      puts "Prioritize active, high-weight risks only when their tags/triggers match this diff."
+      puts "Write the final manifest to: #{@files.risk_manifest_path(round)}"
+      puts '{"summary":"...","coverage_gaps":[],"hypothesis_coverage":[{"id":"H1","status":"covered","note":"..."}],"additional_findings":[],"registry_updates":[]}'
+      puts "Acknowledge every hypothesis exactly once in hypothesis_coverage with status covered and a short note. Resolve every gap; use coverage_gaps: [] only when none remain."
+      puts "Then run: addressit audit-reconcile #{@context.task_folder} #{@files.risk_manifest_path(round)}"
+    end
+
     def print_manager_gate
       puts "Addressit is ready for pi-manager review."
-      puts "Review diff, comments, checks, and commits; write #{@files.manager_review_path}."
+      puts "Review diff, comments, audits, risk manifest, checks, and commits; write #{@files.manager_review_path}."
       puts "Then run: addressit manager-pass #{@context.task_folder}"
     end
 
@@ -1063,6 +1253,10 @@ module Addressit
       case command
       when 'approve'
         approve
+      when 'audit-start'
+        audit_start
+      when 'audit-reconcile'
+        audit_reconcile
       when 'manager-pass'
         manager_pass
       when 'manager-fix'
@@ -1165,6 +1359,34 @@ module Addressit
       lock.acquire!
       begin
         Orchestrator.new(context, files, state).approve!(approval_path)
+      ensure
+        lock.release
+      end
+      0
+    end
+
+    def audit_start
+      task_folder, hypotheses_path = @argv[1], @argv[2]
+      raise Error, 'Usage: addressit audit-start <task_folder> <hypotheses-json>' unless task_folder && hypotheses_path
+      context, files, state = load_by_task(task_folder)
+      lock = Lock.new(files.lock_path)
+      lock.acquire!
+      begin
+        Orchestrator.new(context, files, state).start_audit!(hypotheses_path)
+      ensure
+        lock.release
+      end
+      0
+    end
+
+    def audit_reconcile
+      task_folder, manifest_path = @argv[1], @argv[2]
+      raise Error, 'Usage: addressit audit-reconcile <task_folder> <manifest-json>' unless task_folder && manifest_path
+      context, files, state = load_by_task(task_folder)
+      lock = Lock.new(files.lock_path)
+      lock.acquire!
+      begin
+        Orchestrator.new(context, files, state).reconcile_audit!(manifest_path)
       ensure
         lock.release
       end

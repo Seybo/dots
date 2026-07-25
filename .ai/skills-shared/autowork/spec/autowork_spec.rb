@@ -474,6 +474,49 @@ RSpec.describe Autowork do
     end
   end
 
+  describe Autowork::ReviewRiskRegistry do
+    it 'stores and weights manager-confirmed generalized lessons' do
+      registry = described_class.new('env', task_root: @tmpdir)
+      registry.apply!([{ 'id' => 'lookup-then-write', 'summary' => 'Protect duplicate writes.', 'tags' => ['idempotency'], 'triggers' => ['lookup then insert'] }], task_id: '0003', round_id: 'round1')
+      registry.apply!([{ 'id' => 'lookup-then-write', 'summary' => 'Protect duplicate writes.', 'tags' => ['concurrency'], 'triggers' => ['unique index'] }], task_id: '0003', round_id: 'round2')
+      registry.apply!([{ 'id' => 'lookup-then-write', 'summary' => 'Protect duplicate writes.', 'tags' => ['concurrency'], 'triggers' => ['unique index'] }], task_id: '0004', round_id: 'round1')
+
+      data = JSON.parse(File.read(registry.path))
+      risk = data.fetch('risks').first
+      expect(risk).to include('valid_task_count' => 2, 'valid_round_count' => 3, 'status' => 'active')
+      expect(risk['tags']).to contain_exactly('idempotency', 'concurrency')
+      expect(risk['weight']).to be > 0.25
+    end
+  end
+
+  describe Autowork::ReviewRiskManifest do
+    it 'accepts a compact manager manifest' do
+      manifest = described_class.validate(
+        'summary' => 'Reviewed applicable risks.',
+        'coverage_gaps' => [],
+        'registry_updates' => []
+      )
+
+      expect(manifest['coverage_gaps']).to be_empty
+    end
+
+    it 'rejects a manifest without explicit coverage gaps' do
+      expect do
+        described_class.validate('summary' => 'Reviewed.')
+      end.to raise_error(Autowork::Error, /coverage_gaps must be a present array/)
+    end
+
+    it 'rejects malformed additional findings' do
+      expect do
+        described_class.validate(
+          'summary' => 'Reviewed.',
+          'coverage_gaps' => [],
+          'additional_findings' => [{ 'id' => 'R1', 'severity' => 'HIGH' }]
+        )
+      end.to raise_error(Autowork::Error, /additional finding/)
+    end
+  end
+
   describe Autowork::RunFiles do
     it 'creates the expected autowork-log subdirectories' do
       task_folder = File.join(@tmpdir, 'task')
@@ -488,6 +531,8 @@ RSpec.describe Autowork do
       expect(files.config_path).to eq(File.join(files.log_dir, 'config.yml'))
       expect(files.state_path).to eq(File.join(files.log_dir, 'state.json'))
       expect(files.prompt_path('step1_pi_implement_request.md')).to eq(File.join(files.log_dir, 'prompts', 'step1_pi_implement_request.md'))
+      expect(files.blind_audit_path(1)).to eq(File.join(files.log_dir, 'reviews', 'step1_pi_blind_audit_result.md'))
+      expect(files.risk_manifest_path).to eq(File.join(files.log_dir, 'review-risk-manifest.json'))
     end
   end
 
@@ -943,7 +988,7 @@ RSpec.describe Autowork do
       ENV['AUTOWORK_WORKER_STATUS_TIMEOUT_SECONDS'] = previous_timeout
     end
 
-    it 'commits a completed pi-worker step and sends a claude-worker review prompt' do
+    it 'commits a completed pi-worker step and sends a blind Pi audit prompt' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
       tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
@@ -973,9 +1018,9 @@ RSpec.describe Autowork do
       state = state_store.read
       commit_message = `git -C #{repo} log -1 --pretty=%s`.strip
       expect(commit_message).to eq('Step 1')
-      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('step1_claude_review1_request.md'))
+      expect(tmux).to have_received(:send_prompt).with('%2', files.prompt_path('step1_pi_blind_audit_request.md'))
       expect(state['status']).to eq('running')
-      expect(state['phase']).to eq('waiting_for_claude_review')
+      expect(state['phase']).to eq('waiting_for_pi_audit')
       expect(state['last_commit']).to match(/\A[0-9a-f]{40}\z/)
     end
 
@@ -2127,6 +2172,7 @@ RSpec.describe Autowork do
       state_store.write(state)
       File.write(files.final_summary_path, "# Summary\n\n- Final status: manager_review\n- Final phase: ready_for_manager_final_review\n\n## Manager review loop\n\n- Awaiting manager review iteration 1.\n")
       File.write(files.manager_review_path, "# Manager-context production-readiness review\n\n## Manager review result\n\n- Pending.\n")
+      File.write(files.risk_manifest_path, JSON.pretty_generate('summary' => 'No additional coverage gaps.', 'coverage_gaps' => [], 'registry_updates' => []))
 
       described_class.new([task_folder]).run
 

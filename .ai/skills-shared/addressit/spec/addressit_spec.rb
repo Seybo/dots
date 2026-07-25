@@ -23,6 +23,84 @@ RSpec.describe Addressit do
       expect(File.directory?(files.log_dir)).to be(true)
       expect(files.comments_path(2)).to end_with('rounds/round2_comments.json')
       expect(files.status_path(2, 'claude', 'review', 3)).to end_with('status/round2_claude_review3.json')
+      expect(files.audit_path(2, 'pi')).to end_with('audits/round2_pi_blind_audit.md')
+      expect(files.manager_hypotheses_path(2)).to end_with('audits/round2_manager_initial_review_hypotheses.json')
+      expect(files.risk_manifest_path(2)).to end_with('audits/round2_risk_coverage_manifest.json')
+    end
+  end
+
+  describe Addressit::Orchestrator do
+    let(:task_folder) { File.join(@tmpdir, 'task') }
+    let(:files) do
+      instance = Addressit::Files.new(task_folder)
+      instance.mkdirs
+      instance
+    end
+    let(:context) do
+      repo_root = File.join(@tmpdir, 'repo')
+      FileUtils.mkdir_p(repo_root)
+      system('git', '-C', repo_root, 'init', '-q')
+      Struct.new(:repo_root, :project, :task_id).new(repo_root, 'rails', '0001')
+    end
+
+    it 'rejects empty manager hypotheses before starting the blind audit' do
+      state = { 'phase' => 'ready_for_manager_hypotheses', 'current_round' => 1 }
+      orchestrator = described_class.new(context, files, state)
+      hypotheses_path = File.join(@tmpdir, 'hypotheses.json')
+      File.write(hypotheses_path, JSON.generate('hypotheses' => []))
+
+      expect { orchestrator.start_audit!(hypotheses_path) }
+        .to raise_error(Addressit::Error, /non-empty array/)
+    end
+
+    it 'requires reconciliation to acknowledge every manager hypothesis' do
+      state = {
+        'phase' => 'ready_for_risk_reconciliation',
+        'current_round' => 1,
+        'manager_hypotheses_path' => files.manager_hypotheses_path(1)
+      }
+      File.write(files.manager_hypotheses_path(1), JSON.generate(
+        'hypotheses' => [{ 'id' => 'H1', 'kind' => 'contract', 'check' => 'Check the provider contract.', 'reason' => 'The integration crosses an external boundary.' }]
+      ))
+      orchestrator = described_class.new(context, files, state)
+      manifest_path = File.join(@tmpdir, 'manifest.json')
+      File.write(manifest_path, JSON.generate('summary' => 'Reviewed.', 'coverage_gaps' => []))
+
+      expect { orchestrator.reconcile_audit!(manifest_path) }
+        .to raise_error(Addressit::Error, /hypothesis_coverage must be a present array/)
+    end
+
+    it 'applies registry updates only after squashing the round commits' do
+      state = {
+        'phase' => 'ready_for_manager_review',
+        'current_round' => 1,
+        'commits' => ['implementation'],
+        'comment_ledger' => [],
+        'rounds' => [{ 'number' => 1, 'risk_audit_required' => true, 'approved_ids' => ['1'], 'commit_shas' => ['implementation'], 'round_start_head' => 'base' }]
+      }
+      File.write(files.comments_path(1), JSON.generate([{ 'id' => 1 }]))
+      File.write(files.manager_review_path, '# Manager review\n')
+      File.write(files.risk_manifest_path(1), JSON.generate(
+        'summary' => 'Reviewed.',
+        'coverage_gaps' => [],
+        'registry_updates' => [{ 'id' => 'risk-1', 'summary' => 'Protect the write.' }]
+      ))
+      File.write(files.reconciliation_path(1), "# Reconciliation\n")
+      orchestrator = described_class.new(context, files, state)
+      calls = []
+      repo = instance_double(Autowork::GitRepo)
+      allow(repo).to receive(:squash_commits) do
+        calls << :squash
+        'squashed'
+      end
+      orchestrator.instance_variable_set(:@repo, repo)
+      registry = instance_double(Autowork::ReviewRiskRegistry)
+      allow(registry).to receive(:apply!) { calls << :registry }
+      allow(Autowork::ReviewRiskRegistry).to receive(:new).with('rails').and_return(registry)
+
+      orchestrator.manager_pass!
+
+      expect(calls).to eq(%i[squash registry])
     end
   end
 

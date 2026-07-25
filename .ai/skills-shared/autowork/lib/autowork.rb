@@ -6,6 +6,8 @@ require 'open3'
 require 'time'
 require 'yaml'
 
+require_relative 'review_risk'
+
 module Autowork
   class Error < StandardError; end
 
@@ -308,7 +310,7 @@ module Autowork
   class StatusValidator
     ALLOWED_STATUSES = %w[done needs_user failed].freeze
     ALLOWED_AGENTS = %w[pi claude].freeze
-    ALLOWED_PHASES = %w[implement review classify fix debate final_checks super_review final_review super_fix super_fix_review manager_fix manager_fix_review].freeze
+    ALLOWED_PHASES = %w[implement audit review classify fix debate final_checks super_review final_review super_fix super_fix_review manager_fix manager_fix_review].freeze
 
     Result = Struct.new(:valid, :errors, :data, keyword_init: true) do
       def valid?
@@ -615,6 +617,9 @@ module Autowork
     def manager_fix_result_path(iteration) = File.join(log_dir, 'manager_fixes', "manager_review_pi_fix#{iteration}_result.md")
     def manager_fix_review_path(iteration) = File.join(log_dir, 'manager_fixes', "manager_review_claude_fix_review#{iteration}_result.md")
     def final_check_review_path(review) = File.join(log_dir, 'reviews', "final_checks_claude_review#{review}_result.md")
+    def blind_audit_path(step) = File.join(log_dir, 'reviews', "step#{step}_pi_blind_audit_result.md")
+    def blind_audit_status_path(step) = status_path(step, 'pi', 'audit')
+    def risk_manifest_path = File.join(log_dir, 'review-risk-manifest.json')
     def super_fix_result_path(iteration) = File.join(log_dir, 'super_fixes', "super_review_pi_fix#{iteration}_result.md")
     def super_fix_review_path(iteration) = File.join(log_dir, 'super_fixes', "super_review_claude_fix_review#{iteration}_result.md")
     def prompt_path(name) = File.join(log_dir, 'prompts', name)
@@ -773,6 +778,34 @@ module Autowork
       path
     end
 
+    def pi_blind_audit(step, commit_sha)
+      audit_path = @files.blind_audit_path(step)
+      status_path = @files.blind_audit_status_path(step)
+      prompt_path = @files.prompt_path("step#{step}_pi_blind_audit_request.md")
+      FileUtils.rm_f(audit_path)
+      FileUtils.rm_f(status_path)
+      File.write(prompt_path, <<~PROMPT)
+        # Autowork: blind audit for Step #{step}
+
+        You are the Pi review agent participating in `/autowork` as `pi-worker`.
+        Review the complete current Step #{step} diff in #{@repo.root}, including surrounding code needed to find regressions.
+
+        Read:
+        - task: #{File.join(@context.task_folder, 'task.md')}
+        - steps: #{File.join(@context.task_folder, 'steps.md')}
+
+        This is an independent discovery pass. Do not read other audit artifacts, manager hypotheses, or historical risk files. Do not edit files and do not run tests, linters, or formatters.
+
+        Look for correctness, concurrency, idempotency, external-boundary, partial-failure, data-integrity, time/identity, and operator-behavior risks. Do not limit the audit to the planned step behavior.
+
+        Write a concise human-readable audit to #{audit_path}, then write valid status JSON last to #{status_path}.
+        Required status JSON shape:
+        {"status":"done","agent":"pi","phase":"audit","step":#{step},"summary":"...","findings":[{"id":"P1","severity":"BLOCKER|MINOR","title":"...","body":"..."}]}
+        Use an empty findings array when there are no actionable findings.
+      PROMPT
+      prompt_path
+    end
+
     def claude_review(step, review, commit_sha)
       review_path = @files.review_path(step, review)
       status_path = @files.status_path(step, 'claude', 'review', review)
@@ -784,7 +817,7 @@ module Autowork
 
         You are the Claude review agent participating in `/autowork` as `claude-worker`.
 
-        Review commit `#{commit_sha}` against Step #{step} only.
+        Review commit `#{commit_sha}` across the complete Step #{step} diff, including regressions outside the expected behavior.
 
         Read:
         - task: #{File.join(@context.task_folder, 'task.md')}
@@ -794,6 +827,8 @@ module Autowork
         - Work in repo: #{@repo.root}
         - Do not edit repo files.
         - Scope findings to the current Step #{step}; do not require future-step behavior unless the current commit blocks or contradicts it.
+        - Independently inspect correctness, concurrency, idempotency, external-boundary, partial-failure, data-integrity, time/identity, and operator-behavior risks.
+        - Do not read Pi's blind audit, manager hypotheses, or historical risk files.
         - Use `/gtm-revit`-style review depth.
         - Do not run RSpec, RuboCop, linters, formatters, or any other test/check command during normal step review — not full-suite and not targeted. Inspect the diff/files and Pi's reported `checks_run`; `/autowork` runs full final checks after all planned steps are accepted.
         - Classify checklist items with `PASS`, `MINOR`, or `BLOCKER`.
@@ -1702,6 +1737,7 @@ module Autowork
         'original_review_base_commit' => recorded_review_base_commit,
         'review_base_ref' => review_base_ref,
         'review_base_commit' => recorded_review_base_commit,
+        'risk_manifest_required' => true,
         'steps' => steps.numbers.to_h { |number| [number.to_s, { 'status' => 'pending', 'commits' => [], 'reviews' => [] }] }
       }
       StateStore.new(files.state_path).write(state)
@@ -1711,6 +1747,7 @@ module Autowork
   class Orchestrator
     WAITING_STAGE_NAMES = {
       'pi:implement' => 'PI WORKER IMPLEMENTATION',
+      'pi:audit' => 'PI BLIND AUDIT',
       'claude:review' => 'CLAUDE STEP REVIEW',
       'pi:classify' => 'PI FINDING CLASSIFICATION',
       'pi:fix' => 'PI STEP FIX',
@@ -1772,6 +1809,10 @@ module Autowork
         wait_for_pi_implement(context, repo, files, config, store, state)
       when 'ready_to_commit_step'
         commit_step(context, repo, files, config, store, state)
+      when 'ready_to_send_pi_audit'
+        send_pi_audit(context, repo, files, config, store, state)
+      when 'waiting_for_pi_audit'
+        wait_for_pi_audit(context, repo, files, config, store, state)
       when 'ready_to_send_claude_review'
         send_claude_review(context, repo, files, config, store, state)
       when 'waiting_for_claude_review'
@@ -1827,7 +1868,7 @@ module Autowork
       when 'waiting_for_claude_manager_fix_review'
         wait_for_claude_manager_fix_review(context, repo, files, config, store, state)
       when 'ready_for_manager_final_review'
-        print_manager_final_review_instructions(repo, files, state)
+        print_manager_final_review_instructions(config.fetch('task_project'), repo, files, state)
       when 'ready_to_send_pi_final_check_fix'
         send_pi_final_check_fix(context, repo, files, config, store, state)
       when 'waiting_for_pi_final_check_fix'
@@ -1918,10 +1959,40 @@ module Autowork
       state.dig('steps', step.to_s, 'commits') << commit_sha
       state['last_commit'] = commit_sha
       state['review_iteration'] = 1
+      state['phase'] = 'ready_to_send_pi_audit'
+      state['next_action'] = 'send_pi_audit_prompt'
+      store.write(state)
+      puts "Committed Step #{step}: #{commit_sha}"
+      send_pi_audit(context, repo, files, config, store, state)
+    end
+
+    def send_pi_audit(context, repo, files, config, store, state)
+      raise Error, "Refusing to send Pi audit with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+
+      step = state['current_step']
+      prompt = PromptWriter.new(files, context, repo).pi_blind_audit(step, state.fetch('last_commit'))
+      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      state['status'] = 'running'
+      state['phase'] = 'waiting_for_pi_audit'
+      state['next_action'] = 'wait_for_pi_audit_status'
+      store.write(state)
+      puts "Sent Step #{step} blind audit prompt to pi-worker: #{prompt}"
+      wait_for_pi_audit(context, repo, files, config, store, state)
+    end
+
+    def wait_for_pi_audit(context, repo, files, config, store, state)
+      step = state['current_step']
+      result = wait_for_status(files.blind_audit_status_path(step), expected: { agent: 'pi', phase: 'audit', step: step }, config: config)
+      handle_agent_status!(result, files, store, state)
+      require_nonempty_artifact!(files.blind_audit_path(step), 'Pi blind audit')
+      raise Error, "Pi blind audit changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+
+      state['current_pi_audit_findings'] = actionable_findings(result.data).map do |finding|
+        finding.merge('id' => "PI-#{finding.fetch('id')}")
+      end
       state['phase'] = 'ready_to_send_claude_review'
       state['next_action'] = 'send_claude_review_prompt'
       store.write(state)
-      puts "Committed Step #{step}: #{commit_sha}"
       send_claude_review(context, repo, files, config, store, state)
     end
 
@@ -1948,7 +2019,7 @@ module Autowork
       require_nonempty_artifact!(files.review_path(step, review), 'Claude review')
       raise Error, "Claude review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
 
-      findings = actionable_findings(result.data)
+      findings = Array(state.delete('current_pi_audit_findings')) + actionable_findings(result.data)
       state.dig('steps', step.to_s, 'reviews') << { 'iteration' => review, 'status' => 'done', 'summary' => result.data['summary'], 'findings_count' => findings.count }
       if findings.empty?
         state.dig('steps', step.to_s)['status'] = 'accepted'
@@ -2071,6 +2142,7 @@ module Autowork
       state['last_commit'] = commit_sha
       state['review_iteration'] = (state['review_iteration'] || 1) + 1
       state.delete('current_findings')
+      state.delete('current_pi_audit_findings')
       state.delete('current_resolutions')
       state.delete('accepted_resolutions')
       state.delete('current_debate_resolutions')
@@ -2649,7 +2721,7 @@ module Autowork
       store.write(state)
       write_final_summary(context, repo, files, state, results)
       write_manager_review_request(context, repo, files, state)
-      print_manager_final_review_instructions(repo, files, state)
+      print_manager_final_review_instructions(context.project, repo, files, state)
     end
 
     def mark_complete_after_manager_review(context, repo, files, store, state, results)
@@ -2667,7 +2739,7 @@ module Autowork
       puts "- repo: #{repo.root}"
     end
 
-    def print_manager_final_review_instructions(repo, files, state)
+    def print_manager_final_review_instructions(project, repo, files, state)
       iteration = state.fetch('manager_review_iteration')
       puts "/autowork reached final manager-context production-readiness review #{iteration}."
       puts "Use the pi-manager conversation context that pi-worker and claude-worker did not have."
@@ -2677,6 +2749,8 @@ module Autowork
       puts "- final checks: #{files.final_checks_path}"
       puts "- Claude super-review: #{files.super_review_path}"
       puts "- Pi final review: #{files.pi_final_review_path}" if state['final_pi_reviewed']
+      puts "- risk registry: #{File.join(Autowork::TASK_ROOT, project, 'review-risk-registry.json')}"
+      puts "- risk manifest: #{files.risk_manifest_path}"
       puts "- repo: #{repo.root}"
       puts "If clean, run: autowork manager-review-pass #{files.task_folder}"
       puts "If findings exist, write: #{files.manager_findings_path(iteration)}"
@@ -2701,7 +2775,23 @@ module Autowork
         - final Claude super-review: #{files.super_review_path}
         - final Pi review: #{files.pi_final_review_path}
         - super-review fix artifacts: #{File.join(files.log_dir, 'super_fixes')}
+        - project risk registry: #{File.join(Autowork::TASK_ROOT, context.project, 'review-risk-registry.json')}
+        - risk manifest to write: #{files.risk_manifest_path}
         - repo: #{repo.root}
+
+        ## Risk manifest
+
+        Read the project risk registry after forming your current view of the final diff. Write this compact JSON file before passing manager review:
+
+        ```json
+        {
+          "summary": "...",
+          "coverage_gaps": [],
+          "registry_updates": []
+        }
+        ```
+
+        `coverage_gaps` must be empty for manager-pass. Prioritize active, high-weight registry risks only when their tags/triggers match this diff. Add only generalized, confirmed lessons to `registry_updates`; do not copy code or raw review prose.
 
         ## Check
 
@@ -3465,6 +3555,15 @@ module Autowork
       state = store.read
       unless state['phase'] == 'ready_for_manager_final_review'
         raise Error, "Manager review can only pass from phase ready_for_manager_final_review, got #{state['phase'].inspect}"
+      end
+      if state.fetch('risk_manifest_required', false)
+        manifest = ReviewRiskManifest.validate_file(files.risk_manifest_path)
+        raise Error, 'Risk manifest has unresolved coverage gaps' unless Array(manifest['coverage_gaps']).empty?
+        ReviewRiskRegistry.new(config.fetch('task_project')).apply!(
+          Array(manifest['registry_updates']),
+          task_id: config.fetch('task_id'),
+          round_id: "manager-#{state.fetch('manager_review_iteration', 1)}",
+        )
       end
 
       state['manager_context_reviewed'] = true

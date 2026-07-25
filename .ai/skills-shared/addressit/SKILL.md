@@ -152,17 +152,51 @@ The final commit contains the implementation, Claude-requested fixes, and any
 Pi-manager fixes from that round. It does not create or modify `steps.md` and does
 not invoke `/workit`.
 
-## Claude review and fix loop
+## Blind audits, Claude review, and fix loop
 
-After the combined implementation commit, addressit sends Claude one scoped review
-prompt covering:
+After the combined implementation commit, addressit pauses for Pi-manager to write
+current-only review hypotheses. Do not read historical risk data yet. Resume with:
+
+```text
+addressit audit-start <task_folder> <hypotheses-json>
+```
+
+Addressit then sends Pi-worker one blind, whole-diff audit. Pi-worker must not read
+the manager hypotheses, historical risk registry, or other audit artifacts. The
+worker uses the existing status JSON format and writes only its normal concise
+review artifact and findings.
+
+After the Pi audit, addressit sends Claude one normal review covering:
 
 - every approved GitHub comment
-- regressions introduced by the implementation
-- the exact commit and current diff
+- the complete current diff, not only comment locations
+- regressions and risks outside the approved comments
 
-Claude writes a human-readable review and status JSON. Claude does not run tests,
-linters, or formatters during this review.
+Claude must independently review the diff and must not read the manager hypotheses,
+historical registry, or Pi's blind audit. Claude does not run tests, linters, or
+formatters during this review.
+
+Addressit then pauses for Pi-manager to read the project risk registry and write a
+compact risk manifest with `coverage_gaps: []`. The manifest must also acknowledge
+every hypothesis exactly once in `hypothesis_coverage`. Resume with:
+
+```text
+addressit audit-reconcile <task_folder> <manifest-json>
+```
+
+The manifest may include generalized `registry_updates` and actionable
+`additional_findings`. Those findings enter the existing Pi classification and
+Claude fix loop. No per-file coverage inventory is required.
+
+If Claude or the blind Pi audit reports findings:
+
+1. Pi-worker classifies every finding as accept, alternative fix, dispute,
+   follow-up, or needs-user.
+2. Accepted findings are fixed together in one Pi turn.
+3. Addressit commits them temporarily and tracks them as part of round `<N>`.
+4. Claude reviews the fix commit again.
+5. Repeat within the configured fix limit; all round commits are squashed at the
+   final manager gate into `Add review updates <N>`.
 
 If Claude reports findings:
 
@@ -198,6 +232,7 @@ While Pi-manager waits for a worker status file, addressit prints the current st
 The stage names are:
 
 - `PI WORKER IMPLEMENTATION`
+- `PI BLIND AUDIT`
 - `PI MANAGER FIX`
 - `CLAUDE REVIEW`
 - `CLAUDE FIX REVIEW`
@@ -220,8 +255,10 @@ Reuse `/autowork`'s configured final-check rules:
 
 After Claude accepts and final checks pass, addressit stops at the final
 Pi-manager gate. Pi-manager must review the original comments, classifications,
-approvals, diff, temporary commits, Claude reviews, and final checks using
-manager-only conversation context. The manager pass then squashes all commits from
+approvals, diff, temporary commits, blind audit, Claude reviews, risk manifest,
+and final checks using manager-only conversation context. The project risk registry
+is passive data; Pi-manager reads it and may add only confirmed generalized lessons
+through the final manifest. The manager pass then squashes all commits from
 the round into `Add review updates <N>`. Write the result to:
 
 ```text
@@ -258,7 +295,13 @@ fresh manager gate.
   rounds/round<N>_approval.json
   prompts/
   reviews/
+  audits/
+    round<N>_manager_initial_review_hypotheses.json
+    round<N>_pi_blind_audit.md
+    round<N>_risk_coverage_manifest.json
+    round<N>_risk_reconciliation.json
   status/
+    round<N>_pi_audit.json
   debates/
   final_checks.md
   manager_review.md
@@ -274,10 +317,14 @@ The internal approval handoff is:
 
 ```text
 addressit approve <task_folder> <approval-json>
+addressit audit-start <task_folder> <hypotheses-json>
+addressit audit-reconcile <task_folder> <manifest-json>
 ```
 
 Pi-manager uses this only after the operator has approved or skipped every
-selected comment.
+selected comment. Hypotheses must be non-empty objects with unique `id`, `kind`,
+`check`, and `reason` strings. Reconciliation must include each hypothesis ID in
+`hypothesis_coverage` with `status: "covered"` and a non-empty note.
 
 A later `/addressit` invocation fetches the current branch's pull request again
 and creates the next round from comment IDs/versions that are not addressed or

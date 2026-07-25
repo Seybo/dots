@@ -77,8 +77,9 @@ Automate the existing manual loop:
 
 1. Pi implements one planned step.
 2. `/autowork` commits the code-changing iteration.
-3. Claude reviews the last commit according to `/gtm-revit`-style rules.
-4. Pi applies accepted fixes.
+3. Pi performs one blind whole-diff audit without seeing manager hypotheses or historical risk data.
+4. Claude independently reviews the complete step diff according to `/gtm-revit`-style rules.
+5. Pi applies accepted fixes.
 5. `/autowork` commits every code-changing fix iteration.
 6. Claude reviews again.
 7. If Pi and Claude disagree, facilitate bounded debate rounds.
@@ -284,6 +285,7 @@ Create all orchestration files under the task folder:
 
   prompts/
     step1_pi_implement_request.md
+    step1_pi_blind_audit_request.md
     step1_claude_review1_request.md
     step1_pi_fix1_request.md
     step1_debate_D1_round1_claude_request.md
@@ -294,6 +296,7 @@ Create all orchestration files under the task folder:
     super_review_claude_fix_review1_request.md
 
   reviews/
+    step1_pi_blind_audit_result.md
     step1_claude_review1_result.md
     step1_claude_review2_result.md
 
@@ -319,6 +322,7 @@ Create all orchestration files under the task folder:
 
   status/
     step1_pi_implement_status.json
+    step1_pi_audit_status.json
     step1_claude_review1_status.json
     step1_pi_fix1_status.json
     step0_claude_super_review1_status.json
@@ -329,6 +333,7 @@ Create all orchestration files under the task folder:
     step0_claude_manager_fix_review1_status.json
 
   final_checks.md
+  review-risk-manifest.json
   super-review.md
   pi-final-review.md
   manager_review.md
@@ -737,6 +742,35 @@ If final checks fail:
 9. repeat until checks pass and Claude accepts, or until `max_final_check_fix_iterations` is hit
 
 After final checks pass and any final-check fix commits are accepted, run the final super-review gate described above. The gate runs Claude's whole-branch review and resolves all Claude findings first, including scoped review of super-review fixes. Only then does it run the Pi-worker final review. Then stop at `ready_for_manager_final_review` so pi-manager can perform a manager-context production-readiness review using the original conversation, task creation, grilling, scope, and other manager-only context.
+
+## Manager risk manifest
+
+At the final manager gate, pi-manager reads the passive project registry:
+
+```text
+/Volumes/dev/_tasks/<project>/review-risk-registry.json
+```
+
+After forming the current view of the final diff, write this compact manifest:
+
+```text
+<task_folder>/autowork-log/review-risk-manifest.json
+```
+
+Required shape:
+
+```json
+{
+  "summary": "...",
+  "coverage_gaps": [],
+  "registry_updates": []
+}
+```
+
+`coverage_gaps` is required and must be an array. It must be empty before
+`manager-review-pass`. Add only generalized, confirmed lessons to
+`registry_updates`; do not copy code or raw review prose.
+The registry is passive data. Pi-manager reads and updates it; workers do not.
 
 ## Manager-context finding loop
 
