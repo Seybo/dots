@@ -42,11 +42,11 @@ keybind = cmd+u=text:
 # cmd+m => next tab/window
 keybind = cmd+m=text:
 
-# Zellij sessions
-# cmd+s => enter session mode
+# Tmux session navigation
+# cmd+s => enter session navigation mode
 keybind = cmd+s=text:
-# cmd+d => detach session
-keybind = cmd+d=text:
+# cmd+o => enter session operations mode
+keybind = cmd+o=text:⚙
 
 # Zellij panes
 # cmd+p => enter pane mode
@@ -74,5 +74,4 @@ keybind = cmd+shift+l=text:
 # cmd+shift+u/m => previous/next tmux session
 keybind = cmd+shift+u=text:⟨
 keybind = cmd+shift+m=text:⟩
-
 
