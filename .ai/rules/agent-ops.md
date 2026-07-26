@@ -19,6 +19,11 @@ workflow and approval gates.
 - Staging files (`git add`) is also a git state mutation. Ask first unless the user explicitly asked to commit or prepare a commit.
 - If approval is ambiguous, stop and ask.
 
+## Review state assumptions
+
+- An unmerged PR's intermediate state is not a compatibility contract. Do not require compatibility for temporary commits, filenames, schemas, or behavior that never shipped; review the final branch against the merge base and deployed state.
+- Do not treat a compatibility issue based only on existing database state as a finding until the operator confirms that the affected database exists and matters. Ask how that state should be handled before proposing migration, cleanup, or compatibility work.
+
 ## Dotfiles stow safety
 
 - In the dotfiles repo, never manually create symlinks from `~/.dots` into `$HOME`. Dotfile linking must go through the user's `stow_check` dry-run and `stow_do` apply commands.
