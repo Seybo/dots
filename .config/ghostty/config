@@ -9,6 +9,8 @@ font-family-bold-italic = "Hack Nerd Font"
 font-size = 14
 # cmd+shift+0 => reset font size to configured default
 keybind = cmd+shift+0=reset_font_size
+# cmd+ctrl+shift+r => reload Ghostty configuration
+keybind = cmd+ctrl+shift+r=reload_config
 font-thicken = false
 adjust-cell-height = 0
 adjust-box-thickness = 0
@@ -45,6 +47,10 @@ keybind = cmd+m=text:
 # Tmux session navigation
 # cmd+s => enter session navigation mode
 keybind = cmd+s=text:
+# cmd+shift+comma/period/slash => attention, base, and session picker
+keybind = cmd+shift+comma=text:⟬
+keybind = cmd+shift+period=text:⟭
+keybind = cmd+shift+slash=text:⟮
 # cmd+o => enter session operations mode
 keybind = cmd+o=text:⚙
 
@@ -71,6 +77,8 @@ keybind = cmd+shift+h=text:
 keybind = cmd+shift+j=text:
 keybind = cmd+shift+k=text:
 keybind = cmd+shift+l=text:
+# cmd+shift+f => zoom/unzoom the active tmux pane
+keybind = cmd+shift+f=text:
 # cmd+shift+u/m => previous/next tmux session
 keybind = cmd+shift+u=text:⟨
 keybind = cmd+shift+m=text:⟩
