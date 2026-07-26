@@ -70,8 +70,16 @@ Addressit uses the current checkout and the same project/task resolution rules a
    the task/story ID from an `sc-<digits>` branch segment
 3. require exactly one matching folder under `/Volumes/dev/_tasks/<project>/`
 4. require that folder to contain `task.md`
-5. require a clean worktree
-6. require current-window tmux panes titled exactly `pi-manager`, `pi-worker`,
+5. when starting a new addressit run (no `addressit-log/state.json`), go to the
+   related task repo root at `/Volumes/dev/_tasks/<project>/` and stage changes only
+   from finished task folders. A task is finished when autowork state is `status:
+   done` and `phase: complete`; an existing addressit state must also be
+   `phase: complete`, but missing addressit state is allowed. Include
+   `review-risk-registry.json` only when no other task has an active autowork or
+   addressit state. Commit the selected changes as `save`; skip when there are no
+   selected changes and stop if staging or committing fails
+6. require a clean worktree
+7. require current-window tmux panes titled exactly `pi-manager`, `pi-worker`,
    and `claude-worker`, all rooted at the same repository
 
 If no task folder can be found, report that fact and stop. Do not create a task
@@ -178,7 +186,16 @@ formatters during this review.
 
 Addressit then pauses for Pi-manager to read the project risk registry and write a
 compact risk manifest with `coverage_gaps: []`. The manifest must also acknowledge
-every hypothesis exactly once in `hypothesis_coverage`. Resume with:
+every hypothesis exactly once in `hypothesis_coverage`.
+
+For every active registry risk that the current diff and audits confirm, include an
+update for that existing risk ID in `registry_updates`, even when no new risk is
+being added. Existing-ID updates record the task/round recurrence and recompute the
+risk weight. Do not treat `registry_updates` as new entries only. Do not update a
+risk merely because it was considered: omit unmatched or unconfirmed risks and
+explain important exclusions in `manager_review.md`.
+
+Resume with:
 
 ```text
 addressit audit-reconcile <task_folder> <manifest-json>

@@ -147,6 +147,69 @@ module Autowork
   end
   RolePanes = Struct.new(:manager, :pi_worker, :claude_worker, keyword_init: true)
 
+  class TaskRepoSnapshot
+    MESSAGE = 'save'
+    REGISTRY_FILE = 'review-risk-registry.json'
+
+    def self.commit!(task_path)
+      repo = GitRepo.new(task_path)
+      task_root = repo.root
+      paths = finished_task_paths(task_root)
+      paths << REGISTRY_FILE unless active_task?(task_root)
+      changed_paths = paths.select { |path| !repo.status(path).empty? }
+      return if changed_paths.empty?
+
+      repo.add_paths(changed_paths)
+      repo.commit(MESSAGE)
+    end
+
+    def self.finished_task_paths(task_root)
+      task_directories(task_root).filter_map do |path|
+        relative_path = File.basename(path)
+        relative_path if finished_task?(path)
+      end
+    end
+
+    def self.active_task?(task_root)
+      task_directories(task_root).any? do |path|
+        state_paths(path).values.any? { |state_path| File.file?(state_path) } && !finished_task?(path)
+      end
+    end
+
+    def self.finished_task?(task_path)
+      states = state_paths(task_path)
+      autowork_state = read_state(states.fetch(:autowork))
+      return false unless autowork_state && autowork_state['status'] == 'done' && autowork_state['phase'] == 'complete'
+
+      addressit_state = read_state(states.fetch(:addressit))
+      !File.file?(states.fetch(:addressit)) || addressit_state && addressit_state['phase'] == 'complete'
+    end
+
+    def self.task_directories(task_root)
+      Dir.children(task_root).filter_map do |name|
+        path = File.join(task_root, name)
+        path if File.directory?(path) && File.file?(File.join(path, 'task.md'))
+      end
+    end
+
+    def self.state_paths(task_path)
+      {
+        autowork: File.join(task_path, 'autowork-log', 'state.json'),
+        addressit: File.join(task_path, 'addressit-log', 'state.json'),
+      }
+    end
+
+    def self.read_state(path)
+      return unless File.file?(path)
+
+      JSON.parse(File.read(path))
+    rescue JSON::ParserError, SystemCallError
+      nil
+    end
+
+    private_class_method :active_task?, :finished_task?, :task_directories, :state_paths, :read_state
+  end
+
   class TaskResolver
     def initialize(argv, cwd: Dir.pwd, projects_file: PROJECTS_FILE)
       @argv = argv.dup
@@ -248,8 +311,10 @@ module Autowork
       status.empty?
     end
 
-    def status
-      Shell.capture!('git', '-C', root, 'status', '--porcelain')
+    def status(*paths)
+      command = ['git', '-C', root, 'status', '--porcelain']
+      command.concat(['--', *paths]) unless paths.empty?
+      Shell.capture!(*command)
     end
 
     def branch
@@ -266,6 +331,10 @@ module Autowork
 
     def add_all
       Shell.capture!('git', '-C', root, 'add', '-A')
+    end
+
+    def add_paths(paths)
+      Shell.capture!('git', '-C', root, 'add', '-A', '--', *paths)
     end
 
     def commit(message)
@@ -1642,6 +1711,7 @@ module Autowork
 
     def prepare!
       @context = TaskResolver.new(@argv).resolve
+      TaskRepoSnapshot.commit!(context.task_root)
       @repo = GitRepo.new(context.code_dir)
       raise Error, "Refusing to start with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
       ensure_safe_branch!

@@ -207,6 +207,16 @@ Use the shared task-resolution rules from:
 
 `/autowork` requires the selected task folder to contain `task.md`. It infers the project from the current checkout and the task ID from an `sc-<digits>` branch segment when possible. For arbitrary branch names, pass the task ID positionally, such as `/autowork 0001`. It also requires `steps.md` before the Ruby helper starts, but `/autowork` owns a preflight that creates or updates `steps.md` through `/workit` when needed.
 
+When starting a new autowork run (no `autowork-log/config.yml` and `state.json`),
+go to the related task repo root at `/Volumes/dev/_tasks/<project>/` and stage
+changes only from finished task folders. A task is finished when autowork state is
+`status: done` and `phase: complete`; an existing addressit state must also be
+`phase: complete`, but missing addressit state is allowed. Include
+`review-risk-registry.json` only when no other task has an active autowork or
+addressit state. Commit the selected changes with the exact message `save`; skip
+when there are no selected changes. Stop if staging or committing fails. Resuming
+an existing run does not create another task-repo save commit.
+
 Preflight before running the Ruby helper:
 
 1. resolve the same `<project-or-session> [task_id] [full-base-branch-or-ref]` arguments that `/autowork` will pass to the helper
@@ -768,8 +778,13 @@ Required shape:
 ```
 
 `coverage_gaps` is required and must be an array. It must be empty before
-`manager-review-pass`. Add only generalized, confirmed lessons to
-`registry_updates`; do not copy code or raw review prose.
+`manager-review-pass`. For every active registry risk that the current diff and
+reviews confirm, include an update for that existing risk ID in `registry_updates`,
+even when no new risk is being added. Existing-ID updates record the task/round
+recurrence and recompute the risk weight. Do not treat `registry_updates` as new
+entries only. Add only generalized, confirmed lessons; do not update a risk merely
+because it was considered. Omit unmatched or unconfirmed risks and explain important
+exclusions in `manager_review.md`. Do not copy code or raw review prose.
 The registry is passive data. Pi-manager reads and updates it; workers do not.
 
 ## Manager-context finding loop

@@ -15,6 +15,42 @@ RSpec.describe Addressit do
     end
   end
 
+  describe Addressit::CLI do
+    it 'saves task repo changes before starting a new run' do
+      task_repo = File.join(@tmpdir, 'tasks', 'rails')
+      task_folder = File.join(task_repo, '0001-fix-docs')
+      code_repo = File.join(@tmpdir, 'code')
+      FileUtils.mkdir_p(task_folder)
+      FileUtils.mkdir_p(code_repo)
+      [task_repo, code_repo].each do |repo|
+        system('git', '-C', repo, 'init', '-q')
+        system('git', '-C', repo, 'config', 'user.email', 'addressit@example.test')
+        system('git', '-C', repo, 'config', 'user.name', 'Addressit Spec')
+      end
+      File.write(File.join(task_folder, 'task.md'), "# Task\n")
+      FileUtils.mkdir_p(File.join(task_folder, 'autowork-log'))
+      File.write(File.join(task_folder, 'autowork-log', 'state.json'), JSON.generate('status' => 'done', 'phase' => 'complete'))
+
+      context = Addressit::Context.new(
+        project: 'rails',
+        task_id: '0001',
+        task_folder: task_folder,
+        repo_root: code_repo,
+        branch: 'master',
+      )
+      resolver = instance_double(Addressit::TaskResolver, resolve: context)
+      orchestrator = instance_double(Addressit::Orchestrator)
+      allow(Addressit::TaskResolver).to receive(:new).and_return(resolver)
+      allow(Addressit::Orchestrator).to receive(:new).and_return(orchestrator)
+      allow(orchestrator).to receive(:prepare_round!)
+
+      expect(Addressit::CLI.new(['--clipboard'], cwd: code_repo).run).to eq(0)
+      expect(`git -C #{task_repo} log -1 --format=%s`.strip).to eq('save')
+      expect(`git -C #{task_repo} show HEAD:0001-fix-docs/task.md`).to eq("# Task\n")
+      expect(`git -C #{task_repo} status --porcelain`.strip).to include('?? 0001-fix-docs/addressit-log/')
+    end
+  end
+
   describe Addressit::Files do
     it 'creates the addressit-log layout and exposes round paths' do
       files = described_class.new(File.join(@tmpdir, 'task'))

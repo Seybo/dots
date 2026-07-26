@@ -19,8 +19,12 @@ RSpec.describe Autowork do
 
   def make_env_task(task_id: '0003')
     task_root = File.join(@tmpdir, '_tasks')
-    task_folder = File.join(task_root, 'env', "#{task_id}-test-task")
+    task_repo = File.join(task_root, 'env')
+    task_folder = File.join(task_repo, "#{task_id}-test-task")
     FileUtils.mkdir_p(task_folder)
+    system('git', '-C', task_repo, 'init', '-q')
+    system('git', '-C', task_repo, 'config', 'user.email', 'autowork@example.test', out: File::NULL, err: File::NULL)
+    system('git', '-C', task_repo, 'config', 'user.name', 'Autowork Spec', out: File::NULL, err: File::NULL)
     File.write(File.join(task_folder, 'task.md'), "# Task\n")
     File.write(File.join(task_folder, 'steps.md'), <<~MD)
       # Plan
@@ -29,6 +33,18 @@ RSpec.describe Autowork do
       Do one thing.
     MD
     [task_root, task_folder]
+  end
+
+  def make_finished_task(task_root, task_id: '0002', addressit_phase: nil)
+    task_folder = File.join(task_root, 'env', "#{task_id}-finished-task")
+    FileUtils.mkdir_p(File.join(task_folder, 'autowork-log'))
+    File.write(File.join(task_folder, 'task.md'), "# Finished Task\n")
+    File.write(File.join(task_folder, 'autowork-log', 'state.json'), JSON.generate('status' => 'done', 'phase' => 'complete'))
+    if addressit_phase
+      FileUtils.mkdir_p(File.join(task_folder, 'addressit-log'))
+      File.write(File.join(task_folder, 'addressit-log', 'state.json'), JSON.generate('phase' => addressit_phase))
+    end
+    task_folder
   end
 
   def make_git_repo
@@ -74,6 +90,58 @@ RSpec.describe Autowork do
       pi_worker: pane(id: '%2', title: 'pi-worker', path: repo),
       claude_worker: pane(id: '%3', title: 'claude-worker', path: repo)
     )
+  end
+
+  describe Autowork::TaskRepoSnapshot do
+    it 'commits all changes from finished tasks as save' do
+      task_root, = make_env_task
+      make_finished_task(task_root)
+      task_repo = File.join(task_root, 'env')
+
+      described_class.commit!(task_repo)
+
+      expect(`git -C #{task_repo} log -1 --format=%s`.strip).to eq('save')
+      expect(`git -C #{task_repo} show HEAD:0002-finished-task/task.md`).to eq("# Finished Task\n")
+      expect(`git -C #{task_repo} status --porcelain`.strip).to include('?? 0003-test-task/')
+    end
+
+    it 'includes the risk registry when no task is running' do
+      task_root, = make_env_task
+      make_finished_task(task_root)
+      task_repo = File.join(task_root, 'env')
+      File.write(File.join(task_repo, 'review-risk-registry.json'), "{}\n")
+
+      described_class.commit!(task_repo)
+
+      expect(`git -C #{task_repo} show HEAD:review-risk-registry.json`).to eq("{}\n")
+    end
+
+    it 'leaves the risk registry uncommitted while another task is running' do
+      task_root, = make_env_task
+      make_finished_task(task_root)
+      task_repo = File.join(task_root, 'env')
+      active_task = File.join(task_repo, '0003-test-task', 'autowork-log')
+      FileUtils.mkdir_p(active_task)
+      File.write(File.join(active_task, 'state.json'), JSON.generate('status' => 'running', 'phase' => 'waiting_for_pi_implement'))
+      File.write(File.join(task_repo, 'review-risk-registry.json'), "{}\n")
+
+      described_class.commit!(task_repo)
+
+      expect(`git -C #{task_repo} show HEAD:0002-finished-task/task.md`).to eq("# Finished Task\n")
+      expect(`git -C #{task_repo} status --porcelain`.strip).to include('?? review-risk-registry.json')
+    end
+
+    it 'skips a clean task repo' do
+      task_root, = make_env_task
+      make_finished_task(task_root)
+      task_repo = File.join(task_root, 'env')
+      described_class.commit!(task_repo)
+      first_sha = `git -C #{task_repo} rev-parse HEAD`.strip
+
+      described_class.commit!(task_repo)
+
+      expect(`git -C #{task_repo} rev-parse HEAD`.strip).to eq(first_sha)
+    end
   end
 
   describe Autowork::GitRepo do
@@ -667,6 +735,9 @@ RSpec.describe Autowork do
       task_folder = File.join(task_root, 'rails', '0001-fix-docs')
       registry = File.join(@tmpdir, 'projects.yml')
       FileUtils.mkdir_p(task_folder)
+      system('git', '-C', File.join(task_root, 'rails'), 'init', '-q')
+      system('git', '-C', File.join(task_root, 'rails'), 'config', 'user.email', 'autowork@example.test')
+      system('git', '-C', File.join(task_root, 'rails'), 'config', 'user.name', 'Autowork Spec')
       File.write(File.join(task_folder, 'task.md'), "# Task\n")
       File.write(File.join(task_folder, 'steps.md'), "## Step 1: Fix docs\n")
       File.write(registry, <<~YAML)

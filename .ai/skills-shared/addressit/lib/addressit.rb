@@ -1305,6 +1305,8 @@ module Addressit
     def start_or_resume
       context = resolve_context
       files = Files.new(context.task_folder)
+      is_new_run = !File.file?(files.state_path)
+      Autowork::TaskRepoSnapshot.commit!(context.task_folder) if is_new_run
       files.mkdirs
       state = if File.file?(files.state_path)
                 Store.new(files.state_path).read
