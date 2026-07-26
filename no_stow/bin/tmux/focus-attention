@@ -10,7 +10,7 @@ while IFS= read -r pane_id; do
 done < <(tmux list-windows -a -F '#{@agent-attention-pane}' 2>/dev/null)
 
 if (( ${#attention_panes[@]} == 0 )); then
-  tmux display-message 'No tmux pane needs attention'
+  tmux display-message 'Ok'
   exit 0
 fi
 
