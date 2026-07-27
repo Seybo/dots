@@ -1,0 +1,1 @@
+../../.ai/rules/placeholder-stubs.md

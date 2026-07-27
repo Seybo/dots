@@ -1,0 +1,1 @@
+../../.ai/rules/ruby-general.md

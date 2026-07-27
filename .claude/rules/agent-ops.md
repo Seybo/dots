@@ -1,0 +1,1 @@
+../../.ai/rules/agent-ops.md

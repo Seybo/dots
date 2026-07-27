@@ -40,7 +40,7 @@ Runtime/generated consumers:
 
 - `~/.claude/rules/abbreviations.md` is a symlink to the canonical file.
 - `~/.pi/agent/AGENTS.md` is a symlink to `.ai/rules/pi-global.md`.
-- `.ai/rules/pi-global.md` contains the Pi global rules assembled from the shared rule files; keep its abbreviations section in sync with `.ai/rules/abbreviations.md` until a generator command exists.
+- `.ai/rules/pi-global.md` is generated from the shared rule files by `.ai/bin/generate-pi-global`; never edit it by hand.
 
 Navigator discoverability files, when the abbreviation should be searchable there:
 
@@ -66,8 +66,11 @@ Navigator discoverability files, when the abbreviation should be searchable ther
    - keep abbreviations sorted near the existing `00...` entries when practical
 
 3. **Sync Pi global rules:**
-   - make the matching targeted change in the abbreviations section of `.ai/rules/pi-global.md`
-   - do not rewrite unrelated generated sections
+   - run the generator:
+     ```bash
+     ~/.dots/.ai/bin/generate-pi-global
+     ```
+   - do not hand-edit `.ai/rules/pi-global.md`
 
 4. **Update Navigator only when useful:**
    - if the abbreviation should appear in Navigator's human-facing maps, update:
@@ -87,4 +90,3 @@ Navigator discoverability files, when the abbreviation should be searchable ther
 
 - Do not edit unrelated skills or rules.
 - Do not run specs or RuboCop for abbreviation-only changes.
-- If `.ai/rules/pi-global.md` has a real generator in the future, use that generator instead of hand-syncing the section.
