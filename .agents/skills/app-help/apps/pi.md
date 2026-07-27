@@ -3,8 +3,9 @@
 ## Local sources
 - `pi --help`
 - `pi -h`
-- `/Users/inseybo/.asdf/installs/nodejs/24.0.1/lib/node_modules/@mariozechner/pi-coding-agent/README.md`
-- `/Users/inseybo/.asdf/installs/nodejs/24.0.1/lib/node_modules/@mariozechner/pi-coding-agent/docs/`
+- `/Users/inseybo/.asdf/installs/nodejs/24.0.1/lib/node_modules/@earendil-works/pi-coding-agent/README.md`
+- `/Users/inseybo/.asdf/installs/nodejs/24.0.1/lib/node_modules/@earendil-works/pi-coding-agent/docs/`
+- `/Users/inseybo/.asdf/installs/nodejs/24.0.1/lib/node_modules/@earendil-works/pi-coding-agent/docs/keybindings.md`
 
 ## Local configs
 - `/Users/inseybo/.dots/.pi/agent/settings.json`

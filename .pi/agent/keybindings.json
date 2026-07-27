@@ -5,5 +5,21 @@
   ],
   "tui.input.submit": [
     "enter"
+  ],
+  "tui.editor.cursorUp": [
+    "up",
+    "alt+k"
+  ],
+  "tui.editor.cursorDown": [
+    "down",
+    "alt+j"
+  ],
+  "tui.editor.cursorLeft": [
+    "left",
+    "alt+h"
+  ],
+  "tui.editor.cursorRight": [
+    "right",
+    "alt+l"
   ]
 }
