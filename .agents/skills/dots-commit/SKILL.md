@@ -65,6 +65,11 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
      ```
    - Read diffs for tracked changes. Use targeted `git diff -- <paths>` / `git diff --cached -- <paths>` commands when the full diff is large.
    - For untracked files, list the files first, then read only relevant text files. Do not dump large binaries or generated artifacts.
+   - Check Claude settings drift. `~/.claude/settings.json` is deliberately not stow-linked (Claude Code rewrites it itself); its tracked canonical copy is `.claude/settings.json` in this repo:
+     ```bash
+     diff /Users/inseybo/.claude/settings.json /Users/inseybo/.dots/.claude/settings.json
+     ```
+     If they differ, show the diff and ask which direction to sync — usually copy the live file over the canonical copy, unless the live change looks accidental. Include the synced canonical file in an appropriate commit group.
 
 4. **Check repo fit**
    - Treat this repo as the user's dotfiles / development-environment repo: shell/editor/terminal/tmux/zellij/Ghostty/Hammerspoon config, themes, local helper scripts, agent skills/config, and dev-env reference docs belong here.
