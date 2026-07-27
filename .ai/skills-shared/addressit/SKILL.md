@@ -147,6 +147,10 @@ Approval JSON shape:
 }
 ```
 
+Before approving a finding, require a concrete trigger and evidence from provider documentation, observed data, or a credible normal execution path. A merely theoretical, near-impossible edge case is not actionable: classify it as low-likelihood/theoretical, skip it, and preserve the rationale in the approval or manager artifact instead of sending it to Pi-worker. Do not add code or tests for it unless the operator confirms the risk matters.
+
+For every new public method, argument, provider capability, abstraction, or related test, verify a production caller and an acceptance criterion in the current task. A unit test alone is not evidence that the surface is needed. Uncalled speculative surface must be removed or explicitly deferred as tech debt, not approved as extra scope.
+
 The selected comments are one task batch. Pi-worker receives one prompt for all
 approved comments and leaves changes unstaged/uncommitted. Addressit may create
 temporary commits while workers iterate, but it squashes every commit made in the
