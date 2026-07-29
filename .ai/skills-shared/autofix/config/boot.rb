@@ -1,0 +1,7 @@
+# frozen_string_literal: true
+
+require_relative '../app/services/service_object'
+require_relative '../app/services/review_comment_url'
+require_relative '../app/services/render_review_comment'
+require_relative '../app/services/fetch_review_comment'
+require_relative '../app/services/autofix_cli'
