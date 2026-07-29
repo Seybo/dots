@@ -18,6 +18,7 @@ module Autowork
   STEP_HEADING = /^## Step ([0-9]+)\b/.freeze
   MANAGER_REVIEW_SEVERITIES = %w[BLOCKER MINOR].freeze
   DEFAULT_MAX_TOTAL_COMMITS = 15
+  SUPER_REVIEW_AGENTS = %w[claude codex].freeze
 
   class Shell
     Result = Struct.new(:stdout, :stderr, :status, keyword_init: true) do
@@ -145,7 +146,7 @@ module Autowork
       "#{number}#{suffix}"
     end
   end
-  RolePanes = Struct.new(:manager, :pi_worker, :claude_worker, keyword_init: true)
+  RolePanes = Struct.new(:manager, :worker, :reviewer, keyword_init: true)
 
   class TaskRepoSnapshot
     MESSAGE = 'save'
@@ -378,8 +379,17 @@ module Autowork
 
   class StatusValidator
     ALLOWED_STATUSES = %w[done needs_user failed].freeze
-    ALLOWED_AGENTS = %w[pi claude].freeze
-    ALLOWED_PHASES = %w[implement audit review classify fix debate final_checks super_review final_review super_fix super_fix_review manager_fix manager_fix_review].freeze
+    ALLOWED_AGENTS = %w[pi claude codex].freeze
+    ALLOWED_PHASES = %w[
+      implement audit review classify fix debate final_checks super_review final_review super_fix
+      super_fix_review manager_fix manager_fix_review
+    ].freeze
+    SUPER_REVIEW_EVIDENCE_FIELDS = %w[
+      recommendation trigger mechanism reachability_source evidence
+    ].freeze
+    SUPER_REVIEW_REACHABILITY_SOURCES = %w[
+      task_contract vendor_contract existing_untouched_code reproduction schema_invariant
+    ].freeze
 
     Result = Struct.new(:valid, :errors, :data, keyword_init: true) do
       def valid?
@@ -409,6 +419,7 @@ module Autowork
       validate_expected(data, expected, errors)
       validate_optional_fields(data, errors)
       validate_findings(data, errors)
+      validate_super_review_adjudication(data, errors)
       validate_resolutions(data, errors)
       validate_debate(data, errors)
       Result.new(valid: errors.empty?, errors: errors, data: data)
@@ -449,8 +460,9 @@ module Autowork
     end
 
     def validate_findings(data, errors)
-      if data['phase'] == 'manager_fix_review' && data['status'] == 'done' && !data.key?('findings')
-        errors << 'findings is required for completed manager_fix_review'
+      required_phases = %w[manager_fix_review super_review]
+      if required_phases.include?(data['phase']) && data['status'] == 'done' && !data.key?('findings')
+        errors << "findings is required for completed #{data['phase']}"
         return
       end
       return unless data.key?('findings')
@@ -471,7 +483,61 @@ module Autowork
         unless allowed_severities.include?(finding['severity'])
           errors << "findings[#{index}].severity must be one of #{allowed_severities.join(', ')}"
         end
+        if data['phase'] == 'super_review' && data['status'] == 'done'
+          validate_super_review_evidence(finding, index, errors)
+        end
       end
+    end
+
+    def validate_super_review_evidence(finding, index, errors)
+      SUPER_REVIEW_EVIDENCE_FIELDS.each do |key|
+        unless finding[key].is_a?(String) && !finding[key].strip.empty?
+          errors << "findings[#{index}].#{key} must be a non-empty string for completed super_review"
+        end
+      end
+      source = finding['reachability_source']
+      return unless source.is_a?(String) && !source.empty?
+      return if SUPER_REVIEW_REACHABILITY_SOURCES.include?(source)
+
+      allowed_sources = SUPER_REVIEW_REACHABILITY_SOURCES.join(', ')
+      errors << "findings[#{index}].reachability_source must be one of #{allowed_sources}"
+    end
+
+    def validate_super_review_adjudication(data, errors)
+      return unless data['phase'] == 'super_review' && data['status'] == 'done'
+
+      adjudication = data['adjudication']
+      unless adjudication.is_a?(Hash)
+        errors << 'adjudication is required for completed super_review'
+        return
+      end
+      validate_adjudication_ratios(adjudication, errors)
+      validate_adjudication_booleans(adjudication, errors)
+      validate_adjudication_gate(adjudication, errors)
+    end
+
+    def validate_adjudication_ratios(adjudication, errors)
+      %w[panel_agreement_ratio independent_agreement_ratio].each do |key|
+        value = adjudication[key]
+        next if value.is_a?(Numeric) && value.between?(0, 1)
+
+        errors << "adjudication.#{key} must be a number from 0 to 1"
+      end
+    end
+
+    def validate_adjudication_booleans(adjudication, errors)
+      %w[is_degenerate requires_manual_verification].each do |key|
+        next if [true, false].include?(adjudication[key])
+
+        errors << "adjudication.#{key} must be true or false"
+      end
+    end
+
+    def validate_adjudication_gate(adjudication, errors)
+      errors << 'completed super_review cannot use degenerate adjudication' if adjudication['is_degenerate'] == true
+      return unless adjudication['requires_manual_verification'] == true
+
+      errors << 'completed super_review cannot require manual verification; use needs_user'
     end
 
     def validate_resolutions(data, errors)
@@ -584,9 +650,9 @@ module Autowork
     def discover_roles(repo_root)
       role_panes = panes
       roles = RolePanes.new(
-        manager: select_title(role_panes, 'pi-manager'),
-        pi_worker: select_title(role_panes, 'pi-worker'),
-        claude_worker: select_title(role_panes, 'claude-worker')
+        manager: select_title(role_panes, 'agent-manager'),
+        worker: select_title(role_panes, 'agent-worker'),
+        reviewer: select_title(role_panes, 'agent-reviewer')
       )
       verify_repo_roots!(roles, repo_root)
       roles
@@ -679,27 +745,72 @@ module Autowork
     def final_checks_path = File.join(log_dir, 'final_checks.md')
     def final_summary_path = File.join(log_dir, 'final_summary.md')
     def super_review_path = File.join(log_dir, 'super-review.md')
+    def super_review_adjudication_path(iteration) = File.join(log_dir, "super-review-adjudication#{iteration}.json")
     def pi_final_review_path = File.join(log_dir, 'pi-final-review.md')
     def manager_review_path = File.join(log_dir, 'manager_review.md')
     def manager_review_iteration_path(iteration) = File.join(log_dir, 'manager_reviews', "manager_review#{iteration}.md")
     def manager_findings_path(iteration) = File.join(log_dir, 'manager_reviews', "manager_review#{iteration}_findings.json")
     def manager_fix_result_path(iteration) = File.join(log_dir, 'manager_fixes', "manager_review_pi_fix#{iteration}_result.md")
-    def manager_fix_review_path(iteration) = File.join(log_dir, 'manager_fixes', "manager_review_claude_fix_review#{iteration}_result.md")
-    def final_check_review_path(review) = File.join(log_dir, 'reviews', "final_checks_claude_review#{review}_result.md")
+    def manager_fix_review_path(iteration)
+      reviewer_artifact_path(
+        File.join(log_dir, 'manager_fixes', "manager_review_fix_reviewer_review#{iteration}_result.md"),
+        File.join(log_dir, 'manager_fixes', "manager_review_claude_fix_review#{iteration}_result.md"),
+        "manager_review_claude_fix_review#{iteration}_request.md"
+      )
+    end
+
+    def final_check_review_path(review)
+      reviewer_artifact_path(
+        File.join(log_dir, 'reviews', "final_checks_reviewer_review#{review}_result.md"),
+        File.join(log_dir, 'reviews', "final_checks_claude_review#{review}_result.md"),
+        "final_checks_claude_review#{review}_request.md"
+      )
+    end
+
     def blind_audit_path(step) = File.join(log_dir, 'reviews', "step#{step}_pi_blind_audit_result.md")
     def blind_audit_status_path(step) = status_path(step, 'pi', 'audit')
     def risk_manifest_path = File.join(log_dir, 'review-risk-manifest.json')
     def super_fix_result_path(iteration) = File.join(log_dir, 'super_fixes', "super_review_pi_fix#{iteration}_result.md")
-    def super_fix_review_path(iteration) = File.join(log_dir, 'super_fixes', "super_review_claude_fix_review#{iteration}_result.md")
+    def super_fix_review_path(iteration)
+      reviewer_artifact_path(
+        File.join(log_dir, 'super_fixes', "super_review_fix_reviewer_review#{iteration}_result.md"),
+        File.join(log_dir, 'super_fixes', "super_review_claude_fix_review#{iteration}_result.md"),
+        "super_review_claude_fix_review#{iteration}_request.md"
+      )
+    end
+
     def prompt_path(name) = File.join(log_dir, 'prompts', name)
-    def review_path(step, review) = File.join(log_dir, 'reviews', "step#{step}_claude_review#{review}_result.md")
+    def review_path(step, review)
+      reviewer_artifact_path(
+        File.join(log_dir, 'reviews', "step#{step}_reviewer_review#{review}_result.md"),
+        File.join(log_dir, 'reviews', "step#{step}_claude_review#{review}_result.md"),
+        "step#{step}_claude_review#{review}_request.md"
+      )
+    end
+
     def resolution_path(step, review) = File.join(log_dir, 'resolutions', "step#{step}_pi_review#{review}_result.md")
     def debate_path(step) = File.join(log_dir, 'debates', "step#{step}_debates.md")
-    def debate_claude_result_path(step, debate, round) = File.join(log_dir, 'debates', "step#{step}_debate_#{debate}_round#{round}_claude_result.md")
+    def debate_reviewer_result_path(step, debate, round)
+      reviewer_artifact_path(
+        File.join(log_dir, 'debates', "step#{step}_debate_#{debate}_round#{round}_reviewer_result.md"),
+        File.join(log_dir, 'debates', "step#{step}_debate_#{debate}_round#{round}_claude_result.md"),
+        "step#{step}_debate_#{debate}_round#{round}_claude_request.md"
+      )
+    end
+
     def debate_pi_result_path(step, debate, round) = File.join(log_dir, 'debates', "step#{step}_debate_#{debate}_round#{round}_pi_result.md")
     def status_path(step, agent, phase, iteration = nil)
       suffix = iteration ? "#{phase}#{iteration}" : phase
       File.join(log_dir, 'status', "step#{step}_#{agent}_#{suffix}_status.json")
+    end
+
+    private
+
+    def reviewer_artifact_path(path, legacy_path, legacy_prompt_name)
+      return legacy_path if File.file?(legacy_path)
+      return legacy_path if File.file?(prompt_path(legacy_prompt_name))
+
+      path
     end
   end
 
@@ -786,10 +897,11 @@ module Autowork
   end
 
   class PromptWriter
-    def initialize(files, context, repo)
+    def initialize(files, context, repo, review_agent: 'claude')
       @files = files
       @context = context
       @repo = repo
+      @review_agent = review_agent
     end
 
     def final_status_action_note
@@ -802,7 +914,7 @@ module Autowork
       File.write(path, <<~PROMPT)
         # Autowork: implement Step #{step}
 
-        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+        You are the Pi implementation agent participating in `/autowork` as `agent-worker`.
 
         Read:
         - task: #{File.join(@context.task_folder, 'task.md')}
@@ -856,7 +968,7 @@ module Autowork
       File.write(prompt_path, <<~PROMPT)
         # Autowork: blind audit for Step #{step}
 
-        You are the Pi review agent participating in `/autowork` as `pi-worker`.
+        You are the Pi review agent participating in `/autowork` as `agent-worker`.
         Review the complete current Step #{step} diff in #{@repo.root}, including surrounding code needed to find regressions.
 
         Read:
@@ -877,14 +989,14 @@ module Autowork
 
     def claude_review(step, review, commit_sha)
       review_path = @files.review_path(step, review)
-      status_path = @files.status_path(step, 'claude', 'review', review)
-      path = @files.prompt_path("step#{step}_claude_review#{review}_request.md")
+      status_path = @files.status_path(step, @review_agent, 'review', review)
+      path = @files.prompt_path("step#{step}_reviewer_review#{review}_request.md")
       FileUtils.rm_f(review_path)
       FileUtils.rm_f(status_path)
       File.write(path, <<~PROMPT)
         # Autowork: review Step #{step}, review #{review}
 
-        You are the Claude review agent participating in `/autowork` as `claude-worker`.
+        You are the review agent participating in `/autowork` as `agent-reviewer`.
 
         Review commit `#{commit_sha}` across the complete Step #{step} diff, including regressions outside the expected behavior.
 
@@ -926,7 +1038,7 @@ module Autowork
         ```json
         {
           "status": "done",
-          "agent": "claude",
+          "agent": "#{@review_agent}",
           "phase": "review",
           "step": #{step},
           "summary": "...",
@@ -959,14 +1071,14 @@ module Autowork
       File.write(path, <<~PROMPT)
         # Autowork: classify Step #{step} review #{review} findings
 
-        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+        You are the Pi implementation agent participating in `/autowork` as `agent-worker`.
 
         Read:
         - task: #{File.join(@context.task_folder, 'task.md')}
         - steps: #{File.join(@context.task_folder, 'steps.md')}
-        - Claude review: #{@files.review_path(step, review)}
+        - Review report: #{@files.review_path(step, review)}
 
-        Claude reported these machine-readable findings:
+        Reviewer reported these machine-readable findings:
 
         ```json
         #{JSON.pretty_generate(findings)}
@@ -975,8 +1087,8 @@ module Autowork
         Classify every finding. Do not edit repo files in this classification turn.
 
         Allowed decisions:
-        - `accept`: Claude is right; fix exactly this finding.
-        - `accept_with_alternative_fix`: Claude is right, but use a different safe/local fix.
+        - `accept`: The reviewer is right; fix exactly this finding.
+        - `accept_with_alternative_fix`: The reviewer is right, but use a different safe/local fix.
         - `dispute`: the finding is invalid or not reachable.
         - `follow_up`: the finding is valid, non-minor, and outside this task's scope; record it for the final summary instead of fixing now.
         - `needs_user`: user decision is required.
@@ -1027,12 +1139,12 @@ module Autowork
       File.write(path, <<~PROMPT)
         # Autowork: fix Step #{step}, fix #{fix_iteration}
 
-        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+        You are the Pi implementation agent participating in `/autowork` as `agent-worker`.
 
         Read:
         - task: #{File.join(@context.task_folder, 'task.md')}
         - steps: #{File.join(@context.task_folder, 'steps.md')}
-        - Claude review: #{@files.review_path(step, review)}
+        - Review report: #{@files.review_path(step, review)}
         - Pi resolution: #{@files.resolution_path(step, review)}
 
         Implement only these accepted findings/resolutions:
@@ -1080,7 +1192,7 @@ module Autowork
       File.write(path, <<~PROMPT)
         # Autowork: fix final checks, iteration #{iteration}
 
-        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+        You are the Pi implementation agent participating in `/autowork` as `agent-worker`.
 
         Read:
         - task: #{File.join(@context.task_folder, 'task.md')}
@@ -1093,7 +1205,7 @@ module Autowork
         #{JSON.pretty_generate(final_checks)}
         ```
 
-        Claude final-check review findings to address, if any:
+        Reviewer final-check review findings to address, if any:
 
         ```json
         #{JSON.pretty_generate(review_findings || [])}
@@ -1131,14 +1243,14 @@ module Autowork
 
     def claude_final_check_review(review, commits)
       review_path = @files.final_check_review_path(review)
-      status_path = @files.status_path(0, 'claude', 'final_checks_review', review)
-      path = @files.prompt_path("final_checks_claude_review#{review}_request.md")
+      status_path = @files.status_path(0, @review_agent, 'final_checks_review', review)
+      path = @files.prompt_path("final_checks_reviewer_review#{review}_request.md")
       FileUtils.rm_f(review_path)
       FileUtils.rm_f(status_path)
       File.write(path, <<~PROMPT)
         # Autowork: review final-check fix commits, review #{review}
 
-        You are the Claude review agent participating in `/autowork` as `claude-worker`.
+        You are the review agent participating in `/autowork` as `agent-reviewer`.
 
         Review these final-check fix commit(s):
 
@@ -1169,7 +1281,7 @@ module Autowork
         ```json
         {
           "status": "done",
-          "agent": "claude",
+          "agent": "#{@review_agent}",
           "phase": "final_checks",
           "step": 0,
           "summary": "...",
@@ -1185,16 +1297,18 @@ module Autowork
     end
 
     def claude_final_super_review(iteration, review_base_ref)
-      status_path = @files.status_path(0, 'claude', 'super_review', iteration)
+      status_path = @files.status_path(0, @review_agent, 'super_review', iteration)
       path = @files.prompt_path("final_super_review#{iteration}_request.md")
+      adjudication_path = @files.super_review_adjudication_path(iteration)
       FileUtils.rm_f(@files.super_review_path)
+      FileUtils.rm_f(adjudication_path)
       FileUtils.rm_f(status_path)
       File.write(path, <<~PROMPT)
         # Autowork: final whole-branch super-review #{iteration}
 
-        You are the Claude final review agent participating in `/autowork` as `claude-worker`.
+        You are the final review agent participating in `/autowork` as `agent-reviewer`.
 
-        Run the `/claude-super-review` workflow in non-interactive autowork mode.
+        Run the `/super-review --agent #{@review_agent}` workflow in non-interactive autowork mode.
 
         Scope:
         - repo: #{@repo.root}
@@ -1217,7 +1331,8 @@ module Autowork
         - Save the human-readable report to:
           #{@files.super_review_path}
         - The report must include `Diff base: #{review_base_ref}`.
-        - Write the report before status JSON.
+        - Run the mandatory adjudication validator with `--output #{adjudication_path}`.
+        - Write the report and validator output before status JSON.
         - Write valid JSON status last to:
           #{status_path}
         - #{final_status_action_note}
@@ -1227,28 +1342,38 @@ module Autowork
         ```json
         {
           "status": "done",
-          "agent": "claude",
+          "agent": "#{@review_agent}",
           "phase": "super_review",
           "step": 0,
           "summary": "...",
           "findings": [
             {
-              "id": "SR1",
+              "id": "P1",
               "severity": "BLOCKER",
               "title": "Short title",
               "body": "What is wrong and why it matters",
-              "recommendation": "Concrete suggested fix"
+              "recommendation": "Concrete suggested fix",
+              "trigger": "Exact reachable condition",
+              "mechanism": "Confirmed code path from trigger to consequence",
+              "reachability_source": "task_contract | vendor_contract | existing_untouched_code | reproduction | schema_invariant",
+              "evidence": "Concrete source citation proving reachability"
             }
           ],
+          "adjudication": {
+            "panel_agreement_ratio": 0.5,
+            "independent_agreement_ratio": 0.5,
+            "is_degenerate": false,
+            "requires_manual_verification": false
+          },
           "followups": [
             "Non-actionable advisory to carry into final_summary.md"
           ]
         }
         ```
 
-        Map Critical/High super-review findings to `BLOCKER` in status JSON. Map actionable Medium findings to `MINOR`. Use an empty `findings` array when there are no actionable findings. Put non-actionable report-only advisories, later-story recommendations, and deploy/smoke-test notes in `followups` so they are not lost from the final summary. Use an empty `followups` array when there are none. Keep full Critical/High/Medium labels in the human-readable report if useful.
+        Map Critical/High super-review findings to `BLOCKER` in status JSON. Map actionable Medium findings to `MINOR`. Every actionable finding must copy its validator-approved trigger, mechanism, reachability source, and evidence. Use an empty `findings` array when there are no actionable findings. Put non-actionable report-only advisories, later-story recommendations, and deploy/smoke-test notes in `followups` so they are not lost from the final summary. Use an empty `followups` array when there are none. Keep full Critical/High/Medium labels in the human-readable report if useful.
 
-        If you need user input, use `"status": "needs_user"` and include a `"question"` string.
+        Copy the exact ratios and gate booleans from `#{adjudication_path}`. Keep each actionable finding's stable candidate ID (`P1`/`I1`) as its status `id`; do not renumber it to `SR1`. If adjudication is degenerate or any candidate needs manual verification, use `"status": "needs_user"`, an empty `"findings": []`, and include a concrete `"question"`; never send those candidates into the fix loop.
         If review failed, use `"status": "failed"` and explain in `"summary"`.
       PROMPT
       path
@@ -1262,7 +1387,7 @@ module Autowork
       File.write(path, <<~PROMPT)
         # Autowork: final Pi review #{iteration}
 
-        You are the Pi review agent participating in `/autowork` as `pi-worker`.
+        You are the Pi review agent participating in `/autowork` as `agent-worker`.
 
         review all the changes and try to find issues, gaps, and improvement opportunities. But ignore very minor issues
 
@@ -1275,12 +1400,12 @@ module Autowork
         - task: #{File.join(@context.task_folder, 'task.md')}
         - steps: #{File.join(@context.task_folder, 'steps.md')}
         - final checks: #{@files.final_checks_path}
-        - Claude's final super-review: #{@files.super_review_path}
+        - The reviewer's final super-review: #{@files.super_review_path}
         - autowork state: #{@files.state_path}
 
         Rules:
         - Review the entire final branch diff, not only the latest commit.
-        - Treat Claude's super-review as a separate signal, not as proof that the branch is correct.
+        - Treat the reviewer's super-review as a separate signal, not as proof that the branch is correct.
         - Do not edit repo files, stage, commit, push, switch branches, stash, or edit PR/MR metadata.
         - Ignore formatting, naming, and other very minor issues.
         - Report actionable issues as `BLOCKER` or `MINOR`; use `MINOR` only for local, low-risk fixes.
@@ -1326,7 +1451,7 @@ module Autowork
       File.write(path, <<~PROMPT)
         # Autowork: adjudicate/fix final super-review findings #{iteration}
 
-        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+        You are the Pi implementation agent participating in `/autowork` as `agent-worker`.
 
         Apply `/claude-super-fix` rules to the final super-review report: verify every finding, fix only real in-scope issues, reject noise/scope creep, and print follow-ups instead of mutating PR/MR metadata.
 
@@ -1342,7 +1467,7 @@ module Autowork
         #{JSON.pretty_generate(findings)}
         ```
 
-        Claude's scoped review findings from the previous super-review fix attempt, if any:
+        The reviewer's scoped review findings from the previous super-review fix attempt, if any:
 
         ```json
         #{JSON.pretty_generate(review_findings || [])}
@@ -1353,13 +1478,13 @@ module Autowork
         - Do not commit.
         - Leave code changes unstaged/uncommitted for `/autowork` to commit.
         - Do not stage, commit, push, switch branches, stash, or edit PR/MR metadata.
-        - You have room to disagree with Claude. Do not blindly apply findings.
+        - You have room to disagree with the reviewer. Do not blindly apply findings.
         - For every original finding, choose one decision: `accept`, `accept_with_alternative_fix`, `dispute`, `skip`, `already_fixed`, `out_of_scope`, `follow_up`, or `needs_user`.
         - If a valid finding is clearly in this task's scope, fix it now even when it was discovered late.
         - If a valid finding is `MINOR` or `MEDIUM`, fix it now even when it is outside this task's original scope, as long as it is minor/local/low-risk.
         - Use `follow_up` or `out_of_scope` only for valid non-minor findings outside this task's scope.
         - If you choose `accept` or `accept_with_alternative_fix`, apply the code fix in this same turn.
-        - If Claude's previous scoped review found missed/incorrect fixes, address those too when valid.
+        - If the reviewer's previous scoped review found missed/incorrect fixes, address those too when valid.
         - Keep fixes narrow and safe.
         - Run focused checks if useful.
         - Print valid future cleanup as Follow-ups in the result file only; do not write issues or PR body updates.
@@ -1381,7 +1506,7 @@ module Autowork
           "summary": "...",
           "resolutions": [
             {
-              "finding_id": "SR1",
+              "finding_id": "P1",
               "decision": "accept",
               "rationale": "Why this decision is correct"
             }
@@ -1399,16 +1524,16 @@ module Autowork
 
     def claude_super_review_fix_review(iteration, commits)
       result_path = @files.super_fix_review_path(iteration)
-      status_path = @files.status_path(0, 'claude', 'super_fix_review', iteration)
-      path = @files.prompt_path("super_review_claude_fix_review#{iteration}_request.md")
+      status_path = @files.status_path(0, @review_agent, 'super_fix_review', iteration)
+      path = @files.prompt_path("super_review_fix_reviewer_review#{iteration}_request.md")
       FileUtils.rm_f(result_path)
       FileUtils.rm_f(status_path)
       File.write(path, <<~PROMPT)
         # Autowork: scoped review of super-review fix #{iteration}
 
-        You are the Claude review agent participating in `/autowork` as `claude-worker`.
+        You are the review agent participating in `/autowork` as `agent-reviewer`.
 
-        This is a normal scoped review, not another full `/claude-super-review`.
+        This is a normal scoped review, not another full `/super-review`.
 
         Review:
         - final super-review report: #{@files.super_review_path}
@@ -1437,7 +1562,7 @@ module Autowork
         ```json
         {
           "status": "done",
-          "agent": "claude",
+          "agent": "#{@review_agent}",
           "phase": "super_fix_review",
           "step": 0,
           "summary": "...",
@@ -1462,9 +1587,9 @@ module Autowork
       File.write(path, <<~PROMPT)
         # Autowork: manager production-readiness fix #{iteration}
 
-        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+        You are the Pi implementation agent participating in `/autowork` as `agent-worker`.
 
-        The pi-manager used manager-only conversation context and found production-readiness issues. Fix them as mandatory task requirements. If repo evidence makes a finding impossible or contradictory, report `needs_user`; do not silently dispute or defer it.
+        The agent-manager used manager-only conversation context and found production-readiness issues. Fix them as mandatory task requirements. If repo evidence makes a finding impossible or contradictory, report `needs_user`; do not silently dispute or defer it.
 
         Read:
         - task: #{File.join(@context.task_folder, 'task.md')}
@@ -1523,14 +1648,14 @@ module Autowork
 
     def claude_manager_fix_review(iteration, manager_review_iteration, commit_sha, manager_findings)
       result_path = @files.manager_fix_review_path(iteration)
-      status_path = @files.status_path(0, 'claude', 'manager_fix_review', iteration)
-      path = @files.prompt_path("manager_review_claude_fix_review#{iteration}_request.md")
+      status_path = @files.status_path(0, @review_agent, 'manager_fix_review', iteration)
+      path = @files.prompt_path("manager_review_fix_reviewer_review#{iteration}_request.md")
       FileUtils.rm_f(result_path)
       FileUtils.rm_f(status_path)
       File.write(path, <<~PROMPT)
         # Autowork: scoped review of manager production-readiness fix #{iteration}
 
-        You are the Claude review agent participating in `/autowork` as `claude-worker`.
+        You are the review agent participating in `/autowork` as `agent-reviewer`.
 
         Review manager-fix commit `#{commit_sha}`. This is a normal scoped review, not another whole-branch super-review.
 
@@ -1567,7 +1692,7 @@ module Autowork
         ```json
         {
           "status": "done",
-          "agent": "claude",
+          "agent": "#{@review_agent}",
           "phase": "manager_fix_review",
           "step": 0,
           "summary": "...",
@@ -1581,15 +1706,15 @@ module Autowork
     end
 
     def claude_debate(step, review, debate_id, round, resolution)
-      result_path = @files.debate_claude_result_path(step, debate_id, round)
-      status_path = @files.status_path(step, 'claude', 'debate', "_#{debate_id}_round#{round}")
-      path = @files.prompt_path("step#{step}_debate_#{debate_id}_round#{round}_claude_request.md")
+      result_path = @files.debate_reviewer_result_path(step, debate_id, round)
+      status_path = @files.status_path(step, @review_agent, 'debate', "_#{debate_id}_round#{round}")
+      path = @files.prompt_path("step#{step}_debate_#{debate_id}_round#{round}_reviewer_request.md")
       FileUtils.rm_f(result_path)
       FileUtils.rm_f(status_path)
       File.write(path, <<~PROMPT)
-        # Autowork: debate Step #{step} finding #{debate_id}, round #{round} — Claude
+        # Autowork: debate Step #{step} finding #{debate_id}, round #{round} — Reviewer
 
-        You are the Claude review agent participating in `/autowork` as `claude-worker`.
+        You are the review agent participating in `/autowork` as `agent-reviewer`.
 
         Pi disputed or deferred this finding/resolution:
 
@@ -1600,7 +1725,7 @@ module Autowork
         Read:
         - task: #{File.join(@context.task_folder, 'task.md')}
         - steps: #{File.join(@context.task_folder, 'steps.md')}
-        - Claude review: #{@files.review_path(step, review)}
+        - Review report: #{@files.review_path(step, review)}
         - Pi resolution: #{@files.resolution_path(step, review)}
         - debate log: #{@files.debate_path(step)}
 
@@ -1621,7 +1746,7 @@ module Autowork
         ```json
         {
           "status": "done",
-          "agent": "claude",
+          "agent": "#{@review_agent}",
           "phase": "debate",
           "step": #{step},
           "summary": "agreement | still_disagree | needs_user: ...",
@@ -1648,9 +1773,9 @@ module Autowork
       File.write(path, <<~PROMPT)
         # Autowork: debate Step #{step} finding #{debate_id}, round #{round} — Pi
 
-        You are the Pi implementation agent participating in `/autowork` as `pi-worker`.
+        You are the Pi implementation agent participating in `/autowork` as `agent-worker`.
 
-        Claude still disagrees about this finding/resolution:
+        Reviewer still disagrees about this finding/resolution:
 
         ```json
         #{JSON.pretty_generate(resolution)}
@@ -1659,15 +1784,15 @@ module Autowork
         Read:
         - task: #{File.join(@context.task_folder, 'task.md')}
         - steps: #{File.join(@context.task_folder, 'steps.md')}
-        - Claude review: #{@files.review_path(step, review)}
+        - Review report: #{@files.review_path(step, review)}
         - Pi resolution: #{@files.resolution_path(step, review)}
-        - latest Claude debate response: #{@files.debate_claude_result_path(step, debate_id, round)}
+        - latest reviewer debate response: #{@files.debate_reviewer_result_path(step, debate_id, round)}
         - debate log: #{@files.debate_path(step)}
 
         Rules:
         - Do not edit repo files in this debate turn.
         - Reply only about finding #{debate_id}.
-        - If Claude convinced you, choose `accept` or `accept_with_alternative_fix` so `/autowork` can send a fix turn.
+        - If the reviewer convinced you, choose `accept` or `accept_with_alternative_fix` so `/autowork` can send a fix turn.
         - If you still disagree or still defer, choose `still_disagree`.
         - Write your human-readable response to:
           #{result_path}
@@ -1704,9 +1829,10 @@ module Autowork
   class RunSetup
     attr_reader :context, :repo, :steps, :roles, :files
 
-    def initialize(argv, tmux: Tmux.new)
+    def initialize(argv, tmux: Tmux.new, super_review_agent: 'codex')
       @argv = argv
       @tmux = tmux
+      @super_review_agent = super_review_agent
     end
 
     def prepare!
@@ -1744,9 +1870,10 @@ module Autowork
         'branch_name' => repo.branch,
         'starting_head_commit' => repo.head_sha_if_exists,
         'steps_count' => steps.count,
-        'pi_manager_target' => roles.manager.id,
-        'pi_worker_target' => roles.pi_worker.id,
-        'claude_worker_target' => roles.claude_worker.id,
+        'agent_manager_target' => roles.manager.id,
+        'agent_worker_target' => roles.worker.id,
+        'agent_reviewer_target' => roles.reviewer.id,
+        'super_review_agent' => @super_review_agent,
         'max_total_commits' => DEFAULT_MAX_TOTAL_COMMITS,
         'max_fix_iterations_per_step' => 10,
         'max_debate_rounds_per_disagreement' => 5,
@@ -1815,26 +1942,39 @@ module Autowork
   end
 
   class Orchestrator
+    LEGACY_TARGET_KEYS = {
+      'pi_manager_target' => 'agent_manager_target',
+      'pi_worker_target' => 'agent_worker_target',
+      'claude_worker_target' => 'agent_reviewer_target'
+    }.freeze
     WAITING_STAGE_NAMES = {
       'pi:implement' => 'PI WORKER IMPLEMENTATION',
       'pi:audit' => 'PI BLIND AUDIT',
       'claude:review' => 'CLAUDE STEP REVIEW',
+      'codex:review' => 'CODEX STEP REVIEW',
       'pi:classify' => 'PI FINDING CLASSIFICATION',
       'pi:fix' => 'PI STEP FIX',
       'claude:debate' => 'CLAUDE DEBATE',
+      'codex:debate' => 'CODEX DEBATE',
       'pi:debate' => 'PI DEBATE',
       'claude:final_checks' => 'CLAUDE FINAL-CHECK REVIEW',
+      'codex:final_checks' => 'CODEX FINAL-CHECK REVIEW',
       'pi:final_checks' => 'PI FINAL-CHECK FIX',
       'claude:super_review' => 'CLAUDE FINAL SUPER-REVIEW',
+      'codex:super_review' => 'CODEX FINAL SUPER-REVIEW',
       'pi:final_review' => 'PI FINAL REVIEW',
       'pi:super_fix' => 'PI SUPER-REVIEW FIX',
       'claude:super_fix_review' => 'CLAUDE SUPER-REVIEW FIX REVIEW',
+      'codex:super_fix_review' => 'CODEX SUPER-REVIEW FIX REVIEW',
       'pi:manager_fix' => 'PI MANAGER FIX',
-      'claude:manager_fix_review' => 'CLAUDE MANAGER-FIX REVIEW'
+      'claude:manager_fix_review' => 'CLAUDE MANAGER-FIX REVIEW',
+      'codex:manager_fix_review' => 'CODEX MANAGER-FIX REVIEW'
     }.freeze
 
     def initialize(argv, tmux: Tmux.new, sleeper: Kernel.method(:sleep))
-      @argv = argv
+      @argv = argv.dup
+      @is_retry = @argv.delete('--retry')
+      @super_review_agent = extract_super_review_agent!
       @tmux = tmux
       @sleeper = sleeper
     end
@@ -1859,7 +1999,11 @@ module Autowork
     def setup_if_needed(context, files)
       return nil if File.file?(files.config_path) && File.file?(files.state_path)
 
-      setup = RunSetup.new(@argv, tmux: @tmux).prepare!
+      setup = RunSetup.new(
+        @argv,
+        tmux: @tmux,
+        super_review_agent: @super_review_agent || 'codex'
+      ).prepare!
       puts "Initialized autowork run for #{setup.context.task_folder}"
       setup
     end
@@ -1871,6 +2015,8 @@ module Autowork
       config = YAML.safe_load(File.read(files.config_path))
       store = StateStore.new(files.state_path)
       state = store.read
+      normalize_config!(files, config, state)
+      retry_interrupted_phase!(repo, files, config, store, state) if @is_retry
       ensure_review_base_current!(repo, files, config, store, state) if review_base_check_phase?(state['phase'])
       case state['phase']
       when 'ready_to_send_pi_implement'
@@ -1956,6 +2102,94 @@ module Autowork
       end
     end
 
+    def extract_super_review_agent!
+      indexes = @argv.each_index.select { |index| @argv[index] == '--super-review' }
+      raise Error, '--super-review may be passed only once' if indexes.length > 1
+      return if indexes.empty?
+
+      index = indexes.first
+      agent = @argv[index + 1]
+      unless SUPER_REVIEW_AGENTS.include?(agent)
+        raise Error, "--super-review requires one of: #{SUPER_REVIEW_AGENTS.join(', ')}"
+      end
+
+      @argv.slice!(index, 2)
+      agent
+    end
+
+    def normalize_config!(files, config, state)
+      is_changed = migrate_target_keys!(config)
+      is_changed = set_super_review_agent!(config, state) || is_changed
+      File.write(files.config_path, config.to_yaml) if is_changed
+    end
+
+    def migrate_target_keys!(config)
+      old_keys = LEGACY_TARGET_KEYS.keys.select { |key| config.key?(key) }
+      old_keys.each do |key|
+        config[LEGACY_TARGET_KEYS.fetch(key)] ||= config.fetch(key)
+        config.delete(key)
+      end
+      old_keys.any?
+    end
+
+    def set_super_review_agent!(config, state)
+      agent = selected_super_review_agent(config, state)
+      return false if config['super_review_agent'] == agent
+
+      config['super_review_agent'] = agent
+      true
+    end
+
+    def selected_super_review_agent(config, state)
+      configured_agent = config.fetch('super_review_agent', 'codex')
+      validate_agent_change!(configured_agent, state)
+      agent = @super_review_agent || configured_agent
+      return agent if SUPER_REVIEW_AGENTS.include?(agent)
+
+      raise Error, "Invalid configured super-review agent: #{agent.inspect}"
+    end
+
+    def validate_agent_change!(configured_agent, state)
+      return unless @super_review_agent && @super_review_agent != configured_agent
+      return unless state['phase']&.start_with?('waiting_for_')
+      return if @is_retry
+
+      raise Error, 'Changing --super-review during a waiting phase requires --retry after workers are stopped'
+    end
+
+    def review_agent(config)
+      config.fetch('super_review_agent', 'codex')
+    end
+
+    def retry_interrupted_phase!(repo, files, config, store, state)
+      phase = state['phase']
+      unless phase&.start_with?('waiting_for_')
+        raise Error, "--retry requires an interrupted waiting phase; current phase is #{phase.inspect}"
+      end
+
+      refresh_pane_targets!(repo, files, config)
+      retry_phase = phase.delete_prefix('waiting_for_')
+      requeue_phase!(files, store, state, retry_phase)
+      puts "Retrying interrupted phase: #{retry_phase}"
+    end
+
+    def refresh_pane_targets!(repo, files, config)
+      roles = @tmux.discover_roles(repo.root)
+      config['agent_manager_target'] = roles.manager.id
+      config['agent_worker_target'] = roles.worker.id
+      config['agent_reviewer_target'] = roles.reviewer.id
+      File.write(files.config_path, config.to_yaml)
+    end
+
+    def requeue_phase!(files, store, state, retry_phase)
+      state['status'] = 'running'
+      state.delete('paused_reason')
+      state['phase'] = "ready_to_send_#{retry_phase}"
+      state['next_action'] = "send_#{retry_phase}_prompt"
+      FileUtils.rm_f(files.paused_reason_path)
+      store.write(state)
+    end
+
     def review_base_check_phase?(phase)
       phase && !phase.start_with?('waiting_') && phase != 'complete'
     end
@@ -1998,12 +2232,12 @@ module Autowork
 
       step = state['current_step']
       prompt = PromptWriter.new(files, context, repo).pi_implement(step)
-      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      @tmux.send_prompt(config.fetch('agent_worker_target'), prompt)
       state['status'] = 'running'
       state['phase'] = 'waiting_for_pi_implement'
       state['next_action'] = 'wait_for_pi_implement_status'
       store.write(state)
-      puts "Sent Step #{step} implementation prompt to pi-worker: #{prompt}"
+      puts "Sent Step #{step} implementation prompt to agent-worker: #{prompt}"
       wait_for_pi_implement(context, repo, files, config, store, state)
     end
 
@@ -2019,7 +2253,7 @@ module Autowork
 
     def commit_step(context, repo, files, config, store, state)
       step = state['current_step']
-      raise Error, "No changes to commit for Step #{step}; pi-worker status was done but worktree is clean" if repo.clean?
+      raise Error, "No changes to commit for Step #{step}; agent-worker status was done but worktree is clean" if repo.clean?
 
       ensure_commit_budget!(files, store, state, config)
       repo.add_all
@@ -2041,12 +2275,12 @@ module Autowork
 
       step = state['current_step']
       prompt = PromptWriter.new(files, context, repo).pi_blind_audit(step, state.fetch('last_commit'))
-      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      @tmux.send_prompt(config.fetch('agent_worker_target'), prompt)
       state['status'] = 'running'
       state['phase'] = 'waiting_for_pi_audit'
       state['next_action'] = 'wait_for_pi_audit_status'
       store.write(state)
-      puts "Sent Step #{step} blind audit prompt to pi-worker: #{prompt}"
+      puts "Sent Step #{step} blind audit prompt to agent-worker: #{prompt}"
       wait_for_pi_audit(context, repo, files, config, store, state)
     end
 
@@ -2067,27 +2301,29 @@ module Autowork
     end
 
     def send_claude_review(context, repo, files, config, store, state)
-      raise Error, "Refusing to send Claude review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+      raise Error, "Refusing to send Reviewer pass with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
 
       step = state['current_step']
       review = state['review_iteration'] || 1
-      prompt = PromptWriter.new(files, context, repo).claude_review(step, review, state.fetch('last_commit'))
-      @tmux.send_prompt(config.fetch('claude_worker_target'), prompt)
+      prompt = PromptWriter.new(files, context, repo, review_agent: review_agent(config))
+                           .claude_review(step, review, state.fetch('last_commit'))
+      @tmux.send_prompt(config.fetch('agent_reviewer_target'), prompt)
       state['status'] = 'running'
       state['phase'] = 'waiting_for_claude_review'
       state['next_action'] = 'wait_for_claude_review_status'
       store.write(state)
-      puts "Sent Step #{step} review prompt to claude-worker: #{prompt}"
+      puts "Sent Step #{step} review prompt to agent-reviewer: #{prompt}"
       wait_for_claude_review(context, repo, files, config, store, state)
     end
 
     def wait_for_claude_review(context, repo, files, config, store, state)
       step = state['current_step']
       review = state['review_iteration'] || 1
-      result = wait_for_status(files.status_path(step, 'claude', 'review', review), expected: { agent: 'claude', phase: 'review', step: step }, config: config)
+      agent = review_agent(config)
+      result = wait_for_status(files.status_path(step, agent, 'review', review), expected: { agent: agent, phase: 'review', step: step }, config: config)
       handle_agent_status!(result, files, store, state)
-      require_nonempty_artifact!(files.review_path(step, review), 'Claude review')
-      raise Error, "Claude review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+      require_nonempty_artifact!(files.review_path(step, review), 'Reviewer pass')
+      raise Error, "Reviewer pass changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
 
       findings = Array(state.delete('current_pi_audit_findings')) + actionable_findings(result.data)
       state.dig('steps', step.to_s, 'reviews') << { 'iteration' => review, 'status' => 'done', 'summary' => result.data['summary'], 'findings_count' => findings.count }
@@ -2115,12 +2351,12 @@ module Autowork
       review = state['review_iteration'] || 1
       findings = state.fetch('current_findings')
       prompt = PromptWriter.new(files, context, repo).pi_classify(step, review, findings)
-      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      @tmux.send_prompt(config.fetch('agent_worker_target'), prompt)
       state['status'] = 'running'
       state['phase'] = 'waiting_for_pi_classify'
       state['next_action'] = 'wait_for_pi_classify_status'
       store.write(state)
-      puts "Sent Step #{step} review #{review} classification prompt to pi-worker: #{prompt}"
+      puts "Sent Step #{step} review #{review} classification prompt to agent-worker: #{prompt}"
       wait_for_pi_classify(context, repo, files, config, store, state)
     end
 
@@ -2178,12 +2414,12 @@ module Autowork
       review = state['review_iteration'] || 1
       fix_iteration = state.fetch('fix_iteration')
       prompt = PromptWriter.new(files, context, repo).pi_fix(step, fix_iteration, review, state.fetch('accepted_resolutions'))
-      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      @tmux.send_prompt(config.fetch('agent_worker_target'), prompt)
       state['status'] = 'running'
       state['phase'] = 'waiting_for_pi_fix'
       state['next_action'] = 'wait_for_pi_fix_status'
       store.write(state)
-      puts "Sent Step #{step} fix #{fix_iteration} prompt to pi-worker: #{prompt}"
+      puts "Sent Step #{step} fix #{fix_iteration} prompt to agent-worker: #{prompt}"
       wait_for_pi_fix(context, repo, files, config, store, state)
     end
 
@@ -2201,7 +2437,7 @@ module Autowork
     def commit_fix(context, repo, files, config, store, state)
       step = state['current_step']
       fix_iteration = state.fetch('fix_iteration')
-      raise Error, "No changes to commit for Step #{step} fix #{fix_iteration}; pi-worker status was done but worktree is clean" if repo.clean?
+      raise Error, "No changes to commit for Step #{step} fix #{fix_iteration}; agent-worker status was done but worktree is clean" if repo.clean?
 
       ensure_commit_budget!(files, store, state, config)
       repo.add_all
@@ -2226,20 +2462,21 @@ module Autowork
     end
 
     def send_claude_debate(context, repo, files, config, store, state)
-      raise Error, "Refusing to send Claude debate with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+      raise Error, "Refusing to send Reviewer debate with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
 
       step = state['current_step']
       review = state['review_iteration'] || 1
       round = state.fetch('debate_round')
       resolution = current_debate_resolution(state)
       debate_id = resolution.fetch('finding_id')
-      prompt = PromptWriter.new(files, context, repo).claude_debate(step, review, debate_id, round, resolution)
-      @tmux.send_prompt(config.fetch('claude_worker_target'), prompt)
+      prompt = PromptWriter.new(files, context, repo, review_agent: review_agent(config))
+                           .claude_debate(step, review, debate_id, round, resolution)
+      @tmux.send_prompt(config.fetch('agent_reviewer_target'), prompt)
       state['status'] = 'running'
       state['phase'] = 'waiting_for_claude_debate'
       state['next_action'] = 'wait_for_claude_debate_status'
       store.write(state)
-      puts "Sent Step #{step} debate #{debate_id} round #{round} prompt to claude-worker: #{prompt}"
+      puts "Sent Step #{step} debate #{debate_id} round #{round} prompt to agent-reviewer: #{prompt}"
       wait_for_claude_debate(context, repo, files, config, store, state)
     end
 
@@ -2248,16 +2485,17 @@ module Autowork
       round = state.fetch('debate_round')
       resolution = current_debate_resolution(state)
       debate_id = resolution.fetch('finding_id')
-      result = wait_for_status(files.status_path(step, 'claude', 'debate', "_#{debate_id}_round#{round}"), expected: { agent: 'claude', phase: 'debate', step: step }, config: config)
+      agent = review_agent(config)
+      result = wait_for_status(files.status_path(step, agent, 'debate', "_#{debate_id}_round#{round}"), expected: { agent: agent, phase: 'debate', step: step }, config: config)
       handle_agent_status!(result, files, store, state)
-      require_nonempty_artifact!(files.debate_claude_result_path(step, debate_id, round), 'Claude debate')
-      raise Error, "Claude debate changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+      require_nonempty_artifact!(files.debate_reviewer_result_path(step, debate_id, round), 'Reviewer debate')
+      raise Error, "Reviewer debate changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
 
       decision = debate_decision!(result.data, %w[agree_with_pi still_disagree needs_user])
-      append_debate_turn(files, state, 'Claude', debate_id, round, result.data['summary'])
+      append_debate_turn(files, state, 'Reviewer', debate_id, round, result.data['summary'])
       case decision
       when 'agree_with_pi'
-        append_debate_turn(files, state, 'Decision', debate_id, round, 'Claude agrees with Pi; no code change required for this finding.')
+        append_debate_turn(files, state, 'Decision', debate_id, round, 'Reviewer agrees with Pi; no code change required for this finding.')
         advance_debate_or_accept_step(context, repo, files, config, store, state)
       when 'still_disagree'
         state['phase'] = 'ready_to_send_pi_debate'
@@ -2265,7 +2503,7 @@ module Autowork
         store.write(state)
         send_pi_debate(context, repo, files, config, store, state)
       when 'needs_user'
-        pause_with_reason!(files, store, state, "Claude requested user arbitration for debate #{debate_id}: #{result.data['summary']}")
+        pause_with_reason!(files, store, state, "Reviewer requested user arbitration for debate #{debate_id}: #{result.data['summary']}")
       end
     end
 
@@ -2278,12 +2516,12 @@ module Autowork
       resolution = current_debate_resolution(state)
       debate_id = resolution.fetch('finding_id')
       prompt = PromptWriter.new(files, context, repo).pi_debate(step, review, debate_id, round, resolution)
-      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      @tmux.send_prompt(config.fetch('agent_worker_target'), prompt)
       state['status'] = 'running'
       state['phase'] = 'waiting_for_pi_debate'
       state['next_action'] = 'wait_for_pi_debate_status'
       store.write(state)
-      puts "Sent Step #{step} debate #{debate_id} round #{round} prompt to pi-worker: #{prompt}"
+      puts "Sent Step #{step} debate #{debate_id} round #{round} prompt to agent-worker: #{prompt}"
       wait_for_pi_debate(context, repo, files, config, store, state)
     end
 
@@ -2313,7 +2551,7 @@ module Autowork
         send_pi_fix(context, repo, files, config, store, state)
       when 'still_disagree'
         if round >= config.fetch('max_debate_rounds_per_disagreement', 5).to_i
-          pause_with_reason!(files, store, state, "Pi and Claude still disagree about #{debate_id} after #{round} debate round(s). See #{files.debate_path(step)}")
+          pause_with_reason!(files, store, state, "Pi and the reviewer still disagree about #{debate_id} after #{round} debate round(s). See #{files.debate_path(step)}")
         end
         state['debate_round'] = round + 1
         state['phase'] = 'ready_to_send_claude_debate'
@@ -2465,27 +2703,30 @@ module Autowork
       raise Error, "Refusing to send final super-review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
 
       iteration = (state['final_super_review_iteration'] || 0) + 1
-      prompt = PromptWriter.new(files, context, repo).claude_final_super_review(iteration, config.fetch('review_base_ref'))
-      @tmux.send_prompt(config.fetch('claude_worker_target'), prompt)
+      prompt = PromptWriter.new(files, context, repo, review_agent: review_agent(config))
+                           .claude_final_super_review(iteration, config.fetch('review_base_ref'))
+      @tmux.send_prompt(config.fetch('agent_reviewer_target'), prompt)
       state['status'] = 'running'
       state['final_super_review_iteration'] = iteration
       state['phase'] = 'waiting_for_final_super_review'
       state['next_action'] = 'wait_for_final_super_review_status'
       store.write(state)
-      puts "Sent final super-review #{iteration} prompt to claude-worker: #{prompt}"
+      puts "Sent final super-review #{iteration} prompt to agent-reviewer: #{prompt}"
       wait_for_final_super_review(context, repo, files, config, store, state)
     end
 
     def wait_for_final_super_review(context, repo, files, config, store, state)
       iteration = state.fetch('final_super_review_iteration')
+      agent = review_agent(config)
       result = wait_for_status(
-        files.status_path(0, 'claude', 'super_review', iteration),
-        expected: { agent: 'claude', phase: 'super_review', step: 0 },
+        files.status_path(0, agent, 'super_review', iteration),
+        expected: { agent: agent, phase: 'super_review', step: 0 },
         config: config,
         timeout_seconds: super_review_status_timeout_seconds(config)
       )
       handle_agent_status!(result, files, store, state)
       require_nonempty_artifact!(files.super_review_path, 'Final super-review')
+      validate_super_review_adjudication!(files.super_review_adjudication_path(iteration), result.data)
       raise Error, "Final super-review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
 
       findings = super_review_findings(result.data)
@@ -2509,13 +2750,13 @@ module Autowork
 
       iteration = (state['final_pi_review_iteration'] || 0) + 1
       prompt = PromptWriter.new(files, context, repo).pi_final_review(iteration, config.fetch('review_base_ref'))
-      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      @tmux.send_prompt(config.fetch('agent_worker_target'), prompt)
       state['status'] = 'running'
       state['final_pi_review_iteration'] = iteration
       state['phase'] = 'waiting_for_pi_final_review'
       state['next_action'] = 'wait_for_pi_final_review_status'
       store.write(state)
-      puts "Sent final Pi review #{iteration} prompt to pi-worker: #{prompt}"
+      puts "Sent final Pi review #{iteration} prompt to agent-worker: #{prompt}"
       wait_for_pi_final_review(context, repo, files, config, store, state)
     end
 
@@ -2546,13 +2787,13 @@ module Autowork
         pause_with_reason!(files, store, state, "Super-review findings still need work after #{iteration - 1} fix iteration(s). See #{files.super_review_path}")
       end
       prompt = PromptWriter.new(files, context, repo).pi_super_review_fix(iteration, state.fetch('final_super_review_findings', []), state['super_review_fix_review_findings'])
-      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      @tmux.send_prompt(config.fetch('agent_worker_target'), prompt)
       state['status'] = 'running'
       state['super_review_fix_iteration'] = iteration
       state['phase'] = 'waiting_for_pi_super_review_fix'
       state['next_action'] = 'wait_for_pi_super_review_fix_status'
       store.write(state)
-      puts "Sent super-review fix #{iteration} prompt to pi-worker: #{prompt}"
+      puts "Sent super-review fix #{iteration} prompt to agent-worker: #{prompt}"
       wait_for_pi_super_review_fix(context, repo, files, config, store, state)
     end
 
@@ -2607,26 +2848,28 @@ module Autowork
     end
 
     def send_claude_super_review_fix_review(context, repo, files, config, store, state)
-      raise Error, "Refusing to send Claude super-review fix review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+      raise Error, "Refusing to send Reviewer super-review fix review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
 
       iteration = state.fetch('super_review_fix_iteration')
       commits = super_review_fix_commits(state)
-      prompt = PromptWriter.new(files, context, repo).claude_super_review_fix_review(iteration, commits)
-      @tmux.send_prompt(config.fetch('claude_worker_target'), prompt)
+      prompt = PromptWriter.new(files, context, repo, review_agent: review_agent(config))
+                           .claude_super_review_fix_review(iteration, commits)
+      @tmux.send_prompt(config.fetch('agent_reviewer_target'), prompt)
       state['status'] = 'running'
       state['phase'] = 'waiting_for_claude_super_review_fix_review'
       state['next_action'] = 'wait_for_claude_super_review_fix_review_status'
       store.write(state)
-      puts "Sent super-review fix review #{iteration} prompt to claude-worker: #{prompt}"
+      puts "Sent super-review fix review #{iteration} prompt to agent-reviewer: #{prompt}"
       wait_for_claude_super_review_fix_review(context, repo, files, config, store, state)
     end
 
     def wait_for_claude_super_review_fix_review(context, repo, files, config, store, state)
       iteration = state.fetch('super_review_fix_iteration')
-      result = wait_for_status(files.status_path(0, 'claude', 'super_fix_review', iteration), expected: { agent: 'claude', phase: 'super_fix_review', step: 0 }, config: config)
+      agent = review_agent(config)
+      result = wait_for_status(files.status_path(0, agent, 'super_fix_review', iteration), expected: { agent: agent, phase: 'super_fix_review', step: 0 }, config: config)
       handle_agent_status!(result, files, store, state)
-      require_nonempty_artifact!(files.super_fix_review_path(iteration), 'Claude super-review fix review')
-      raise Error, "Claude super-review fix review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+      require_nonempty_artifact!(files.super_fix_review_path(iteration), 'Reviewer super-review fix review')
+      raise Error, "Reviewer super-review fix review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
 
       findings = actionable_findings(result.data)
       state['super_review_fix_reviews'] = Array(state['super_review_fix_reviews']) + [{
@@ -2669,13 +2912,13 @@ module Autowork
         state.fetch('manager_review_findings'),
         state['manager_fix_review_findings']
       )
-      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      @tmux.send_prompt(config.fetch('agent_worker_target'), prompt)
       state['status'] = 'running'
       state['manager_fix_iteration'] = iteration
       state['phase'] = 'waiting_for_pi_manager_fix'
       state['next_action'] = 'wait_for_pi_manager_fix_status'
       store.write(state)
-      puts "Sent manager fix #{iteration} prompt to pi-worker: #{prompt}"
+      puts "Sent manager fix #{iteration} prompt to agent-worker: #{prompt}"
       wait_for_pi_manager_fix(context, repo, files, config, store, state)
     end
 
@@ -2718,37 +2961,38 @@ module Autowork
     end
 
     def send_claude_manager_fix_review(context, repo, files, config, store, state)
-      raise Error, "Refusing to send Claude manager-fix review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+      raise Error, "Refusing to send Reviewer manager-fix review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
 
       iteration = state.fetch('manager_fix_iteration')
       commit_sha = manager_fix_commits(state).last
       raise Error, 'Manager-fix review requires a manager-fix commit' if commit_sha.to_s.empty?
 
-      prompt = PromptWriter.new(files, context, repo).claude_manager_fix_review(
+      prompt = PromptWriter.new(files, context, repo, review_agent: review_agent(config)).claude_manager_fix_review(
         iteration,
         state.fetch('manager_review_iteration'),
         commit_sha,
         state.fetch('manager_review_findings')
       )
-      @tmux.send_prompt(config.fetch('claude_worker_target'), prompt)
+      @tmux.send_prompt(config.fetch('agent_reviewer_target'), prompt)
       state['status'] = 'running'
       state['phase'] = 'waiting_for_claude_manager_fix_review'
       state['next_action'] = 'wait_for_claude_manager_fix_review_status'
       store.write(state)
-      puts "Sent manager-fix review #{iteration} prompt to claude-worker: #{prompt}"
+      puts "Sent manager-fix review #{iteration} prompt to agent-reviewer: #{prompt}"
       wait_for_claude_manager_fix_review(context, repo, files, config, store, state)
     end
 
     def wait_for_claude_manager_fix_review(context, repo, files, config, store, state)
       iteration = state.fetch('manager_fix_iteration')
+      agent = review_agent(config)
       result = wait_for_status(
-        files.status_path(0, 'claude', 'manager_fix_review', iteration),
-        expected: { agent: 'claude', phase: 'manager_fix_review', step: 0 },
+        files.status_path(0, agent, 'manager_fix_review', iteration),
+        expected: { agent: agent, phase: 'manager_fix_review', step: 0 },
         config: config
       )
       handle_agent_status!(result, files, store, state)
-      require_nonempty_artifact!(files.manager_fix_review_path(iteration), 'Claude manager-fix review')
-      raise Error, "Claude manager-fix review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+      require_nonempty_artifact!(files.manager_fix_review_path(iteration), 'Reviewer manager-fix review')
+      raise Error, "Reviewer manager-fix review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
 
       findings = actionable_findings(result.data)
       state['manager_fix_reviews'] = Array(state['manager_fix_reviews']) + [{
@@ -2812,12 +3056,12 @@ module Autowork
     def print_manager_final_review_instructions(project, repo, files, state)
       iteration = state.fetch('manager_review_iteration')
       puts "/autowork reached final manager-context production-readiness review #{iteration}."
-      puts "Use the pi-manager conversation context that pi-worker and claude-worker did not have."
+      puts "Use the agent-manager conversation context that agent-worker and agent-reviewer did not have."
       puts "Read:"
       puts "- manager review checklist: #{files.manager_review_path}"
       puts "- summary: #{files.final_summary_path}"
       puts "- final checks: #{files.final_checks_path}"
-      puts "- Claude super-review: #{files.super_review_path}"
+      puts "- Reviewer super-review: #{files.super_review_path}"
       puts "- Pi final review: #{files.pi_final_review_path}" if state['final_pi_reviewed']
       puts "- risk registry: #{File.join(Autowork::TASK_ROOT, project, 'review-risk-registry.json')}"
       puts "- risk manifest: #{files.risk_manifest_path}"
@@ -2832,9 +3076,9 @@ module Autowork
       text = <<~MD
         # Manager-context production-readiness review
 
-        Before declaring `/autowork` complete, pi-manager must perform this final review using the full context available only in the manager conversation: original user request, draft/task creation, grilling decisions, task edits, scope boundaries, explicit user preferences, and any caveats that may not be fully captured in `task.md` or `steps.md`.
+        Before declaring `/autowork` complete, agent-manager must perform this final review using the full context available only in the manager conversation: original user request, draft/task creation, grilling decisions, task edits, scope boundaries, explicit user preferences, and any caveats that may not be fully captured in `task.md` or `steps.md`.
 
-        Assume `pi-worker` and `claude-worker` may have missed important intent/context because they only saw task artifacts and prompts.
+        Assume `agent-worker` and `agent-reviewer` may have missed important intent/context because they only saw task artifacts and prompts.
 
         ## Read
 
@@ -2842,7 +3086,7 @@ module Autowork
         - steps: #{File.join(context.task_folder, 'steps.md')}
         - final summary: #{files.final_summary_path}
         - final checks: #{files.final_checks_path}
-        - final Claude super-review: #{files.super_review_path}
+        - final reviewer super-review: #{files.super_review_path}
         - final Pi review: #{files.pi_final_review_path}
         - super-review fix artifacts: #{File.join(files.log_dir, 'super_fixes')}
         - project risk registry: #{File.join(Autowork::TASK_ROOT, context.project, 'review-risk-registry.json')}
@@ -2868,7 +3112,7 @@ module Autowork
         - Does the final implementation satisfy the original user intent, not just `steps.md`?
         - Did the work accidentally expand or shrink scope?
         - Did any grilling/task decision get lost?
-        - Did Pi or Claude reject/accept a finding contrary to manager-only context?
+        - Did Pi or the reviewer reject/accept a finding contrary to manager-only context?
         - Are follow-ups acceptable and clearly surfaced?
         - Is anything important missing from `final_summary.md`?
         - Is the result production-ready if the user does not perform another review?
@@ -2903,7 +3147,7 @@ module Autowork
         autowork manager-review-fix #{files.task_folder}
         ```
 
-        That command owns Pi routing, commits, full checks, scoped Claude review, retries, and return to a fresh manager gate. Do not send manual tmux prompts or create manual commits.
+        That command owns Pi routing, commits, full checks, scoped reviewer pass, retries, and return to a fresh manager gate. Do not send manual tmux prompts or create manual commits.
 
         If clean, record your pass below and run:
 
@@ -2928,13 +3172,13 @@ module Autowork
         pause_with_reason!(files, store, state, "Final checks still fail after #{iteration - 1} fix iteration(s). See #{files.final_checks_path}")
       end
       prompt = PromptWriter.new(files, context, repo).pi_final_check_fix(iteration, state.fetch('final_checks', []), state['final_check_review_findings'])
-      @tmux.send_prompt(config.fetch('pi_worker_target'), prompt)
+      @tmux.send_prompt(config.fetch('agent_worker_target'), prompt)
       state['status'] = 'running'
       state['final_check_fix_iteration'] = iteration
       state['phase'] = 'waiting_for_pi_final_check_fix'
       state['next_action'] = 'wait_for_pi_final_check_fix_status'
       store.write(state)
-      puts "Sent final-check fix #{iteration} prompt to pi-worker: #{prompt}"
+      puts "Sent final-check fix #{iteration} prompt to agent-worker: #{prompt}"
       wait_for_pi_final_check_fix(context, repo, files, config, store, state)
     end
 
@@ -2976,26 +3220,28 @@ module Autowork
     end
 
     def send_claude_final_check_review(context, repo, files, config, store, state)
-      raise Error, "Refusing to send Claude final-check review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
+      raise Error, "Refusing to send Reviewer final-check review with dirty worktree in #{repo.root}:\n#{repo.status}" unless repo.clean?
 
       review = (state['final_check_review_iteration'] || 0) + 1
-      prompt = PromptWriter.new(files, context, repo).claude_final_check_review(review, final_check_fix_commits(state))
-      @tmux.send_prompt(config.fetch('claude_worker_target'), prompt)
+      prompt = PromptWriter.new(files, context, repo, review_agent: review_agent(config))
+                           .claude_final_check_review(review, final_check_fix_commits(state))
+      @tmux.send_prompt(config.fetch('agent_reviewer_target'), prompt)
       state['status'] = 'running'
       state['final_check_review_iteration'] = review
       state['phase'] = 'waiting_for_claude_final_check_review'
       state['next_action'] = 'wait_for_claude_final_check_review_status'
       store.write(state)
-      puts "Sent final-check review #{review} prompt to claude-worker: #{prompt}"
+      puts "Sent final-check review #{review} prompt to agent-reviewer: #{prompt}"
       wait_for_claude_final_check_review(context, repo, files, config, store, state)
     end
 
     def wait_for_claude_final_check_review(context, repo, files, config, store, state)
       review = state.fetch('final_check_review_iteration')
-      result = wait_for_status(files.status_path(0, 'claude', 'final_checks_review', review), expected: { agent: 'claude', phase: 'final_checks', step: 0 }, config: config)
+      agent = review_agent(config)
+      result = wait_for_status(files.status_path(0, agent, 'final_checks_review', review), expected: { agent: agent, phase: 'final_checks', step: 0 }, config: config)
       handle_agent_status!(result, files, store, state)
-      require_nonempty_artifact!(files.final_check_review_path(review), 'Claude final-check review')
-      raise Error, "Claude final-check review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
+      require_nonempty_artifact!(files.final_check_review_path(review), 'Reviewer final-check review')
+      raise Error, "Reviewer final-check review changed repo files; worktree must remain clean:\n#{repo.status}" unless repo.clean?
 
       findings = actionable_findings(result.data)
       state['final_check_reviews'] = Array(state['final_check_reviews']) + [{
@@ -3214,8 +3460,8 @@ module Autowork
     def summary_super_review_markdown(files, state)
       return '- Disabled by config.' unless state['final_super_reviewed']
 
-      lines = ["- Claude report: #{files.super_review_path}"]
-      lines << "- Claude summary: #{state['final_super_review_summary']}" if state['final_super_review_summary']
+      lines = ["- Reviewer report: #{files.super_review_path}"]
+      lines << "- Reviewer summary: #{state['final_super_review_summary']}" if state['final_super_review_summary']
       lines << "- Pi report: #{files.pi_final_review_path}" if state['final_pi_reviewed']
       lines << "- Pi summary: #{state['final_pi_review_summary']}" if state['final_pi_review_summary']
       lines << "- Fix commits: #{super_review_fix_commits(state).count}"
@@ -3317,6 +3563,51 @@ module Autowork
       return if File.file?(path) && !File.read(path).strip.empty?
 
       raise Error, "#{label} artifact is missing or empty: #{path}. Agents must write artifacts before status JSON."
+    end
+
+    def validate_super_review_adjudication!(path, status_data)
+      summary = read_adjudication_summary(path)
+      validate_adjudication_status_gate!(path, summary, status_data)
+      validate_actionable_candidate_ids!(path, summary, status_data)
+    end
+
+    def read_adjudication_summary(path)
+      summary = JSON.parse(File.read(path))
+      return summary if summary['valid'] == true
+
+      raise Error, "Invalid super-review adjudication summary at #{path}"
+    rescue Errno::ENOENT
+      raise Error, "Missing super-review adjudication summary: #{path}"
+    rescue JSON::ParserError => e
+      raise Error, "Invalid super-review adjudication summary at #{path}: #{e.message}"
+    end
+
+    def validate_adjudication_status_gate!(path, summary, status_data)
+      return if status_data['adjudication'] == adjudication_gate(summary)
+
+      raise Error, "Super-review status adjudication does not match #{path}"
+    rescue KeyError => e
+      raise Error, "Invalid super-review adjudication summary at #{path}: #{e.message}"
+    end
+
+    def validate_actionable_candidate_ids!(path, summary, status_data)
+      expected_ids = Array(summary.fetch('actionable_candidate_ids')).sort
+      actual_ids = Array(status_data['findings']).map { |finding| finding['id'] }.sort
+      return if actual_ids == expected_ids
+
+      raise Error, "Super-review status findings do not match actionable candidates in #{path}"
+    rescue KeyError => e
+      raise Error, "Invalid super-review adjudication summary at #{path}: #{e.message}"
+    end
+
+    def adjudication_gate(summary)
+      groups = summary.fetch('groups')
+      {
+        'panel_agreement_ratio' => groups.fetch('panel').fetch('agreement_ratio'),
+        'independent_agreement_ratio' => groups.fetch('independent').fetch('agreement_ratio'),
+        'is_degenerate' => summary.fetch('is_degenerate'),
+        'requires_manual_verification' => summary.fetch('requires_manual_verification')
+      }
     end
 
     def handle_agent_status!(result, files, store, state)
@@ -3479,9 +3770,9 @@ module Autowork
       roles = repo ? @tmux.discover_roles(repo.root) : nil
       if roles
         puts 'tmux_panes: ok'
-        puts "pi-manager: #{roles.manager.id} #{roles.manager.path}"
-        puts "pi-worker: #{roles.pi_worker.id} #{roles.pi_worker.path}"
-        puts "claude-worker: #{roles.claude_worker.id} #{roles.claude_worker.path}"
+        puts "agent-manager: #{roles.manager.id} #{roles.manager.path}"
+        puts "agent-worker: #{roles.worker.id} #{roles.worker.path}"
+        puts "agent-reviewer: #{roles.reviewer.id} #{roles.reviewer.path}"
       end
       roles
     rescue Error => e
@@ -3504,9 +3795,9 @@ module Autowork
 
     def send_test(roles)
       message = "AUTOWORK DOCTOR SEND TEST #{Time.now.iso8601}: no action required"
-      @tmux.send_text(roles.pi_worker.id, message)
-      @tmux.send_text(roles.claude_worker.id, message)
-      puts 'prompt_delivery_send_test: sent to pi-worker and claude-worker'
+      @tmux.send_text(roles.worker.id, message)
+      @tmux.send_text(roles.reviewer.id, message)
+      puts 'prompt_delivery_send_test: sent to agent-worker and agent-reviewer'
     end
 
     def report_status_validator
@@ -3870,9 +4161,9 @@ module Autowork
       puts "task_folder=#{setup.context.task_folder}"
       puts "repo=#{setup.repo.root}"
       puts "steps_count=#{setup.steps.count}"
-      puts "pi_manager_target=#{setup.roles.manager.id}"
-      puts "pi_worker_target=#{setup.roles.pi_worker.id}"
-      puts "claude_worker_target=#{setup.roles.claude_worker.id}"
+      puts "agent_manager_target=#{setup.roles.manager.id}"
+      puts "agent_worker_target=#{setup.roles.worker.id}"
+      puts "agent_reviewer_target=#{setup.roles.reviewer.id}"
       puts "first_prompt=#{setup.files.prompt_path("step#{setup.steps.numbers.first}_pi_implement_request.md")}"
       puts
       puts 'Next manual/integration step: run autowork normally to send the prompt.'
@@ -3916,8 +4207,8 @@ module Autowork
     def usage
       <<~USAGE
         Usage:
-          autowork [task_id] [full-base-branch-or-ref]
-          autowork [project-or-session] [task_id] [full-base-branch-or-ref]
+          autowork [--retry] [--super-review claude|codex] [task_id] [full-base-branch-or-ref]
+          autowork [--retry] [--super-review claude|codex] [project-or-session] [task_id] [full-base-branch-or-ref]
           autowork init [task_id] [full-base-branch-or-ref]
           autowork init [project-or-session] [task_id] [full-base-branch-or-ref]
           autowork doctor [--no-send-test]

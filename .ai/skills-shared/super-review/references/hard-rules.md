@@ -1,6 +1,6 @@
 # HARD RULES BLOCK
 
-Paste this entire block into EVERY reviewer prompt — all 6 Claude subagents, the Codex pass, and both Phase 2 cross-review calls. Replace `<WORKTREE_DIR>` with the absolute worktree path.
+Paste this entire block into EVERY reviewer prompt — all seven Phase 1 reviewers and both Phase 2 adjudicators, regardless of selected agent mode. Replace `<WORKTREE_DIR>` with the absolute worktree path.
 
 ```
 LOCATION CITATIONS - HARD RULE:
@@ -134,6 +134,30 @@ deletion whose own docstring describes a purpose the surviving code does NOT
 cover: after the delete every remaining file agrees, because the one file that
 dissented is gone.
 
+REACHABILITY EVIDENCE GATE - HARD RULE:
+Phase 1 may emit an uncertain candidate so downstream review can investigate it.
+Phase 2 may answer AGREE only when the trigger is reachable according to at
+least one independent evidence source:
+- task_contract: task/PR acceptance criteria require or permit the scenario
+- vendor_contract: official provider documentation or real provider output permits it
+- existing_untouched_code: a caller, configuration, or persisted-data path outside
+  this diff constructs it
+- reproduction: a concrete reproduction through the existing public interface
+- schema_invariant: the current schema and write paths demonstrably permit it
+
+These are NOT reachability evidence:
+- an imagined direct caller or future writer
+- absence of a value from vendor documentation
+- a test, fixture, comment, or documentation changed in the same diff
+- reviewer agreement or convergence
+- impact alone
+
+Every Phase 2 AGREE decision must state the exact trigger, mechanism,
+reachability_source, and concrete evidence. If evidence is missing, answer
+NEEDS_CONTEXT and name what would prove or disprove the trigger. Never convert
+"the contract does not prove X" into "the contract proves not-X". Phase 3 must
+not surface NEEDS_CONTEXT candidates as actionable findings.
+
 PRECONDITION & SEVERITY DISCIPLINE - HARD RULE:
 For ANY finding that depends on control flow, exception handling, or a state
 machine ("the error is swallowed", "the call is left in state X", "this masks
@@ -152,13 +176,14 @@ the real error", "X is lost"):
 If you cannot state the precondition crisply in one line, you have NOT verified
 it - downgrade or move to "Verify Manually"; do not flag it High.
 
-COVERAGE OVER SELF-CENSORSHIP:
-Report every issue you find, including ones you are uncertain about - mark
-those [confidence: low]. Do NOT silently drop a finding because you doubt its
-importance: convergence and adversarial cross-review filter downstream, and a
-finding dropped at the source is unrecoverable. (The SKIP LIST below excludes
-noise classes, not uncertain bugs. PRECONDITION discipline still applies:
-state the trigger honestly and downgrade severity, but keep the finding.)
+COVERAGE OVER SELF-CENSORSHIP (PHASE 1 ONLY):
+Phase 1 should report every candidate it finds, including uncertain ones, and
+mark them `[confidence: low]`. Do NOT silently drop a candidate because you
+doubt its importance: Phase 2 investigates it, and a candidate dropped at the
+source is unrecoverable. This rule does not authorize Phase 2 AGREE or Phase 3
+surfacing without the reachability evidence required above. (The SKIP LIST
+below excludes noise classes, not uncertain candidates. PRECONDITION discipline
+still applies: state the trigger honestly and downgrade severity.)
 
 SKIP LIST (do not surface these as findings):
 - Formatting, whitespace, line breaks (linter catches)

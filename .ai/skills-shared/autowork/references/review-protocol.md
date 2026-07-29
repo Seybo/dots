@@ -1,14 +1,16 @@
-# Review protocol — Claude reviews, finding handling, debates
+# Review protocol — reviewer findings, handling, and debates
 
-Read this file when a step reaches review, findings, or a Pi/Claude disagreement.
+Read this file when a step reaches review, findings, or a worker/reviewer disagreement.
 
-## Claude review protocol
+All human-readable review, classification, and debate artifacts must be copyable plain Markdown without tables, aligned columns, or cell layouts. Use headings and numbered finding blocks with one labeled field per line.
 
-Claude reviews should follow `/gtm-revit`-style rules, not a minimal blocker-only review.
+## Review protocol
 
-Important: `/gtm-revit` does not require running RuboCop or RSpec. During normal step reviews, Claude should not run RSpec, RuboCop, linters, formatters, or any other test/check command — not full-suite and not targeted. Claude should inspect the diff/files and Pi's reported `checks_run`. Pi may run targeted checks during implementation/fix turns, and `/autowork` runs configured full final checks after all planned steps are accepted.
+`agent-reviewer` uses `/gtm-revit`-style depth, not a minimal blocker-only review. It may be Claude or Pi using Codex, as selected by `super_review_agent`.
 
-Claude should suggest everything that makes sense according to `/gtm-revit` rules and classify checklist items with:
+During normal step reviews, the reviewer must not run RSpec, RuboCop, linters, formatters, or other checks. It inspects the diff/files and the worker's reported `checks_run`. The worker may run targeted checks during implementation/fix turns; `/autowork` runs configured full checks after all planned steps are accepted.
+
+Classify checklist items as:
 
 ```text
 PASS
@@ -16,36 +18,33 @@ MINOR
 BLOCKER
 ```
 
-Expected summary shape:
+Expected summary:
 
 ```text
 Summary: <N> BLOCKER / <M> MINOR / <K> PASS
 Recommendation: accept | fix | split
 ```
 
-`/autowork` prompt should ask Claude to review the last commit against the current step only:
+The reviewer prompt must:
 
-- read `task.md`
-- read `steps.md`
-- use full `steps.md` for context
-- scope findings to current `Step N`
-- do not require future-step behavior unless current changes block or contradict future work
-- do not edit repo files
-- do not run RSpec, RuboCop, linters, formatters, or any other test/check command during step review — not full-suite and not targeted
-- write review to the assigned `autowork-log/reviews/...` file
-- write status JSON when done
+- read `task.md` and `steps.md`
+- review the last commit against the current step
+- use full `steps.md` only as context
+- not require future-step behavior unless current changes block or contradict it
+- not edit repo files
+- write the assigned human-readable review before status JSON
 
 ## Handling findings
 
-Claude review status JSON must include a machine-readable `findings` array. Use an empty array when there are no `BLOCKER` or `MINOR` findings. Each actionable finding should include `id`, `severity`, `title`, `body`, and `recommendation`.
+Reviewer status JSON includes `findings`; use an empty array when there are no actionable findings. Each finding includes `id`, `severity`, `title`, `body`, and `recommendation`.
 
-After Claude review, Pi classifies all findings at once in a resolution file:
+After review, Pi classifies all findings at once in:
 
 ```text
 autowork-log/resolutions/step1_pi_review1_result.md
 ```
 
-For each finding, Pi chooses one:
+Allowed decisions:
 
 ```text
 accept
@@ -57,64 +56,43 @@ needs_user
 
 Rules:
 
-- Valid findings that are clearly in this task's scope must be fixed now, even when the fix naturally belongs to a later step.
-- `MINOR` findings must be fixed now, even when they are outside this task's original scope, as long as they are minor/local/low-risk.
-- Use `follow_up` only for valid non-minor findings that are outside this task's scope; `/autowork` carries them into `final_summary.md` instead of debating/fixing them.
-- Use `dispute` only when the finding is invalid, not reachable, or contradicted by repo/task evidence.
-- `needs_user` pauses immediately when product/scope input is required.
-- Accepted fixes are implemented first.
-- `/autowork` commits accepted code changes.
-- Claude reviews the fix commit.
-- Remaining disputes are recorded in `autowork-log/debates/stepN_debates.md` and debated up to `max_debate_rounds_per_disagreement`.
-- If Claude agrees with Pi during debate, the finding is treated as resolved without code changes.
-- If Pi accepts Claude's position during debate, `/autowork` sends a normal fix prompt, commits the fix, and sends it back to Claude for review.
-- If both agents still disagree after the round limit, `/autowork` pauses for user arbitration. This pause is intentional because the manager cannot decide which agent is correct.
+- Fix valid in-scope findings now, even when the fix naturally belongs to a later step.
+- Fix `MINOR` findings now when they are local and low-risk, even outside original scope.
+- Use `follow_up` only for valid non-minor out-of-scope findings.
+- Use `dispute` only when repo/task evidence shows the finding is invalid or unreachable.
+- `needs_user` pauses immediately.
+- `/autowork` commits accepted changes, then sends the commit to `agent-reviewer`.
+- Debate remaining disputes up to `max_debate_rounds_per_disagreement`.
+- If the reviewer agrees with Pi, resolve without code changes.
+- If Pi accepts the reviewer's position, send a normal fix turn, commit, and re-review.
+- If disagreement remains at the limit, pause for operator arbitration.
 
 ## Disagreement procedure
 
-Disagreement escalation starts when Pi disputes a Claude finding or fix requirement:
-
-- Claude says `BLOCKER`, Pi thinks it is invalid or not reachable
-- Claude says `MINOR`, Pi thinks it is invalid or not reachable
-- Claude suggests fix A, Pi thinks fix B is better
-- Claude says prior fix is still wrong
-
-Per-step debate file:
+The per-step record is:
 
 ```text
 autowork-log/debates/step1_debates.md
 ```
 
-Each disagreement gets its own section:
+Each disagreement has alternating reviewer and Pi rounds:
 
 ```md
 ## D1 — Review 1 finding B: <short title>
 
-### Round 1 — Claude
+### Round 1 — Reviewer
 ...
 
 ### Round 1 — Pi
 ...
 ```
 
-`/autowork` facilitates debate rounds, but it must not pick a winner between Pi and Claude on its own.
-
 Round flow:
 
-1. send Pi's dispute/defer rationale to Claude
-2. Claude either agrees with Pi or still disagrees
-3. if Claude still disagrees, send Claude's response back to Pi
-4. Pi either accepts and requests a fix turn, or still disagrees
-5. repeat until agreement or `max_debate_rounds_per_disagreement`
+1. Send Pi's rationale to `agent-reviewer`.
+2. The reviewer agrees or explains the remaining disagreement.
+3. If disagreement remains, send the response back to Pi.
+4. Pi accepts and requests a fix, or explains why it still disagrees.
+5. Repeat until agreement or the configured limit.
 
-If agreement happens:
-
-- Claude agrees with Pi: no code change is required for that finding; continue to the next debate/finding/step
-- Pi accepts Claude's concern: send a fix turn, commit it as `Step N fix M`, then send the fix commit back to Claude for review
-
-If still unresolved after the round limit, pause for operator arbitration. After the operator decides:
-
-- if a fix is needed, continue with an explicit instruction so Pi can implement it and `/autowork` can commit/re-review it
-- if the finding is rejected or deferred, keep the rationale in the disagreement file and continue only with explicit operator approval
-
-The `debates/` directory stores disagreement records and per-round responses.
+`/autowork` facilitates the exchange but never picks a winner. After an operator decision, continue only with explicit approval. Keep rejected/deferred rationale in the debate file.

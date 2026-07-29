@@ -74,7 +74,7 @@ Pattern: rule content lives in `~/.dots/.ai/rules/<project>.md`; each project ch
 When a mistake or new guidance needs a home, route it to the narrowest mechanism that fixes it:
 
 1. **Hook** — if it is mechanically checkable (strongest: cannot be forgotten).
-2. **Skill / skill reference** — if it only matters inside one workflow (e.g. review lessons → `claude-super-review/references/past-findings.md`).
+2. **Skill / skill reference** — if it only matters inside one workflow (e.g. review lessons → `super-review/references/past-findings.md`).
 3. **Project rules** (`.ai/rules/<project>.md`) — if project-specific.
 4. **Always-loaded global rules** — last resort, only for cross-cutting hard constraints; include the why.
 
@@ -82,4 +82,4 @@ Do not add global rules for situations a skill or hook already covers. Keep alwa
 
 ## Big skills use progressive disclosure
 
-`claude-super-review` and `autowork` keep a short `SKILL.md` spine plus `references/*.md` files read only at the phase that needs them. Follow the same pattern for any skill whose SKILL.md grows past ~200 lines.
+`super-review` and `autowork` keep a short `SKILL.md` spine plus `references/*.md` files read only at the phase that needs them. Follow the same pattern for any skill whose SKILL.md grows past ~200 lines.

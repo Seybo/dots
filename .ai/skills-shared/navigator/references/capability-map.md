@@ -9,7 +9,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 
 ## GitHub / PRs / code review
 
-- `/skill:claude-super-review` — default deep code-review workflow for PRs, branches, diffs, and uncommitted changes.
+- `/skill:super-review` — default deep code-review workflow for PRs, branches, diffs, and uncommitted changes.
 - `/skill:claude-super-fix` — verify and apply real, in-scope fixes from a saved super-review report.
 - `/skill:addressit` — interactively fetch and address GitHub PR review comments one at a time.
 - `/skill:delete-merged-branches` — delete local git branches that were merged and removed from remote.
@@ -23,7 +23,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `/skill:draftit` — save selected conversation context into a draft task folder.
 - `/skill:workit` — start work from an existing task folder.
 - `/skill:sumit` — summarize a task file into PR-description text with reviewer gotchas and copy it to the clipboard.
-- `/skill:autowork` — orchestrate an existing task plan across Pi and Claude panes, with commits, reviews, checks, and bounded fixes.
+- `/skill:autowork` — orchestrate an existing task plan across agent-manager, agent-worker, and agent-reviewer panes, with selectable Claude/Codex review.
 
 ## Local dev environment / dotfiles
 

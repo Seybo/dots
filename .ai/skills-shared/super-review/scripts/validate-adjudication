@@ -1,0 +1,214 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require 'optparse'
+
+module SuperReview
+  # Validates structured Phase 2 decisions and computes the deterministic synthesis gate.
+  # rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity
+  # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
+  class AdjudicationValidator
+    SOURCE_GROUPS = %w[panel independent].freeze
+    DECISIONS = %w[AGREE DISAGREE NEEDS_CONTEXT].freeze
+    CANDIDATE_SEVERITIES = %w[CRITICAL HIGH MEDIUM].freeze
+    REACHABILITY_SOURCES = %w[
+      task_contract vendor_contract existing_untouched_code reproduction schema_invariant
+    ].freeze
+    AGREE_FIELDS = %w[trigger mechanism reachability_source evidence].freeze
+
+    def initialize(candidates_path:, adjudication_paths:)
+      @candidates_path = candidates_path
+      @adjudication_paths = adjudication_paths
+    end
+
+    def validate
+      errors = []
+      candidates = load_candidates(errors)
+      decisions_by_group = load_adjudications(errors)
+      validate_coverage(candidates, decisions_by_group, errors)
+      return { 'valid' => false, 'errors' => errors } unless errors.empty?
+
+      build_summary(candidates, decisions_by_group)
+    end
+
+    private
+
+    def load_json(path, errors)
+      JSON.parse(File.read(path))
+    rescue Errno::ENOENT
+      errors << "missing file: #{path}"
+      nil
+    rescue JSON::ParserError => e
+      errors << "invalid JSON at #{path}: #{e.message}"
+      nil
+    end
+
+    def load_candidates(errors)
+      data = load_json(@candidates_path, errors)
+      return [] unless data
+
+      rows = data['candidates']
+      unless rows.is_a?(Array)
+        errors << 'candidates must be an array'
+        return []
+      end
+
+      seen_ids = {}
+      rows.each_with_index do |candidate, index|
+        unless candidate.is_a?(Hash)
+          errors << "candidates[#{index}] must be an object"
+          next
+        end
+        %w[id source_group claim severity trigger].each do |key|
+          validate_string(candidate, key, "candidates[#{index}]", errors)
+        end
+        unless SOURCE_GROUPS.include?(candidate['source_group'])
+          errors << "candidates[#{index}].source_group is invalid"
+        end
+        errors << "candidates[#{index}].severity is invalid" unless CANDIDATE_SEVERITIES.include?(candidate['severity'])
+        id = candidate['id']
+        errors << "duplicate candidate id: #{id}" if id.is_a?(String) && seen_ids[id]
+        seen_ids[id] = true if id.is_a?(String)
+      end
+      rows
+    end
+
+    def load_adjudications(errors)
+      decisions_by_group = {}
+      @adjudication_paths.each do |path|
+        data = load_json(path, errors)
+        next unless data
+
+        group = data['source_group']
+        unless SOURCE_GROUPS.include?(group)
+          errors << "invalid source_group at #{path}"
+          next
+        end
+        if decisions_by_group.key?(group)
+          errors << "duplicate adjudication for source_group #{group}"
+          next
+        end
+
+        decisions = data['decisions']
+        unless decisions.is_a?(Array)
+          errors << "decisions must be an array at #{path}"
+          next
+        end
+        validate_decisions(decisions, group, errors)
+        decisions_by_group[group] = decisions
+      end
+      decisions_by_group
+    end
+
+    def validate_decisions(decisions, group, errors)
+      seen_ids = {}
+      decisions.each_with_index do |decision, index|
+        prefix = "#{group}.decisions[#{index}]"
+        unless decision.is_a?(Hash)
+          errors << "#{prefix} must be an object"
+          next
+        end
+        %w[id decision rationale].each { |key| validate_string(decision, key, prefix, errors) }
+        errors << "#{prefix}.decision is invalid" unless DECISIONS.include?(decision['decision'])
+        id = decision['id']
+        errors << "duplicate decision id in #{group}: #{id}" if id.is_a?(String) && seen_ids[id]
+        seen_ids[id] = true if id.is_a?(String)
+        validate_agree(decision, prefix, errors) if decision['decision'] == 'AGREE'
+        validate_string(decision, 'missing_evidence', prefix, errors) if decision['decision'] == 'NEEDS_CONTEXT'
+      end
+    end
+
+    def validate_agree(decision, prefix, errors)
+      AGREE_FIELDS.each { |key| validate_string(decision, key, prefix, errors) }
+      source = decision['reachability_source']
+      return unless source.is_a?(String) && !source.empty?
+
+      return if REACHABILITY_SOURCES.include?(source)
+
+      errors << "#{prefix}.reachability_source must be one of #{REACHABILITY_SOURCES.join(', ')}"
+    end
+
+    def validate_coverage(candidates, decisions_by_group, errors)
+      SOURCE_GROUPS.each do |group|
+        expected_ids = candidates.select { |row| row['source_group'] == group }.map { |row| row['id'] }
+        decisions = decisions_by_group[group]
+        if expected_ids.any? && decisions.nil?
+          errors << "missing adjudication for source_group #{group}"
+          next
+        end
+        next unless decisions
+
+        actual_ids = decisions.map { |row| row['id'] }
+        (expected_ids - actual_ids).each { |id| errors << "missing decision for candidate #{id}" }
+        (actual_ids - expected_ids).each { |id| errors << "unknown decision candidate #{id}" }
+      end
+    end
+
+    def validate_string(object, key, prefix, errors)
+      value = object[key]
+      errors << "#{prefix}.#{key} must be a non-empty string" unless value.is_a?(String) && !value.strip.empty?
+    end
+
+    def build_summary(candidates, decisions_by_group)
+      groups = SOURCE_GROUPS.to_h do |group|
+        decisions = decisions_by_group.fetch(group, [])
+        agree_count = decisions.count { |row| row['decision'] == 'AGREE' }
+        total_count = decisions.count
+        ratio = total_count.zero? ? 0.0 : agree_count.fdiv(total_count)
+        [group, {
+          'candidate_count' => total_count,
+          'agree_count' => agree_count,
+          'agreement_ratio' => ratio.round(4),
+          'is_degenerate' => ratio > 0.7
+        }]
+      end
+      is_degenerate = groups.values.any? { |group| group['is_degenerate'] }
+      all_decisions = decisions_by_group.values.flatten
+      needs_context_ids = all_decisions.filter_map { |row| row['id'] if row['decision'] == 'NEEDS_CONTEXT' }
+      agree_ids = all_decisions.filter_map { |row| row['id'] if row['decision'] == 'AGREE' }
+      manual_ids = is_degenerate ? (agree_ids + needs_context_ids).uniq : needs_context_ids
+
+      {
+        'valid' => true,
+        'candidate_count' => candidates.count,
+        'groups' => groups,
+        'is_degenerate' => is_degenerate,
+        'requires_manual_verification' => is_degenerate || needs_context_ids.any?,
+        'actionable_candidate_ids' => is_degenerate ? [] : agree_ids,
+        'manual_verification_candidate_ids' => manual_ids
+      }
+    end
+  end
+  # rubocop:enable Metrics/MethodLength, Metrics/PerceivedComplexity
+  # rubocop:enable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity
+end
+
+if $PROGRAM_NAME == __FILE__
+  options = { adjudication_paths: [] }
+  parser = OptionParser.new do |config|
+    config.banner = [
+      'Usage: validate-adjudication --candidates FILE',
+      '--adjudication FILE --adjudication FILE --output FILE'
+    ].join(' ')
+    config.on('--candidates FILE') { |value| options[:candidates_path] = value }
+    config.on('--adjudication FILE') { |value| options[:adjudication_paths] << value }
+    config.on('--output FILE') { |value| options[:output_path] = value }
+  end
+  parser.parse!
+
+  abort parser.banner unless options[:candidates_path] && options[:output_path]
+
+  result = SuperReview::AdjudicationValidator.new(
+    candidates_path: options[:candidates_path],
+    adjudication_paths: options[:adjudication_paths]
+  ).validate
+
+  unless result['valid']
+    warn result.fetch('errors').join("\n")
+    exit 1
+  end
+
+  File.write(options[:output_path], "#{JSON.pretty_generate(result)}\n")
+  puts options[:output_path]
+end

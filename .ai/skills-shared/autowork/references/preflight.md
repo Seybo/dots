@@ -4,7 +4,7 @@ Read this file when starting or QA-ing a run (before the Ruby helper launches).
 
 ## Doctor command
 
-`/autowork doctor` is abstract environment health, not task QA. It does not take a project or task id. When panes are healthy, it sends one harmless "no action required" line to `pi-worker` and `claude-worker` so pane delivery is QA'd without repeating a second command. It may run on a dirty worktree and should report dirty/clean status instead of failing. It does not touch git state or repo files.
+`/autowork doctor` is abstract environment health, not task QA. It does not take a project or task id. When panes are healthy, it sends one harmless "no action required" line to `agent-worker` and `agent-reviewer` so pane delivery is QA'd without repeating a second command. It may run on a dirty worktree and should report dirty/clean status instead of failing. It does not touch git state or repo files.
 
 `/autowork doctor --no-send-test` keeps doctor fully read-only and skips the harmless tmux delivery test.
 
@@ -17,15 +17,15 @@ Doctor should report:
 - current branch
 - worktree clean/dirty status
 - current tmux window pane-title discovery for exact titles:
-  - `pi-manager`
-  - `pi-worker`
-  - `claude-worker`
+  - `agent-manager`
+  - `agent-worker`
+  - `agent-reviewer`
 - pane IDs for each role
 - whether all panes resolve to the same git root as the current repo
 - status JSON validator health using a sample object
 - prompt-delivery readiness
 
-Doctor output should be human-readable and clear enough that the user can QA the shell/tmux environment from the `pi-manager` prompt.
+Doctor output should be human-readable and clear enough that the user can QA the shell/tmux environment from the `agent-manager` prompt.
 
 ## Task resolution
 
@@ -41,7 +41,7 @@ When starting a new autowork run (no `autowork-log/config.yml` and `state.json`)
 
 ## Preflight before running the Ruby helper
 
-1. resolve the same `<project-or-session> [task_id] [full-base-branch-or-ref]` arguments that `/autowork` will pass to the helper
+1. resolve the same `<project-or-session> [task_id] [full-base-branch-or-ref]` arguments that `/autowork` will pass to the helper; treat `--retry` and `--super-review <agent>` as Autowork-only flags and never pass them to `/workit`
 2. if a full base branch/ref was supplied, preserve it exactly; do not infer it from a numeric task/story ID
 3. if `<task_folder>/steps.md` is missing, a base branch/ref was supplied, or branch setup/verification is needed, invoke `/workit ... create-steps-only` before the Ruby helper:
    ```text

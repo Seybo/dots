@@ -18,19 +18,19 @@ Create all orchestration files under the task folder:
   prompts/
     step1_pi_implement_request.md
     step1_pi_blind_audit_request.md
-    step1_claude_review1_request.md
+    step1_reviewer_review1_request.md
     step1_pi_fix1_request.md
-    step1_debate_D1_round1_claude_request.md
+    step1_debate_D1_round1_reviewer_request.md
     step1_debate_D1_round1_pi_request.md
     final_super_review1_request.md
     final_pi_review1_request.md
     super_review_pi_fix1_request.md
-    super_review_claude_fix_review1_request.md
+    super_review_fix_reviewer_review1_request.md
 
   reviews/
     step1_pi_blind_audit_result.md
-    step1_claude_review1_result.md
-    step1_claude_review2_result.md
+    step1_reviewer_review1_result.md
+    step1_reviewer_review2_result.md
 
   debates/
     step1_debates.md
@@ -42,7 +42,7 @@ Create all orchestration files under the task folder:
 
   super_fixes/
     super_review_pi_fix1_result.md
-    super_review_claude_fix_review1_result.md
+    super_review_fix_reviewer_review1_result.md
 
   manager_reviews/
     manager_review1.md
@@ -50,23 +50,24 @@ Create all orchestration files under the task folder:
 
   manager_fixes/
     manager_review_pi_fix1_result.md
-    manager_review_claude_fix_review1_result.md
+    manager_review_fix_reviewer_review1_result.md
 
   status/
     step1_pi_implement_status.json
     step1_pi_audit_status.json
-    step1_claude_review1_status.json
+    step1_codex_review1_status.json
     step1_pi_fix1_status.json
-    step0_claude_super_review1_status.json
+    step0_codex_super_review1_status.json
     step0_pi_final_review1_status.json
     step0_pi_super_fix1_status.json
-    step0_claude_super_fix_review1_status.json
+    step0_codex_super_fix_review1_status.json
     step0_pi_manager_fix1_status.json
-    step0_claude_manager_fix_review1_status.json
+    step0_codex_manager_fix_review1_status.json
 
   final_checks.md
   review-risk-manifest.json
   super-review.md
+  super-review-adjudication1.json
   pi-final-review.md
   manager_review.md
   final_summary.md
@@ -74,16 +75,18 @@ Create all orchestration files under the task folder:
 
 `autowork-log/` lives only in the task folder and should not be committed to the feature repo.
 
+Reviewer prompt/result artifact names are provider-neutral. Runs created before this naming change may retain `claude` in existing prompt/result filenames; the helper continues to honor those paths so interrupted runs can resume safely. Status filenames remain agent-specific and use the configured reviewer (`codex` by default).
+
 ## Tmux model
 
 The user manually starts visible terminal agents in the same tmux window.
 
-`/autowork` runs from the `pi-manager` pane and uses the current tmux window. That window must have exactly one pane with each exact title:
+`/autowork` runs from the `agent-manager` pane and uses the current tmux window. That window must have exactly one pane with each exact title:
 
 ```text
-pi-manager
-pi-worker
-claude-worker
+agent-manager
+agent-worker
+agent-reviewer
 ```
 
 Initial discovery uses the current tmux window:
@@ -95,19 +98,19 @@ tmux list-panes -F '#{pane_index} #{pane_id} "#{pane_title}"'
 Discovery rules:
 
 - current tmux window is the task workspace
-- find exact pane title `pi-manager`; this should be the current/orchestrator pane
-- find exact pane title `pi-worker`; send implementation/fix prompts here
-- find exact pane title `claude-worker`; send review/debate prompts here
+- find exact pane title `agent-manager`; this should be the current/orchestrator pane
+- find exact pane title `agent-worker`; send implementation/fix prompts here
+- find exact pane title `agent-reviewer`; send review/debate prompts here
 - if any title is missing or duplicated, stop and ask the user to fix pane titles
-- verify `pi-manager`, `pi-worker`, and `claude-worker` panes resolve to the same git root
-- store pane IDs in `config.yml`
+- verify `agent-manager`, `agent-worker`, and `agent-reviewer` panes resolve to the same git root
+- store pane IDs as `agent_manager_target`, `agent_worker_target`, and `agent_reviewer_target` in `config.yml`
+- store `super_review_agent` as `codex` (default) or `claude`; `agent-reviewer` must run that selected software
 
 Resume rule:
 
-- assume tmux state did not change
-- verify stored pane IDs still exist
-- do not rediscover by title on resume
-- if any pane ID is gone, pause and ask the user to restore panes or restart cleanly
+- normal `/autowork` keeps the stored pane targets and waits for the current worker result
+- `/autowork --retry` means the operator confirms workers are no longer running; rediscover exact pane titles in the current window, verify their git roots, and update stored targets before resending the interrupted stage
+- if a required title is missing or duplicated, stop and ask the user to fix pane titles
 
 ## Prompt delivery
 
@@ -116,9 +119,9 @@ Resume rule:
 Prompt submission must use the helper's tested literal-text path with a short configurable delay before Enter:
 
 ```sh
-tmux send-keys -t "$claude_target" -l "Please read and follow: <prompt_file>"
+tmux send-keys -t "$reviewer_target" -l "Please read and follow: <prompt_file>"
 sleep "${AUTOWORK_SEND_SUBMIT_DELAY_SECONDS:-0.2}"
-tmux send-keys -t "$claude_target" Enter
+tmux send-keys -t "$reviewer_target" Enter
 ```
 
 Do not paste large prompt bodies into tmux panes. Do not bypass `Tmux#send_prompt` for manager fixes; `autowork manager-review-fix` owns delivery, status waits, commits, checks, and reviews.
@@ -145,7 +148,7 @@ Required fields:
 }
 ```
 
-Allowed statuses: `done`, `needs_user`, `failed`. Allowed agents: `pi`, `claude`.
+Allowed statuses: `done`, `needs_user`, `failed`. Allowed agents: `pi`, `claude`, `codex`. Reviewer status filenames and the JSON `agent` value use the configured `super_review_agent`.
 
 Common phases:
 
@@ -171,7 +174,7 @@ If an agent needs user input, it writes:
 ```json
 {
   "status": "needs_user",
-  "agent": "claude",
+  "agent": "codex",
   "phase": "review",
   "step": 1,
   "summary": "Need product decision",
@@ -193,24 +196,20 @@ While the manager waits for a worker status file, it prints the current stage in
 
 For step-scoped stages, the banner also includes the current plan heading, for example `[PI WORKER IMPLEMENTATION — Step 1: Build the parser]`.
 
-The human-readable stage names map from the internal `waiting_for_*` phase and worker role:
+The human-readable stage names map from the internal phase and selected agent. Reviewer stages are labeled `CLAUDE ...` or `CODEX ...` accordingly:
 
-- `pi:implement` — `PI WORKER IMPLEMENTATION`
-- `claude:review` — `CLAUDE STEP REVIEW`
-- `pi:classify` — `PI FINDING CLASSIFICATION`
-- `pi:fix` — `PI STEP FIX`
-- `claude:debate` / `pi:debate` — `CLAUDE DEBATE` / `PI DEBATE`
-- `claude:final_checks` / `pi:final_checks` — `CLAUDE FINAL-CHECK REVIEW` / `PI FINAL-CHECK FIX`
-- `claude:super_review` — `CLAUDE FINAL SUPER-REVIEW`
-- `pi:final_review` — `PI FINAL REVIEW`
-- `pi:super_fix` / `claude:super_fix_review` — `PI SUPER-REVIEW FIX` / `CLAUDE SUPER-REVIEW FIX REVIEW`
-- `pi:manager_fix` / `claude:manager_fix_review` — `PI MANAGER FIX` / `CLAUDE MANAGER-FIX REVIEW`
+- implementation/audit/classification/fix stages — `PI ...`
+- step review/debate — `<CLAUDE|CODEX> STEP REVIEW` / `<CLAUDE|CODEX> DEBATE`
+- final-check review — `<CLAUDE|CODEX> FINAL-CHECK REVIEW`
+- final super-review — `<CLAUDE|CODEX> FINAL SUPER-REVIEW`
+- scoped super-review/manager-fix reviews — `<CLAUDE|CODEX> ... REVIEW`
+- final Pi review and code-changing fixes — `PI ...`
 
 ## Waiting, worker timeout, pause, resume
 
 Foreground wait model:
 
-1. send prompt to Pi or Claude pane
+1. send the prompt to `agent-worker` or `agent-reviewer`
 2. wait up to the worker status timeout for expected status JSON
 3. if status arrives, continue
 4. if the worker status timeout expires, stop cleanly and report the current waiting phase and expected status path
@@ -220,7 +219,7 @@ Foreground wait model:
 Timeout model:
 
 - `/autowork` should not have a meaningful manager timeout. The manager process should not be killed by a short shell/tool timeout during normal operation.
-- Timeouts belong to worker waits: `pi-worker` / `claude-worker` must write expected status JSON within `worker_status_timeout_minutes`.
+- Timeouts belong to worker waits: `agent-worker` / `agent-reviewer` must write expected status JSON within `worker_status_timeout_minutes`.
 - If invoking the Ruby helper through a shell tool, do not set a short timeout on the manager command. Prefer no outer timeout. If the tool requires one, use a long safety cap that comfortably exceeds the expected whole run; never use the worker status timeout as the manager command timeout.
 - If an outer shell/tool timeout is unavoidable, it must be longer than the expected whole manager run. It is a safety cap, not part of autowork's protocol.
 
@@ -229,7 +228,8 @@ Important resume UX:
 - Rerunning `/autowork` is not a read-only status check. It may continue the state machine immediately and can stage/commit if the worker finished while the manager process was not running.
 - If the manager process was killed by an outer shell/tool timeout, do not rerun `/autowork` automatically. The previous request no longer counts as approval to resume. Read-only inspection is OK; rerun only after the operator gives a fresh explicit continue/resume instruction.
 - Use `autowork status <task_folder>` or read `autowork-log/state.json` for safe inspection.
-- Do not auto-resend an in-flight prompt on resume. Resume by checking whether the expected status file now exists.
+- Plain `/autowork` does not resend an in-flight prompt; it waits for the current status file.
+- `/autowork --retry` explicitly abandons that wait and resends the current `waiting_for_*` stage. Prompt generation deletes that attempt's expected status file or allocates a new numbered attempt path before sending. It requires the operator to have stopped the workers first.
 
 Manual pause:
 
@@ -243,7 +243,7 @@ Safe checkpoints include:
 
 - before sending a prompt
 - after Pi status, before commit
-- after commit, before Claude review
-- after Claude review, before Pi fixes
+- after commit, before reviewer pass
+- after reviewer pass, before Pi fixes
 - between debate rounds
 - before final checks

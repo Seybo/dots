@@ -1,8 +1,8 @@
-# Phase 1 — model assignment, subagent prompts, Codex pass
+# Phase 1 — reviewer prompts and agent-specific launch
 
 Read this file when composing Phase 1. Every prompt below gets the full HARD RULES BLOCK from `references/hard-rules.md` pasted where marked.
 
-## Model assignment (MANDATORY)
+## Claude mode model assignment (MANDATORY)
 
 Pass `model` explicitly in EVERY Task call. Without an explicit `model`, the subagent inherits the main session's model - which can be 2-3x more expensive (e.g. Fable 5 at $10/$50 per MTok vs Opus 4.8 at $5/$25 and Sonnet 4.6 at $3/$15), and the review cost becomes uncontrolled.
 
@@ -16,11 +16,42 @@ Pass `model` explicitly in EVERY Task call. Without an explicit `model`, the sub
 | Phase 2 Call A (Claude reviews Codex) | `"opus"` | Adjudication: the power to kill findings - a wrong DISAGREE costs more than the tokens saved |
 | Codex | `gpt-5.6-sol` (CLI `-m`, reasoning effort `high`) | Cross-vendor diversity; fallback `gpt-5.4` at `high` |
 
-The layout is locked by Sasha 2026-06-09; Architecture role added 2026-07-10 by replacing one generic reviewer while preserving the Sonnet slot. Do not change it without his decision.
+The Claude layout is locked by Sasha 2026-06-09; Architecture role added 2026-07-10 by replacing one generic reviewer while preserving the Sonnet slot. Do not change Claude-mode assignments without his decision.
 
 Do NOT use Haiku in any role: the loss of depth on subtle bugs destroys the pipeline's value, plus the 200K context may not fit a large PR + files.
 
-Logic of the mixed panel: Opus sits where maximum depth is needed (2 generic + Security + adjudication), Sonnet where the prompt does the heavy lifting (Architecture + Deployment) and where a second model adds diversity (1 generic). Two identical models share common blind spots, so Opus+Sonnet convergence is a stronger signal than two runs of one model; the same principle as the cross-vendor signal from Codex.
+Logic of the mixed Claude panel: Opus sits where maximum depth is needed (2 generic + Security + adjudication), Sonnet where the prompt does the heavy lifting (Architecture + Deployment) and where a second model adds diversity (1 generic). Two identical models share common blind spots, so Opus+Sonnet convergence is a stronger signal than two runs of one model; the same principle as the cross-vendor signal from Codex.
+
+## Codex mode launch (MANDATORY)
+
+Codex mode runs all seven Phase 1 roles as isolated Pi subprocesses using `openai-codex/gpt-5.6-terra` with high reasoning:
+
+1. Generic 1
+2. Generic 2
+3. Generic 3
+4. Architecture
+5. Security
+6. Deployment
+7. Independent generic reviewer (use the Codex prompt at the end of this file)
+
+Write each fully rendered prompt to its own file under one temporary prompt directory. Launch all seven in one command so they start before any wait:
+
+```bash
+~/.ai/skills-shared/super-review/scripts/run-pi-reviewers \
+  --cwd "$WORKTREE_DIR" \
+  --output-dir "$OUTPUT_DIR/phase1" \
+  --model gpt-5.6-terra \
+  --thinking high \
+  "$PROMPT_DIR/generic1.md" \
+  "$PROMPT_DIR/generic2.md" \
+  "$PROMPT_DIR/generic3.md" \
+  "$PROMPT_DIR/architecture.md" \
+  "$PROMPT_DIR/security.md" \
+  "$PROMPT_DIR/deployment.md" \
+  "$PROMPT_DIR/independent.md"
+```
+
+The runner starts seven independent Pi processes before waiting. Do not replace this with sequential tool calls or Codex CLI native subagents. Treat a missing/empty output or non-zero child exit as a failed reviewer and report the sanitized failure.
 
 ## Subagents 1-3: Generic adversarial reviewers
 
@@ -181,7 +212,11 @@ PR context: <paste>
 Process as in generic prompt.
 ```
 
-## Codex pass (parallel with subagents)
+## Independent generic reviewer
+
+Use the prompt below for the seventh reviewer in both modes.
+
+### Claude mode launch
 
 In parallel with the 6 Claude subagents, launch Codex from the worktree directory:
 
@@ -203,7 +238,7 @@ The prompt already tells Codex to read `/tmp/pr<num>.diff` and open files in the
 
 Run in the background so the main agent isn't blocked waiting on Codex.
 
-Codex prompt:
+Independent generic prompt:
 ```
 You are an independent senior reviewer providing a second opinion.
 

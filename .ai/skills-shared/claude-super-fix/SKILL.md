@@ -1,7 +1,7 @@
 ---
 name: claude-super-fix
 description: >-
-  Command-only companion to claude-super-review. In Pi, use /skill:claude-super-fix
+  Command-only companion to super-review. In Pi, use /skill:claude-super-fix
   to verify and address findings from a saved super-review.md report or pasted
   external review feedback; /claude-super-fix is also accepted where that alias
   is exposed. Applies only real, in-scope fixes; rejects noise and scope creep;
@@ -11,7 +11,7 @@ disable-model-invocation: true
 
 # claude-super-fix
 
-Companion skill for `/claude-super-review`.
+Companion skill for `/super-review`.
 
 Use this only when the user explicitly invokes either the Pi form:
 
@@ -33,7 +33,7 @@ Treat every finding as a claim to verify, not an instruction to obey. Apply only
 
 Preferred input:
 
-1. The saved `/claude-super-review` report:
+1. The saved `/super-review` report:
    - task-folder `super-review.md`, when known
    - repo-root `super-review.md`, when no task folder is known
    - explicit path passed by the user
@@ -78,9 +78,9 @@ Split the review into distinct findings. For each finding, classify it as exactl
 
 Verify each non-trivial claim against code, tests, docs, and the PR diff before editing. Prefer source evidence over reviewer severity. A `HIGH` label from a reviewer is still only a claim.
 
-### 3. Respect `/claude-super-review` report structure
+### 3. Respect `/super-review` report structure
 
-`/claude-super-review` can produce:
+`/super-review` can produce:
 
 - High-confidence findings.
 - Single-agent specialist findings.
@@ -99,7 +99,7 @@ Handle them as follows:
 
 ### 4. Architecture findings
 
-Architecture findings from `/claude-super-review` are expected and valid review material. They still need source verification.
+Architecture findings from `/super-review` are expected and valid review material. They still need source verification.
 
 Fix now when:
 

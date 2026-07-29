@@ -77,7 +77,7 @@ RSpec.describe Autowork do
       session: 'work',
       window_id: '@1',
       window_name: 'agents',
-      active: title == 'pi-manager',
+      active: title == 'agent-manager',
       command: 'zsh',
       title: title,
       path: path
@@ -86,10 +86,30 @@ RSpec.describe Autowork do
 
   def role_panes(repo)
     Autowork::RolePanes.new(
-      manager: pane(id: '%1', title: 'pi-manager', path: repo),
-      pi_worker: pane(id: '%2', title: 'pi-worker', path: repo),
-      claude_worker: pane(id: '%3', title: 'claude-worker', path: repo)
+      manager: pane(id: '%1', title: 'agent-manager', path: repo),
+      worker: pane(id: '%2', title: 'agent-worker', path: repo),
+      reviewer: pane(id: '%3', title: 'agent-reviewer', path: repo)
     )
+  end
+
+  describe Autowork::RunFiles do
+    it 'uses provider-neutral names for new reviewer artifacts' do
+      files = described_class.new(File.join(@tmpdir, 'task'))
+
+      expect(files.review_path(1, 2)).to end_with('reviews/step1_reviewer_review2_result.md')
+      expect(files.debate_reviewer_result_path(1, 'B1', 2)).to end_with('debates/step1_debate_B1_round2_reviewer_result.md')
+      expect(files.final_check_review_path(2)).to end_with('reviews/final_checks_reviewer_review2_result.md')
+      expect(files.super_fix_review_path(2)).to end_with('super_fixes/super_review_fix_reviewer_review2_result.md')
+      expect(files.manager_fix_review_path(2)).to end_with('manager_fixes/manager_review_fix_reviewer_review2_result.md')
+    end
+
+    it 'keeps the legacy result path when an older reviewer prompt already exists' do
+      files = described_class.new(File.join(@tmpdir, 'task'))
+      files.mkdirs
+      File.write(files.prompt_path('super_review_claude_fix_review2_request.md'), "legacy prompt\n")
+
+      expect(files.super_fix_review_path(2)).to end_with('super_fixes/super_review_claude_fix_review2_result.md')
+    end
   end
 
   describe Autowork::TaskRepoSnapshot do
@@ -374,6 +394,81 @@ RSpec.describe Autowork do
       expect(result).to be_valid
     end
 
+    it 'accepts Codex reviewer status' do
+      result = validator.validate_hash(
+        {
+          'status' => 'done',
+          'agent' => 'codex',
+          'phase' => 'super_review',
+          'step' => 0,
+          'summary' => 'review complete',
+          'findings' => [],
+          'adjudication' => {
+            'panel_agreement_ratio' => 0.5,
+            'independent_agreement_ratio' => 0.5,
+            'is_degenerate' => false,
+            'requires_manual_verification' => false
+          }
+        }
+      )
+
+      expect(result).to be_valid
+    end
+
+    it 'rejects completed super-review findings without reachability evidence' do
+      result = validator.validate_hash(
+        {
+          'status' => 'done',
+          'agent' => 'codex',
+          'phase' => 'super_review',
+          'step' => 0,
+          'summary' => 'review complete',
+          'findings' => [
+            { 'id' => 'SR1', 'severity' => 'BLOCKER', 'title' => 'Bug', 'body' => 'Broken' }
+          ],
+          'adjudication' => {
+            'panel_agreement_ratio' => 0.5,
+            'independent_agreement_ratio' => 0.5,
+            'is_degenerate' => false,
+            'requires_manual_verification' => false
+          }
+        }
+      )
+
+      expect(result).not_to be_valid
+      expect(result.errors).to include(
+        'findings[0].trigger must be a non-empty string for completed super_review',
+        'findings[0].mechanism must be a non-empty string for completed super_review',
+        'findings[0].reachability_source must be a non-empty string for completed super_review',
+        'findings[0].evidence must be a non-empty string for completed super_review'
+      )
+    end
+
+    it 'rejects a completed super-review with a degenerate adjudicator' do
+      result = validator.validate_hash(
+        {
+          'status' => 'done',
+          'agent' => 'codex',
+          'phase' => 'super_review',
+          'step' => 0,
+          'summary' => 'review complete',
+          'findings' => [],
+          'adjudication' => {
+            'panel_agreement_ratio' => 0.8,
+            'independent_agreement_ratio' => 1.0,
+            'is_degenerate' => true,
+            'requires_manual_verification' => true
+          }
+        }
+      )
+
+      expect(result).not_to be_valid
+      expect(result.errors).to include(
+        'completed super_review cannot use degenerate adjudication',
+        'completed super_review cannot require manual verification; use needs_user'
+      )
+    end
+
     it 'rejects missing required fields' do
       result = validator.validate_hash({ 'status' => 'done' })
 
@@ -656,18 +751,18 @@ RSpec.describe Autowork do
       tmux = described_class.new
       repo_root = make_git_repo
       panes = [
-        pane(id: '%1', title: 'pi-manager', path: repo_root),
-        pane(id: '%2', title: 'pi-worker', path: repo_root),
-        pane(id: '%3', title: 'claude-worker', path: repo_root)
+        pane(id: '%1', title: 'agent-manager', path: repo_root),
+        pane(id: '%2', title: 'agent-worker', path: repo_root),
+        pane(id: '%3', title: 'agent-reviewer', path: repo_root)
       ]
 
       allow(tmux).to receive(:panes).and_return(panes)
 
       roles = tmux.discover_roles(repo_root)
 
-      expect(roles.manager.title).to eq('pi-manager')
-      expect(roles.pi_worker.title).to eq('pi-worker')
-      expect(roles.claude_worker.title).to eq('claude-worker')
+      expect(roles.manager.title).to eq('agent-manager')
+      expect(roles.worker.title).to eq('agent-worker')
+      expect(roles.reviewer.title).to eq('agent-reviewer')
     end
 
     it 'submits prompt text literally, then sends Enter separately' do
@@ -689,30 +784,30 @@ RSpec.describe Autowork do
       tmux = described_class.new
       repo_root = make_git_repo
       panes = [
-        pane(id: '%1', title: 'pi-manager', path: repo_root),
-        pane(id: '%2', title: 'pi-worker', path: repo_root)
+        pane(id: '%1', title: 'agent-manager', path: repo_root),
+        pane(id: '%2', title: 'agent-worker', path: repo_root)
       ]
 
       allow(tmux).to receive(:panes).and_return(panes)
 
       expect { tmux.discover_roles(repo_root) }
-        .to raise_error(Autowork::Error, /No tmux pane titled "claude-worker"/)
+        .to raise_error(Autowork::Error, /No tmux pane titled "agent-reviewer"/)
     end
 
     it 'rejects duplicate exact pane titles' do
       tmux = described_class.new
       repo_root = make_git_repo
       panes = [
-        pane(id: '%1', title: 'pi-manager', path: repo_root),
-        pane(id: '%2', title: 'pi-worker', path: repo_root),
-        pane(id: '%3', title: 'claude-worker', path: repo_root),
-        pane(id: '%4', title: 'claude-worker', path: repo_root)
+        pane(id: '%1', title: 'agent-manager', path: repo_root),
+        pane(id: '%2', title: 'agent-worker', path: repo_root),
+        pane(id: '%3', title: 'agent-reviewer', path: repo_root),
+        pane(id: '%4', title: 'agent-reviewer', path: repo_root)
       ]
 
       allow(tmux).to receive(:panes).and_return(panes)
 
       expect { tmux.discover_roles(repo_root) }
-        .to raise_error(Autowork::Error, /Multiple tmux panes titled "claude-worker"/)
+        .to raise_error(Autowork::Error, /Multiple tmux panes titled "agent-reviewer"/)
     end
   end
 
@@ -756,7 +851,7 @@ RSpec.describe Autowork do
         .to raise_error(Autowork::Error, /protected branch "master"/)
     end
 
-    it 'creates config, state, and the first pi-worker prompt for a clean run' do
+    it 'creates config, state, and the first agent-worker prompt for a clean run' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
       tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
@@ -772,14 +867,15 @@ RSpec.describe Autowork do
       state = JSON.parse(File.read(files.state_path))
       prompt = File.read(files.prompt_path('step1_pi_implement_request.md'))
 
-      expect(config['pi_manager_target']).to eq('%1')
-      expect(config['pi_worker_target']).to eq('%2')
-      expect(config['claude_worker_target']).to eq('%3')
+      expect(config['agent_manager_target']).to eq('%1')
+      expect(config['agent_worker_target']).to eq('%2')
+      expect(config['agent_reviewer_target']).to eq('%3')
       expect(config['branch_name']).not_to be_empty
       expect(config['starting_head_commit']).to be_nil
       expect(config['super_review_status_timeout_minutes']).to eq(20)
       expect(config['max_total_commits']).to eq(15)
       expect(config['run_final_super_review']).to eq(true)
+      expect(config['super_review_agent']).to eq('codex')
       expect(%w[main master]).to include(config['review_base_ref'])
       expect(config['original_review_base_ref']).to eq(config['review_base_ref'])
       expect(config['original_review_base_commit']).to eq(config['review_base_commit'])
@@ -787,7 +883,7 @@ RSpec.describe Autowork do
       expect(state['original_review_base_ref']).to eq(config['original_review_base_ref'])
       expect(state['review_base_ref']).to eq(config['review_base_ref'])
       expect(state['current_step']).to eq(1)
-      expect(prompt).to include('as `pi-worker`')
+      expect(prompt).to include('as `agent-worker`')
       expect(prompt).to include('Implement only `## Step 1`')
     end
 
@@ -826,7 +922,7 @@ RSpec.describe Autowork do
       ENV['AUTOWORK_SUPER_REVIEW_STATUS_TIMEOUT_SECONDS'] = previous_super
     end
 
-    it 'initializes, sends the pi-worker prompt, and records the waiting phase' do
+    it 'initializes, sends the agent-worker prompt, and records the waiting phase' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
       tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
@@ -843,6 +939,123 @@ RSpec.describe Autowork do
       expect(tmux).to have_received(:send_prompt).with('%2', files.prompt_path('step1_pi_implement_request.md'))
       expect(state['status']).to eq('running')
       expect(state['phase']).to eq('waiting_for_pi_implement')
+    end
+
+    it 'stores an explicitly selected non-default super-review agent for a new run' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+
+      expect { described_class.new(%w[env 0003 --super-review claude], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
+
+      config = YAML.safe_load(File.read(Autowork::RunFiles.new(task_folder).config_path))
+      expect(config['super_review_agent']).to eq('claude')
+    end
+
+    it 'rejects an unsupported super-review agent' do
+      expect { described_class.new(%w[env 0003 --super-review gemini]) }
+        .to raise_error(Autowork::Error, /requires one of: claude, codex/)
+    end
+
+    it 'retries an interrupted Claude super-review through Codex with refreshed pane targets' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      initial_roles = role_panes(repo)
+      resumed_roles = Autowork::RolePanes.new(
+        manager: pane(id: '%11', title: 'agent-manager', path: repo),
+        worker: pane(id: '%13', title: 'agent-worker', path: repo),
+        reviewer: pane(id: '%14', title: 'agent-reviewer', path: repo)
+      )
+      tmux = instance_double(Autowork::Tmux)
+      allow(tmux).to receive(:discover_roles).and_return(initial_roles, resumed_roles)
+      allow(tmux).to receive(:send_prompt)
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      config = YAML.safe_load(File.read(files.config_path))
+      config['pi_manager_target'] = config.delete('agent_manager_target')
+      config['pi_worker_target'] = config.delete('agent_worker_target')
+      config['claude_worker_target'] = config.delete('agent_reviewer_target')
+      config.delete('super_review_agent')
+      File.write(files.config_path, config.to_yaml)
+
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['status'] = 'paused'
+      state['phase'] = 'waiting_for_final_super_review'
+      state['next_action'] = 'wait_for_final_super_review_status'
+      state['final_super_review_iteration'] = 1
+      state_store.write(state)
+      File.write(files.status_path(0, 'claude', 'super_review', 1), JSON.pretty_generate(
+        'status' => 'needs_user',
+        'agent' => 'claude',
+        'phase' => 'super_review',
+        'step' => 0,
+        'summary' => '400 Identity verification is required.'
+      ))
+
+      expect { described_class.new(%w[env 0003 --retry --super-review codex], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
+
+      prompt_path = files.prompt_path('final_super_review2_request.md')
+      expect(tmux).to have_received(:send_prompt).with('%14', prompt_path)
+      expect(File.read(prompt_path)).to include('/super-review --agent codex')
+      expect(File.read(prompt_path)).to include(files.status_path(0, 'codex', 'super_review', 2))
+      expect(state_store.read).to include('status' => 'running', 'phase' => 'waiting_for_final_super_review', 'final_super_review_iteration' => 2)
+      expect(YAML.safe_load(File.read(files.config_path))).to include(
+        'agent_manager_target' => '%11',
+        'agent_worker_target' => '%13',
+        'agent_reviewer_target' => '%14',
+        'super_review_agent' => 'codex'
+      )
+    end
+
+    it 'requires --retry to change reviewer agents during a wait' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_final_super_review'
+      state_store.write(state)
+
+      expect { described_class.new(%w[env 0003 --super-review codex], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /requires --retry/)
+      expect(YAML.safe_load(File.read(files.config_path))['super_review_agent']).to eq('claude')
+    end
+
+    it 'keeps waiting for a worker when resumed without --retry' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_final_super_review'
+      state['final_super_review_iteration'] = 1
+      state_store.write(state)
+
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /Worker status timeout/)
     end
 
     it 'prints a readable waiting-stage banner with the current step title' do
@@ -874,7 +1087,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1031,7 +1244,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1059,7 +1272,7 @@ RSpec.describe Autowork do
       ENV['AUTOWORK_WORKER_STATUS_TIMEOUT_SECONDS'] = previous_timeout
     end
 
-    it 'commits a completed pi-worker step and sends a blind Pi audit prompt' do
+    it 'commits a completed agent-worker step and sends a blind Pi audit prompt' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
       tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
@@ -1067,7 +1280,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1103,7 +1316,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1141,7 +1354,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1173,7 +1386,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1211,7 +1424,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1236,7 +1449,7 @@ RSpec.describe Autowork do
         .to raise_error(Autowork::Error, /Worker status timeout/)
 
       state = state_store.read
-      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('step1_debate_B1_round1_claude_request.md'))
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('step1_debate_B1_round1_reviewer_request.md'))
       expect(state['phase']).to eq('waiting_for_claude_debate')
       expect(state['debate_round']).to eq(1)
       expect(File.read(files.debate_path(1))).to include('B1')
@@ -1250,7 +1463,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1288,7 +1501,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1321,7 +1534,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1334,7 +1547,7 @@ RSpec.describe Autowork do
       state['debate_round'] = 1
       state['review_iteration'] = 1
       state_store.write(state)
-      File.write(files.debate_claude_result_path(1, 'B1', 1), "Claude agrees\n")
+      File.write(files.debate_reviewer_result_path(1, 'B1', 1), "Claude agrees\n")
       File.write(files.status_path(1, 'claude', 'debate', '_B1_round1'), JSON.pretty_generate(
         'status' => 'done',
         'agent' => 'claude',
@@ -1361,7 +1574,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1372,7 +1585,7 @@ RSpec.describe Autowork do
       state['debate_round'] = 1
       state['review_iteration'] = 1
       state_store.write(state)
-      File.write(files.debate_claude_result_path(1, 'B1', 1), "Still disagree\n")
+      File.write(files.debate_reviewer_result_path(1, 'B1', 1), "Still disagree\n")
       File.write(files.status_path(1, 'claude', 'debate', '_B1_round1'), JSON.pretty_generate(
         'status' => 'done',
         'agent' => 'claude',
@@ -1397,7 +1610,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       config = YAML.safe_load(File.read(files.config_path))
@@ -1436,7 +1649,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       prompt = Autowork::PromptWriter.new(files, Autowork::TaskResolver.new(%w[env 0003], cwd: repo).resolve, Autowork::GitRepo.new(repo)).claude_review(1, 1, 'a' * 40)
@@ -1454,7 +1667,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       prompt = Autowork::PromptWriter.new(files, Autowork::TaskResolver.new(%w[env 0003], cwd: repo).resolve, Autowork::GitRepo.new(repo)).claude_final_check_review(1, ['a' * 40])
@@ -1473,7 +1686,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1508,7 +1721,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       config = YAML.safe_load(File.read(files.config_path))
@@ -1537,7 +1750,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       config = YAML.safe_load(File.read(files.config_path))
@@ -1569,7 +1782,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       config = YAML.safe_load(File.read(files.config_path))
@@ -1608,7 +1821,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       config = YAML.safe_load(File.read(files.config_path))
@@ -1636,7 +1849,7 @@ RSpec.describe Autowork do
       commit_message = `git -C #{repo} log -1 --pretty=%s`.strip
       expect(commit_message).to eq('Final checks fix 1')
       expect(state['final_check_fix_commits'].first).to match(/\A[0-9a-f]{40}\z/)
-      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('final_checks_claude_review1_request.md'))
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('final_checks_reviewer_review1_request.md'))
       expect(state['phase']).to eq('waiting_for_claude_final_check_review')
     end
 
@@ -1648,7 +1861,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1685,7 +1898,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1733,24 +1946,32 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
-      prompt = Autowork::PromptWriter.new(files, Autowork::TaskResolver.new(%w[env 0003], cwd: repo).resolve, Autowork::GitRepo.new(repo)).claude_final_super_review(1, 'main')
+      prompt = Autowork::PromptWriter.new(
+        files,
+        Autowork::TaskResolver.new(%w[env 0003], cwd: repo).resolve,
+        Autowork::GitRepo.new(repo),
+        review_agent: 'codex'
+      ).claude_final_super_review(1, 'main')
       text = File.read(prompt)
 
+      expect(text).to include('/super-review --agent codex')
+      expect(text).to include('"agent": "codex"')
+      expect(text).to include(files.status_path(0, 'codex', 'super_review', 1))
       expect(text).to include('"followups"')
       expect(text).to include('Put non-actionable report-only advisories')
     end
 
-    it 'gives pi-worker the exact final review goal after Claude super-review' do
+    it 'gives agent-worker the exact final review goal after Claude super-review' do
       task_root, task_folder = make_env_task
       repo = make_git_repo
       tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       prompt = Autowork::PromptWriter.new(files, Autowork::TaskResolver.new(%w[env 0003], cwd: repo).resolve, Autowork::GitRepo.new(repo)).pi_final_review(1, 'main')
@@ -1769,7 +1990,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1779,13 +2000,41 @@ RSpec.describe Autowork do
       state['final_checks'] = [{ 'command' => nil, 'status' => 'skipped', 'summary' => 'none' }]
       state_store.write(state)
       File.write(files.super_review_path, "# Super review\n\nDiff base: main\n")
+      File.write(files.super_review_adjudication_path(1), JSON.pretty_generate(
+        'valid' => true,
+        'groups' => {
+          'panel' => { 'agreement_ratio' => 0.5 },
+          'independent' => { 'agreement_ratio' => 0.5 }
+        },
+        'is_degenerate' => false,
+        'requires_manual_verification' => false,
+        'actionable_candidate_ids' => ['P1']
+      ))
       File.write(files.status_path(0, 'claude', 'super_review', 1), JSON.pretty_generate(
         'status' => 'done',
         'agent' => 'claude',
         'phase' => 'super_review',
         'step' => 0,
         'summary' => 'one finding',
-        'findings' => [{ 'id' => 'SR1', 'severity' => 'BLOCKER', 'title' => 'Bug', 'body' => 'Broken', 'recommendation' => 'Fix' }],
+        'findings' => [
+          {
+            'id' => 'P1',
+            'severity' => 'BLOCKER',
+            'title' => 'Bug',
+            'body' => 'Broken',
+            'recommendation' => 'Fix',
+            'trigger' => 'Task input reaches the broken branch',
+            'mechanism' => 'The branch raises before persistence',
+            'reachability_source' => 'task_contract',
+            'evidence' => 'task.md requires this input'
+          }
+        ],
+        'adjudication' => {
+          'panel_agreement_ratio' => 0.5,
+          'independent_agreement_ratio' => 0.5,
+          'is_degenerate' => false,
+          'requires_manual_verification' => false
+        },
         'followups' => ['Run a provider smoke test later']
       ))
 
@@ -1794,9 +2043,54 @@ RSpec.describe Autowork do
 
       state = state_store.read
       expect(state['phase']).to eq('waiting_for_pi_super_review_fix')
-      expect(state['final_super_review_findings'].first['id']).to eq('SR1')
+      expect(state['final_super_review_findings'].first['id']).to eq('P1')
       expect(state['final_super_review_followups']).to include('Run a provider smoke test later')
       expect(tmux).to have_received(:send_prompt).with('%2', files.prompt_path('super_review_pi_fix1_request.md'))
+    end
+
+    it 'rejects super-review status that omits validator-approved actionable candidates' do
+      task_root, task_folder = make_env_task
+      repo = make_git_repo
+      tmux = instance_double(Autowork::Tmux, discover_roles: role_panes(repo))
+
+      stub_const('Autowork::TASK_ROOT', task_root)
+      stub_const('Autowork::DOTS_REPO', repo)
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
+
+      files = Autowork::RunFiles.new(task_folder)
+      state_store = Autowork::StateStore.new(files.state_path)
+      state = state_store.read
+      state['phase'] = 'waiting_for_final_super_review'
+      state['final_super_review_iteration'] = 1
+      state_store.write(state)
+      File.write(files.super_review_path, "# Super review\n\nDiff base: main\n")
+      File.write(files.super_review_adjudication_path(1), JSON.pretty_generate(
+        'valid' => true,
+        'groups' => {
+          'panel' => { 'agreement_ratio' => 0.5 },
+          'independent' => { 'agreement_ratio' => 0.5 }
+        },
+        'is_degenerate' => false,
+        'requires_manual_verification' => false,
+        'actionable_candidate_ids' => ['P1']
+      ))
+      File.write(files.status_path(0, 'claude', 'super_review', 1), JSON.pretty_generate(
+        'status' => 'done',
+        'agent' => 'claude',
+        'phase' => 'super_review',
+        'step' => 0,
+        'summary' => 'incorrectly clean',
+        'findings' => [],
+        'adjudication' => {
+          'panel_agreement_ratio' => 0.5,
+          'independent_agreement_ratio' => 0.5,
+          'is_degenerate' => false,
+          'requires_manual_verification' => false
+        }
+      ))
+
+      expect { described_class.new(%w[env 0003], tmux: tmux).run }
+        .to raise_error(Autowork::Error, /findings do not match actionable candidates/)
     end
 
     it 'routes Pi final-review findings to the manager gate without changing Claude findings' do
@@ -1807,7 +2101,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1847,7 +2141,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1875,7 +2169,7 @@ RSpec.describe Autowork do
       expect(state['phase']).to eq('waiting_for_claude_super_review_fix_review')
       expect(state['super_review_fix_commits']).to be_nil
       expect(`git -C #{repo} log --oneline 2>/dev/null`.strip).to be_empty
-      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('super_review_claude_fix_review1_request.md'))
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('super_review_fix_reviewer_review1_request.md'))
     end
 
     it 'commits a super-review fix, reruns final checks, and sends a scoped Claude review' do
@@ -1886,7 +2180,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       config = YAML.safe_load(File.read(files.config_path))
@@ -1919,7 +2213,7 @@ RSpec.describe Autowork do
       expect(state['super_review_fix_commits'].first).to match(/\A[0-9a-f]{40}\z/)
       expect(state['phase']).to eq('waiting_for_claude_super_review_fix_review')
       expect(File.read(files.final_checks_path)).to include('Status: passed')
-      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('super_review_claude_fix_review1_request.md'))
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('super_review_fix_reviewer_review1_request.md'))
     end
 
     it 'starts Pi final review when Claude accepts the scoped super-review fix review' do
@@ -1930,7 +2224,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -1969,7 +2263,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       config = YAML.safe_load(File.read(files.config_path))
@@ -2002,7 +2296,7 @@ RSpec.describe Autowork do
       expect(state['manager_fix_commits'].first).to match(/\A[0-9a-f]{40}\z/)
       expect(state['phase']).to eq('waiting_for_claude_manager_fix_review')
       expect(File.read(files.final_checks_path)).to include('Status: passed')
-      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('manager_review_claude_fix_review1_request.md'))
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('manager_review_fix_reviewer_review1_request.md'))
     end
 
     it 'returns to a fresh manager gate when Claude accepts a manager fix' do
@@ -2013,7 +2307,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -2059,7 +2353,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -2101,7 +2395,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -2127,7 +2421,7 @@ RSpec.describe Autowork do
       state = state_store.read
       commit_message = `git -C #{repo} log -1 --pretty=%s`.strip
       expect(commit_message).to eq('Step 1 fix 1')
-      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('step1_claude_review2_request.md'))
+      expect(tmux).to have_received(:send_prompt).with('%3', files.prompt_path('step1_reviewer_review2_request.md'))
       expect(state['phase']).to eq('waiting_for_claude_review')
       expect(state['review_iteration']).to eq(2)
     end
@@ -2150,7 +2444,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -2193,7 +2487,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       File.write(files.lock_path, JSON.pretty_generate('pid' => Process.pid))
@@ -2209,7 +2503,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -2232,7 +2526,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
 
       files = Autowork::RunFiles.new(task_folder)
       state_store = Autowork::StateStore.new(files.state_path)
@@ -2264,7 +2558,7 @@ RSpec.describe Autowork do
 
       stub_const('Autowork::TASK_ROOT', task_root)
       stub_const('Autowork::DOTS_REPO', repo)
-      Autowork::RunSetup.new(%w[env 0003], tmux: tmux).prepare!
+      Autowork::RunSetup.new(%w[env 0003], tmux: tmux, super_review_agent: 'claude').prepare!
       system('git', '-C', repo, 'switch', '-c', 'unrelated', out: File::NULL, err: File::NULL)
 
       expect { described_class.new([task_folder]).run }
@@ -2292,7 +2586,7 @@ RSpec.describe Autowork do
       expect(text).to include('tmux_panes: ok')
       expect(text).to include('prompt_delivery: ready')
       expect(text).to include('prompt_delivery_send_test: enabled')
-      expect(text).to include('prompt_delivery_send_test: sent to pi-worker and claude-worker')
+      expect(text).to include('prompt_delivery_send_test: sent to agent-worker and agent-reviewer')
       expect(text).to include('status_json_validator: ok')
     ensure
       $stdout = original_stdout if original_stdout

@@ -6,7 +6,7 @@ Read this file when all planned steps are accepted and the run enters its final 
 
 Skip orchestrator-enforced checks between intermediate steps/fixes. Pi may run targeted checks and report them, but `/autowork` does not block intermediate commits on tests.
 
-After all planned steps pass Claude review, run configured final checks. For Ruby projects with a `Gemfile`, default to:
+After all planned steps pass review, run configured final checks. For Ruby projects with a `Gemfile`, default to:
 
 ```sh
 bundle exec rubocop
@@ -24,16 +24,18 @@ If final checks fail:
 3. Pi fixes without committing, or reports that no repo fix is needed
 4. if Pi changed repo files, `/autowork` commits `Final checks fix M`
 5. if Pi made no repo changes, `/autowork` reruns final checks without creating an empty commit
-6. when checks pass, send any final-check fix commits to Claude for review
-7. Claude reviews final-check fix commits without running RSpec, RuboCop, linters, formatters, or any other test/check command; it reads `final_checks.md` and inspects the fix commits
-8. if Claude finds issues, send them to Pi as another final-check fix iteration
-9. repeat until checks pass and Claude accepts, or until `max_final_check_fix_iterations` is hit
+6. when checks pass, send any final-check fix commits to `agent-reviewer`
+7. the reviewer inspects final-check fix commits without running RSpec, RuboCop, linters, formatters, or any other test/check command; it reads `final_checks.md` and inspects the fix commits
+8. if the reviewer finds issues, send them to Pi as another final-check fix iteration
+9. repeat until checks pass and the reviewer accepts, or until `max_final_check_fix_iterations` is hit
 
-After final checks pass and any final-check fix commits are accepted, run the final super-review gate. The gate runs Claude's whole-branch review and resolves all Claude findings first, including scoped review of super-review fixes. Only then does it run the Pi-worker final review. Then stop at `ready_for_manager_final_review` so pi-manager can perform a manager-context production-readiness review using the original conversation, task creation, grilling, scope, and other manager-only context.
+After final checks pass and any final-check fix commits are accepted, run the final super-review gate. The gate runs the selected reviewer's whole-branch review and resolves all findings first, including scoped review of super-review fixes. Only then does it run the agent-worker final review. Then stop at `ready_for_manager_final_review` so agent-manager can perform a manager-context production-readiness review using the original conversation, task creation, grilling, scope, and other manager-only context.
 
 ## Final super-review gate
 
-After final checks pass, `/autowork` runs one final whole-branch `/claude-super-review` through `claude-worker`.
+After final checks pass, `/autowork` runs `/super-review --agent <super_review_agent>` through `agent-reviewer`. The default is `codex`, which uses the Pi/Codex seven-reviewer panel; `claude` uses the mixed Claude/Codex panel. The selected agent is persisted in `config.yml` and is also used for scoped fix reviews.
+
+Actionable super-review findings must include validator-approved trigger, mechanism, reachability source, and evidence. The validator writes `autowork-log/super-review-adjudication<N>.json`; Autowork compares its ratios, gate booleans, and actionable candidate IDs with status JSON before routing fixes. Degenerate adjudication or any NEEDS_CONTEXT candidate returns `needs_user` with no actionable findings, so it cannot enter or consume the fix loop.
 
 Base branch/ref rules:
 
@@ -53,9 +55,9 @@ Base branch/ref rules:
 
 The final super-review wait uses `super_review_status_timeout_minutes: 20`, separate from normal `worker_status_timeout_minutes`.
 
-If super-review finds actionable issues, `/autowork` sends them to `pi-worker` for `/claude-super-fix`-style adjudication and fixes. Pi may accept, disagree, mark already-fixed/out-of-scope/follow-up, or request user input. `/autowork` commits accepted code changes as `Super-review fix N`, reruns final checks, and sends those fix commits to Claude for a normal scoped review. It does not rerun full super-review by default.
+If super-review finds actionable issues, `/autowork` sends them to `agent-worker` for `/claude-super-fix`-style adjudication and fixes. Pi may accept, disagree, mark already-fixed/out-of-scope/follow-up, or request user input. `/autowork` commits accepted code changes as `Super-review fix N`, reruns final checks, and sends those fix commits to `agent-reviewer` for a normal scoped review. It does not rerun full super-review by default.
 
-After Claude's whole-branch super-review findings and any super-review fix commits have been accepted by Claude's scoped review, `/autowork` sends `pi-worker` a review-only prompt containing this exact goal: `review all the changes and try to find issues, gaps, and improvement opportunities. But ignore very minor issues`. Pi reviews the entire `review_base_ref...HEAD` diff without editing files, writes `autowork-log/pi-final-review.md`, and reports actionable `BLOCKER`/`MINOR` findings in `step0_pi_final_reviewN_status.json`. Pi's final-review findings are recorded for the manager gate and are not combined with Claude's findings or fed back into the Claude super-fix loop.
+After the reviewer's whole-branch super-review findings and any super-review fix commits have been accepted by the reviewer's scoped review, `/autowork` sends `agent-worker` a review-only prompt containing this exact goal: `review all the changes and try to find issues, gaps, and improvement opportunities. But ignore very minor issues`. Pi reviews the entire `review_base_ref...HEAD` diff without editing files, writes `autowork-log/pi-final-review.md`, and reports actionable `BLOCKER`/`MINOR` findings in `step0_pi_final_reviewN_status.json`. Pi's final-review findings are recorded for the manager gate and are not combined with the super-review findings or fed back into the super-fix loop.
 
 Final super-review report-only advisories, later-story recommendations, deploy notes, and smoke-test notes should be emitted as status JSON `followups` so `final_summary.md` does not contradict a "merge with follow-ups" report.
 
@@ -101,7 +103,7 @@ Rules:
 
 ## Manager risk manifest
 
-At the final manager gate, pi-manager reads the passive project registry:
+At the final manager gate, agent-manager reads the passive project registry:
 
 ```text
 /Volumes/dev/_tasks/<project>/review-risk-registry.json
@@ -123,7 +125,7 @@ Required shape:
 }
 ```
 
-`coverage_gaps` is required and must be an array. It must be empty before `manager-review-pass`. For every active registry risk that the current diff and reviews confirm, include an update for that existing risk ID in `registry_updates`, even when no new risk is being added. Existing-ID updates record the task/round recurrence and recompute the risk weight. Do not treat `registry_updates` as new entries only. Add only generalized, confirmed lessons; do not update a risk merely because it was considered. Omit unmatched or unconfirmed risks and explain important exclusions in `manager_review.md`. Do not copy code or raw review prose. The registry is passive data. Pi-manager reads and updates it; workers do not.
+`coverage_gaps` is required and must be an array. It must be empty before `manager-review-pass`. For every active registry risk that the current diff and reviews confirm, include an update for that existing risk ID in `registry_updates`, even when no new risk is being added. Existing-ID updates record the task/round recurrence and recompute the risk weight. Do not treat `registry_updates` as new entries only. Add only generalized, confirmed lessons; do not update a risk merely because it was considered. Omit unmatched or unconfirmed risks and explain important exclusions in `manager_review.md`. Do not copy code or raw review prose. The registry is passive data. Agent-manager reads and updates it; workers do not.
 
 ## Manager-context finding loop
 
@@ -149,14 +151,14 @@ If manager review finds actionable issues:
    }
    ```
 3. Invoke `autowork manager-review-fix <task_folder>` immediately. The original `/autowork` invocation grants this manager loop permission to stage and commit according to the protocol; do not ask the user to route each finding.
-4. The helper validates the findings and clean branch, sends a Pi fix prompt through `Tmux#send_prompt`, waits for status JSON, commits `Manager review fix N`, reruns configured full final checks, and sends the commit to Claude for scoped review.
-5. If Claude finds issues in the manager fix, `/autowork` sends all of them back to Pi in the next manager-fix iteration. Pi may request user input but may not silently defer or dispute a manager-context requirement.
-6. When Claude accepts, `/autowork` returns to a fresh `ready_for_manager_final_review` gate. Pi-manager reviews the final result again using manager-only context.
+4. The helper validates the findings and clean branch, sends a Pi fix prompt through `Tmux#send_prompt`, waits for status JSON, commits `Manager review fix N`, reruns configured full final checks, and sends the commit to `agent-reviewer` for scoped review.
+5. If the reviewer finds issues in the manager fix, `/autowork` sends all of them back to Pi in the next manager-fix iteration. Pi may request user input but may not silently defer or dispute a manager-context requirement.
+6. When the reviewer accepts, `/autowork` returns to a fresh `ready_for_manager_final_review` gate. Agent-manager reviews the final result again using manager-only context.
 7. Only `autowork manager-review-pass <task_folder>` marks the run complete.
 
 Do not manually call `tmux send-keys`, stage, commit, or construct ad hoc manager-fix status files. Normal resume rules apply if a worker timeout interrupts the manager-fix loop.
 
-Finish only when final checks pass, final-check fix commits are accepted, all Claude super-review findings and fix reviews are resolved, the Pi final review has completed, every manager-fix commit has passed scoped Claude review, and pi-manager records that the result is production-ready if the user does not perform another review. Successful completion writes `final_summary.md`.
+Finish only when final checks pass, final-check fix commits are accepted, all super-review findings and fix reviews are resolved, the Pi final review has completed, every manager-fix commit has passed scoped reviewer review, and agent-manager records that the result is production-ready if the user does not perform another review. Successful completion writes `final_summary.md`.
 
 ## Final output
 
@@ -180,7 +182,7 @@ Include:
 - manager-context production-readiness review result
 - any unresolved caveats
 
-Then stop and tell pi-manager where to review. If findings exist, write the printed structured findings file and route it with `autowork manager-review-fix <task_folder>`. After the automated fix/check/Claude-review loop returns to a fresh manager gate, review again. If the manager-context review passes, record completion with `autowork manager-review-pass <task_folder>`.
+Then stop and tell agent-manager where to review. If findings exist, write the printed structured findings file and route it with `autowork manager-review-fix <task_folder>`. After the automated fix/check/reviewer loop returns to a fresh manager gate, review again. If the manager-context review passes, record completion with `autowork manager-review-pass <task_folder>`.
 
 Final output after that pass:
 

@@ -1,0 +1,69 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'fileutils'
+require 'optparse'
+
+options = {
+  model: ENV.fetch('SUPER_REVIEW_CODEX_MODEL', 'gpt-5.6-terra'),
+  provider: ENV.fetch('SUPER_REVIEW_CODEX_PROVIDER', 'openai-codex'),
+  thinking: ENV.fetch('SUPER_REVIEW_CODEX_THINKING', 'high')
+}
+
+OptionParser.new do |parser|
+  parser.banner = 'Usage: run-pi-reviewers --cwd DIR --output-dir DIR PROMPT_FILE...'
+  parser.on('--cwd DIR') { |value| options[:cwd] = value }
+  parser.on('--output-dir DIR') { |value| options[:output_dir] = value }
+  parser.on('--model MODEL') { |value| options[:model] = value }
+  parser.on('--provider PROVIDER') { |value| options[:provider] = value }
+  parser.on('--thinking LEVEL') { |value| options[:thinking] = value }
+end.parse!
+
+abort 'Missing --cwd' unless options[:cwd]
+abort 'Missing --output-dir' unless options[:output_dir]
+abort 'Pass between 1 and 8 prompt files' unless (1..8).cover?(ARGV.length)
+
+cwd = File.realpath(options[:cwd])
+output_dir = File.expand_path(options[:output_dir])
+FileUtils.mkdir_p(output_dir)
+
+children = ARGV.map do |prompt_path|
+  prompt_path = File.realpath(prompt_path)
+  name = File.basename(prompt_path, File.extname(prompt_path))
+  output_path = File.join(output_dir, "#{name}.md")
+  error_path = File.join(output_dir, "#{name}.stderr.log")
+  command = [
+    'pi',
+    '--provider', options[:provider],
+    '--model', options[:model],
+    '--thinking', options[:thinking],
+    '--no-session',
+    '--tools', 'read,bash,grep,find,ls',
+    '--no-extensions',
+    '--no-skills',
+    '--no-prompt-templates',
+    '--no-context-files',
+    '--no-approve',
+    '-p',
+    "@#{prompt_path}"
+  ]
+  output = File.open(output_path, 'w')
+  error = File.open(error_path, 'w')
+  pid = Process.spawn(*command, chdir: cwd, out: output, err: error)
+  { pid: pid, output: output, error: error, output_path: output_path, error_path: error_path }
+end
+
+is_failed = false
+children.each do |child|
+  _pid, status = Process.wait2(child[:pid])
+  child[:output].close
+  child[:error].close
+  if !status.success? || !File.file?(child[:output_path]) || File.zero?(child[:output_path])
+    warn "Reviewer failed: #{child[:output_path]} (exit #{status.exitstatus}); stderr: #{child[:error_path]}"
+    is_failed = true
+  else
+    puts child[:output_path]
+  end
+end
+
+exit 1 if is_failed
