@@ -40,10 +40,12 @@ comment.
 - Replace the supplied comment URL interface with current-branch pull request
   discovery.
 - Remove the single-comment URL behavior from Task 1.
-- List the discovered pull request's inline review comments.
+- Retrieve the discovered pull request's inline review comments.
+- Display only the first comment returned by GitHub, then stop. Do not add
+  ordering behavior or pull request metadata output.
 
-Real QA: run Autofix without a URL inside a checkout whose branch has a real pull
-request.
+Real QA: run Autofix without arguments inside a checkout whose branch has a real
+pull request and verify that only the first returned inline comment is displayed.
 
 ### Task 3: Persist fetched comments
 
@@ -58,8 +60,9 @@ Autofix.
 
 ### Task 4: Record one decision
 
-- Select one fetched comment.
-- Record `approved` or `skipped`.
+- Present one fetched comment at a time.
+- Record `approved` or `skipped` for the displayed comment.
+- Display the next comment only after the operator decides the current one.
 - Show the stored decision through Autofix.
 
 Real QA: classify one real comment and confirm that Autofix reports the decision.

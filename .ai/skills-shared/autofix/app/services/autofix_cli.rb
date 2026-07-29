@@ -6,9 +6,9 @@ class AutofixCli
   arguments :cli_args
 
   def call
-    raise ArgumentError, 'Autofix requires exactly one review comment URL' unless cli_args.length == 1
+    raise ArgumentError, 'Autofix does not accept arguments' unless cli_args.empty?
 
-    comment = FetchReviewComment.call(url: cli_args.first)
+    comment = FetchPullRequestComments.call.first
     puts RenderReviewComment.call(comment: comment)
   end
 end
