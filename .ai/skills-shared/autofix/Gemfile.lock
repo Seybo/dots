@@ -2,10 +2,12 @@ GEM
   remote: https://rubygems.org/
   specs:
     ast (2.4.3)
+    bigdecimal (4.1.2)
     diff-lcs (1.6.2)
     json (2.13.2)
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)
+    mini_portile2 (2.8.9)
     parallel (1.27.0)
     parser (3.3.10.2)
       ast (~> 2.4.1)
@@ -49,6 +51,11 @@ GEM
       lint_roller (~> 1.1)
       rubocop (~> 1.72, >= 1.72.1)
     ruby-progressbar (1.13.0)
+    sequel (5.106.0)
+      bigdecimal
+    sqlite3 (2.9.5)
+      mini_portile2 (~> 2.8.0)
+    sqlite3 (2.9.5-arm64-darwin)
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
     unicode-emoji (4.2.0)
@@ -62,6 +69,8 @@ DEPENDENCIES
   rubocop
   rubocop-performance
   rubocop-rspec
+  sequel
+  sqlite3
 
 RUBY VERSION
    ruby 3.3.7p123

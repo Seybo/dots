@@ -1,0 +1,7 @@
+/.bundle/
+/vendor/bundle/
+/tmp/
+/db/*.db
+/db/*.db-shm
+/db/*.db-wal
+/.DS_Store

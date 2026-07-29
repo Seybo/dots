@@ -1,8 +1,8 @@
 ---
 name: autofix
 description: >-
-  Discover the current branch's GitHub pull request and display its first inline
-  review comment. Command-only skill.
+  Store inline review comments from the current branch's GitHub pull request and
+  display its first unresolved reported issue. Command-only skill.
 disable-model-invocation: true
 ---
 
@@ -23,3 +23,5 @@ The only supported invocation is:
 Use the current checkout to discover the pull request. Run the helper immediately
 without confirmation. Return its stdout unchanged, with no introduction,
 summary, code fence, or follow-up interaction.
+
+Local clipboard review extraction is implemented by a later task.

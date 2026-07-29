@@ -10,10 +10,13 @@ Build Autofix through small vertical increments. At the end of every task:
   which existing inputs and behaviors are retained, replaced, or removed.
 - The task adds one useful feature or improvement.
 - RSpec and RuboCop pass for the implemented Ruby behavior.
-- The new behavior is manually QAed against a real GitHub pull request.
+- The new external behavior is manually QAed through Pi against a real GitHub
+  pull request or real local clipboard review, as the task requires.
 
 Do not test `gh`, `git`, or `tmux` behavior through complex stubs. Real-PR QA is
-the integration test for those boundaries.
+the integration test for GitHub boundaries. Real clipboard extraction must be
+QAed through the manager model in Pi; deterministic Ruby persistence and
+validation receive automated specs.
 
 Before implementing each task:
 
@@ -23,7 +26,7 @@ Before implementing each task:
 4. Split the task again if grilling reveals more than one substantial integration
    boundary.
 
-## Phase 1: Read real PR feedback
+## Phase 1: Read and retain reported issues
 
 ### Task 1: Fetch one comment
 
@@ -47,59 +50,86 @@ comment.
 Real QA: run Autofix without arguments inside a checkout whose branch has a real
 pull request and verify that only the first returned inline comment is displayed.
 
-### Task 3: Persist fetched comments
+### Task 3: Persist GitHub reported issues
 
-- Add SQLite, Sequel, migrations, and the agreed database structure.
-- Store fetched comments.
-- Expose enough Autofix output to inspect the persisted result.
+- Add SQLite, Sequel, migrations, and one generic `reported_issues` table.
+- Give every table an integer primary ID and creation timestamp while enforcing
+  issue domain identity separately by canonical project path, source, and source
+  ID; retain the current unresolved body and nullable decision.
+- Automatically migrate, fetch every inline-comment page, insert new GitHub
+  issues, and refresh the bodies of unresolved existing issues.
+- Leave decided issues unchanged, then select unresolved stored GitHub issues
+  whose IDs occur in the fresh current-PR response and display the first current
+  GitHub comment.
+- Print `No unresolved comments.` when that queue is empty.
+- Add no temporary inspection command; verify storage with real SQLite specs and
+  the complete path through Pi.
 
-Real QA: fetch a real pull request and inspect its persisted comments through
-Autofix.
+Real QA: run Autofix against a real pull request and verify the fetch, persist,
+select, and display path while real SQLite specs verify stored data.
 
-## Phase 2: Address one comment
+### Task 4: Import local reported issues
 
-### Task 4: Record one decision
+- Read one complete review copied from another agent into the clipboard.
+- Let the manager model extract multiple actual issues while ignoring non-issue
+  prose and preserving each issue's relevant reported text verbatim.
+- Persist every extracted issue separately with source `local` and the canonical
+  current project path.
+- Preserve the complete clipboard text as a clipboard snapshot because it cannot
+  be fetched again later.
+- Feed local issues into the same unresolved queue used by GitHub issues.
 
-- Present one fetched comment at a time.
-- Record `approved` or `skipped` for the displayed comment.
-- Display the next comment only after the operator decides the current one.
+Real QA: import a real multi-issue agent review through Pi, verify non-issue prose
+is excluded, and inspect each retained local issue and its original context.
+
+## Phase 2: Address one reported issue
+
+### Task 5: Record one decision
+
+- Present one unresolved reported issue at a time, regardless of source.
+- Record `approved` or `skipped` for the displayed issue.
+- Display the next issue only after the operator decides the current one.
 - Show the stored decision through Autofix.
 
-Real QA: classify one real comment and confirm that Autofix reports the decision.
+Real QA: classify one real GitHub issue and one real local issue and confirm that
+both use the same decision queue.
 
-### Task 5: Run the worker
+### Task 6: Run the worker
 
-- Generate the structured Markdown prompt for one approved comment.
-- Send it to `agent-worker`.
-- Collect worker completion.
+- Generate the structured Markdown prompt for one approved reported issue.
+- Include its project path, body, and current GitHub context or clipboard
+  snapshot.
+- Send it to `agent-worker` and collect worker completion.
 
-Real QA: have `agent-worker` modify code for one approved real PR comment.
+Real QA: have `agent-worker` modify code for one approved real reported issue.
 
-### Task 6: Run one reviewer pass
+### Task 7: Run one reviewer pass
 
 - Send the worker's change to `agent-reviewer`.
 - Collect and display one pass/fail result.
 - Stop when the reviewer reports findings; do not implement corrections yet.
 
-Real QA: have `agent-reviewer` inspect the real worker change and return a result.
+Real QA: have `agent-reviewer` inspect a real worker change and return a result.
 
-### Task 7: Finalize one successful comment
+### Task 8: Finalize one successful issue
 
 - Add final operator approval.
-- Create the local commit for a successful one-comment run.
+- Create the local commit for a successful one-issue run.
 
-Real QA: complete one real comment from fetch through an approved local commit.
+Real QA: complete one real reported issue from ingestion through an approved local
+commit.
 
-## Phase 3: Expand the usable workflow
+## Phase 3: Expand the shared workflow
 
-### Task 8: Process a batch
+### Task 9: Process a batch
 
-- Approve or skip multiple comments.
-- Send approved comments to the worker as one coherent batch.
+- Approve or skip multiple reported issues from one active GitHub PR or local
+  review.
+- Send approved issues to the worker as one coherent batch.
 
-Real QA: process multiple comments from one real pull request.
+Real QA: process multiple issues from one real GitHub PR or one real local review.
 
-### Task 9: Capture structured reviewer findings
+### Task 10: Capture structured reviewer findings
 
 - Persist reviewer findings.
 - Display them to the operator.
@@ -107,7 +137,7 @@ Real QA: process multiple comments from one real pull request.
 
 Real QA: use a real change where `agent-reviewer` reports at least one finding.
 
-### Task 10: Add the correction loop
+### Task 11: Add the correction loop
 
 - Send accepted findings to `agent-worker`.
 - Apply corrections.
@@ -119,21 +149,23 @@ Real QA: complete one real reviewer-requested correction and second review.
 
 ## Phase 4: Make Autofix a daily driver
 
-### Task 11: Add interruption and resume
+### Task 12: Add interruption and resume
 
-- Resume durable manager, worker, and reviewer handoffs.
+- Resume durable manager, worker, and reviewer handoffs for either issue source.
 - Provide read-only run status.
 
 Real QA: terminate and resume a real run while it is waiting at an agent handoff.
 
-### Task 12: Support repeated PR rounds
+### Task 13: Support repeated review rounds
 
-- Remember addressed and skipped comments.
-- Select only new feedback during later invocations.
+- Remember addressed and skipped reported issues from either source.
+- Select only new or reopened feedback during later GitHub fetches or local
+  imports.
 
-Real QA: process at least two review rounds on one real pull request.
+Real QA: process at least two review rounds from one real source without
+reselecting terminal issues.
 
-### Task 13: Add final checks
+### Task 14: Add final checks
 
 - Run configured checks before final approval and commit.
 - Report failures without speculative recovery behavior.
@@ -141,11 +173,12 @@ Real QA: process at least two review rounds on one real pull request.
 Real QA: complete one real round with passing checks and separately confirm that
 an intentionally failing check stops finalization.
 
-### Task 14: Assess Addressit replacement
+### Task 15: Assess Addressit replacement
 
-- Compare actual Autofix usage with the existing Addressit workflow.
+- Compare actual Autofix usage with the existing Addressit workflow for both
+  GitHub and local review sources.
 - Add only missing features proven necessary by earlier QA.
 - Decide whether Autofix can become the default.
 
-Real QA: use Autofix for a normal real review round without falling back to
-Addressit, or record the concrete remaining blocker.
+Real QA: use Autofix for normal real GitHub and local review rounds without
+falling back to Addressit, or record the concrete remaining blocker.

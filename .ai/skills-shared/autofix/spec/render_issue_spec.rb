@@ -2,7 +2,7 @@
 
 require_relative 'spec_helper'
 
-RSpec.describe RenderReviewComment do
+RSpec.describe RenderIssue do
   it 'renders only the author, location, and full Markdown body in a quote block' do
     body = <<~MARKDOWN.chomp
       **Avoid the extra query.**
@@ -25,5 +25,9 @@ RSpec.describe RenderReviewComment do
     expect(described_class.call(comment: comment)).to eq(
       "Author: @reviewer\nPath: app/services/example.rb:42\n\n#{quoted_body}"
     )
+  end
+
+  it 'reports an empty queue' do
+    expect(described_class.call(comment: nil)).to eq('No unresolved comments.')
   end
 end

@@ -3,11 +3,11 @@
 require 'json'
 require 'open3'
 
-class FetchPullRequestComments
+class FetchComments
   include ServiceObject
 
   def call
-    JSON.parse(capture!('gh', 'api', comments_endpoint))
+    JSON.parse(capture!('gh', 'api', comments_endpoint, '--paginate', '--slurp')).flatten(1)
   end
 
   private

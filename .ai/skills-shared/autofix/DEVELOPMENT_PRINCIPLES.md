@@ -62,6 +62,19 @@ state.
 - `SKILL.md` should only contain what Pi needs to invoke and operate the CLI. It
   must not duplicate the workflow implementation.
 
+## Language and naming
+
+- Use simple, concise, accurate language everywhere: code, database names,
+  prompts, tests, task files, and documentation.
+- Prefer the shortest name that preserves the full meaning. Remove words already
+  clear from the local context, but do not shorten names into ambiguity.
+- Use established domain terms consistently. Avoid synonyms and unnecessary
+  abbreviations.
+- A singular service name acts on one item. Use a plural name only when the
+  service owns collection behavior.
+- Keep headings, sentences, examples, and explanations short. Include details
+  that affect behavior; remove repetition and filler.
+
 ## Ruby conventions
 
 - Prefer explicit, boring Ruby and one obvious execution path.
@@ -110,7 +123,13 @@ not a requirement to create empty scaffolding.
 - Do not create ORM models, callbacks, or a repository layer.
 - Put genuine data invariants in SQLite with foreign keys, unique indexes, and
   check constraints. Let violations raise naturally.
-- Runs, comments, decisions, and agent results belong in SQLite. Generated
+- Every persisted table must declare an integer primary `id` with Sequel's
+  `primary_key :id`; SQLite generates its value automatically. Application
+  services must not calculate or supply IDs.
+- Every persisted table must have a non-null `created_at` timestamp supplied when
+  the row is inserted. Add `updated_at` only when a concrete workflow needs it.
+  Keep domain identity enforced separately with unique constraints.
+- Runs, reported issues, decisions, and agent results belong in SQLite. Generated
   Markdown or JSON handoff files are not authoritative state.
 - Do not support legacy Addressit state.
 

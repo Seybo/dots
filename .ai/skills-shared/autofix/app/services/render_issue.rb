@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
-class RenderReviewComment
+class RenderIssue
   include ServiceObject
 
   arguments :comment
 
   def call
+    return 'No unresolved comments.' if comment.nil?
+
     [author, location, '', quoted_body].join("\n")
   end
 
