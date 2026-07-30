@@ -3,29 +3,18 @@
 class RenderIssue
   include ServiceObject
 
-  arguments :comment
+  arguments :body, author: nil, path: nil, line: nil
 
   def call
-    return 'No unresolved comments.' if comment.nil?
+    return 'No unresolved comments.' if body.nil?
+    return quoted_body if author.nil?
 
-    [author, location, '', quoted_body].join("\n")
+    ["Author: @#{author}", "Path: #{path}:#{line}", '', quoted_body].join("\n")
   end
 
   private
 
-  def author
-    "Author: @#{comment.fetch('user').fetch('login')}"
-  end
-
-  def location
-    "Path: #{comment.fetch('path')}:#{comment.fetch('line')}"
-  end
-
   def quoted_body
-    body.lines(chomp: true).map { |line| line.empty? ? '>' : "> #{line}" }.join("\n")
-  end
-
-  def body
-    comment.fetch('body')
+    body.lines(chomp: true).map { |text| text.empty? ? '>' : "> #{text}" }.join("\n")
   end
 end

@@ -10,12 +10,8 @@ An inline pull request comment fetched from GitHub. One comment produces one rep
 
 ## Local Source
 
-A review copied from another agent. One local source may contain several reported issues and unrelated prose.
+A review copied from another agent. Agent-manager turns its concrete concerns into concise, self-contained reported issues. The original clipboard text is not retained.
 
 ## Project Path
 
 The canonical root of the Git checkout where a reported issue belongs and work occurs.
-
-## Clipboard Snapshot
-
-The complete clipboard text captured before local issues are extracted.

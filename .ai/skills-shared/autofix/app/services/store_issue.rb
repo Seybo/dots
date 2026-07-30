@@ -3,7 +3,7 @@
 class StoreIssue
   include ServiceObject
 
-  arguments :project_path, :source, :source_id, :body
+  arguments :project_path, :source, :body, source_id: nil
 
   def call
     issues.
@@ -26,7 +26,7 @@ class StoreIssue
       created_at: Time.now,
       project_path: project_path,
       source: source,
-      source_id: source_id.to_s,
+      source_id: source_id&.to_s,
       body: body,
       decision: nil
     }

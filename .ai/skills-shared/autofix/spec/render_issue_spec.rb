@@ -3,31 +3,38 @@
 require_relative 'spec_helper'
 
 RSpec.describe RenderIssue do
-  it 'renders only the author, location, and full Markdown body in a quote block' do
-    body = <<~MARKDOWN.chomp
+  let(:body) do
+    <<~MARKDOWN.chomp
       **Avoid the extra query.**
 
       ```ruby
       records.to_a
       ```
     MARKDOWN
-    comment = {
-      'id' => 456,
-      'html_url' => 'https://github.com/example/project/pull/123#discussion_r456',
-      'user' => { 'login' => 'reviewer' },
-      'path' => 'app/services/example.rb',
-      'line' => 42,
-      'body' => body
-    }
+  end
 
-    quoted_body = body.lines(chomp: true).map { |line| line.empty? ? '>' : "> #{line}" }.join("\n")
+  it 'renders GitHub metadata and the full Markdown body' do
+    output = described_class.call(
+      body: body,
+      author: 'reviewer',
+      path: 'app/services/example.rb',
+      line: 42
+    )
 
-    expect(described_class.call(comment: comment)).to eq(
+    expect(output).to eq(
       "Author: @reviewer\nPath: app/services/example.rb:42\n\n#{quoted_body}"
     )
   end
 
+  it 'renders only the quoted local body' do
+    expect(described_class.call(body: body)).to eq(quoted_body)
+  end
+
   it 'reports an empty queue' do
-    expect(described_class.call(comment: nil)).to eq('No unresolved comments.')
+    expect(described_class.call(body: nil)).to eq('No unresolved comments.')
+  end
+
+  def quoted_body
+    body.lines(chomp: true).map { |line| line.empty? ? '>' : "> #{line}" }.join("\n")
   end
 end

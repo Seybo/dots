@@ -15,15 +15,16 @@ RSpec.describe 'database schema' do
   end
 
   it 'requires issue data' do
-    %i[project_path source source_id body].each do |name|
+    %i[project_path source body].each do |name|
       expect(column(name)).to include(allow_null: false)
     end
+    expect(column(:source_id)).to include(allow_null: true)
     expect(column(:decision)).to include(allow_null: true)
     expect { db[:reported_issues].insert(issue_attributes.except(:created_at)) }.
       to raise_error(Sequel::NotNullConstraintViolation)
   end
 
-  it 'generates IDs and keeps domain identity unique' do
+  it 'generates IDs and keeps GitHub identity unique' do
     id = db[:reported_issues].insert(issue_attributes)
 
     expect(id).to be_a(Integer)
@@ -32,11 +33,21 @@ RSpec.describe 'database schema' do
       to raise_error(Sequel::UniqueConstraintViolation)
   end
 
-  it 'allows only known sources' do
+  it 'allows repeated local issues without source IDs' do
+    attributes = issue_attributes(source: 'local', source_id: nil)
+
+    expect { 2.times { db[:reported_issues].insert(attributes) } }.not_to raise_error
+  end
+
+  it 'allows only known sources with matching source IDs' do
     expect { db[:reported_issues].insert(issue_attributes(source: 'email')) }.
       to raise_error(Sequel::CheckConstraintViolation)
+    expect { db[:reported_issues].insert(issue_attributes(source_id: nil)) }.
+      to raise_error(Sequel::CheckConstraintViolation)
+    expect { db[:reported_issues].insert(issue_attributes(source: 'local')) }.
+      to raise_error(Sequel::CheckConstraintViolation)
 
-    expect { db[:reported_issues].insert(issue_attributes(source: 'local')) }.not_to raise_error
+    expect { db[:reported_issues].insert(issue_attributes(source: 'local', source_id: nil)) }.not_to raise_error
   end
 
   it 'allows only known decisions' do

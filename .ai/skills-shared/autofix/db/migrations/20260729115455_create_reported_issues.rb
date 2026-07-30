@@ -7,11 +7,18 @@ Sequel.migration do
       DateTime :created_at, null: false
       String :project_path, text: true, null: false
       String :source, null: false
-      String :source_id, text: true, null: false
+      String :source_id, text: true
       String :body, text: true, null: false
       String :decision
 
       constraint(:reported_issues_source_allowed, source: %w[github local])
+      constraint(
+        :reported_issues_source_id_matches_source,
+        Sequel.|(
+          Sequel.&({ source: 'github' }, Sequel.~(source_id: nil)),
+          { source: 'local', source_id: nil }
+        )
+      )
       constraint(
         :reported_issues_decision_allowed,
         Sequel.|({ decision: nil }, { decision: %w[approved skipped] })

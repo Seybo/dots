@@ -70,17 +70,17 @@ select, and display path while real SQLite specs verify stored data.
 
 ### Task 4: Import local reported issues
 
-- Read one complete review copied from another agent into the clipboard.
-- Let the manager model extract multiple actual issues while ignoring non-issue
-  prose and preserving each issue's relevant reported text verbatim.
-- Persist every extracted issue separately with source `local` and the canonical
-  current project path.
-- Preserve the complete clipboard text as a clipboard snapshot because it cannot
-  be fetched again later.
-- Feed local issues into the same unresolved queue used by GitHub issues.
+- Add `/skill:autofix --local` while retaining no-argument GitHub behavior.
+- Let agent-manager read `pbpaste`, extract every concrete concern, ignore
+  non-issue prose, and rewrite each issue into a concise, self-contained body.
+- Pass issue bodies to Ruby through a temporary JSON array and delete the file
+  after import.
+- Persist every issue separately with source `local`, no source ID, and the
+  canonical current project path. Do not store or deduplicate the clipboard.
+- Select the current project's unresolved local issues by database ID ascending.
 
 Real QA: import a real multi-issue agent review through Pi, verify non-issue prose
-is excluded, and inspect each retained local issue and its original context.
+is excluded, and inspect each retained local issue.
 
 ## Phase 2: Address one reported issue
 
@@ -97,8 +97,7 @@ both use the same decision queue.
 ### Task 6: Run the worker
 
 - Generate the structured Markdown prompt for one approved reported issue.
-- Include its project path, body, and current GitHub context or clipboard
-  snapshot.
+- Include its project path, body, and current GitHub context when available.
 - Send it to `agent-worker` and collect worker completion.
 
 Real QA: have `agent-worker` modify code for one approved real reported issue.

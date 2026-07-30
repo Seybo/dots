@@ -28,6 +28,14 @@ RSpec.describe StoreIssue do
     expect(issues.count).to eq(3)
   end
 
+  it 'stores every local issue with no source ID' do
+    first_id = store_issue(source: 'local', source_id: nil)
+    second_id = store_issue(source: 'local', source_id: nil)
+
+    expect(first_id).not_to eq(second_id)
+    expect(issues.where(source: 'local').select_map(:source_id)).to eq([nil, nil])
+  end
+
   it 'updates only the body of an unresolved issue' do
     id = store_issue
     original = issues.where(id: id).first

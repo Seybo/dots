@@ -8,17 +8,33 @@ class AutofixCli
   def call
     validate_args
     MigrateDatabase.call
-    store_issues
-    puts RenderIssue.call(comment: comment)
+    cli_args.empty? ? run_github : run_local
   end
 
   private
 
   def validate_args
-    raise ArgumentError, 'Autofix does not accept arguments' unless cli_args.empty?
+    return if cli_args.empty?
+    return if cli_args.length == 2 && cli_args.first == 'import-local'
+
+    raise ArgumentError, 'Usage: autofix [import-local <json-path>]'
   end
 
-  def store_issues
+  def run_github
+    store_github_issues
+    puts RenderIssue.call(
+      body: comment&.fetch('body'),
+      author: comment&.dig('user', 'login'),
+      path: comment&.fetch('path'),
+      line: comment&.fetch('line')
+    )
+  end
+
+  def run_local
+    puts ImportLocal.call(path: cli_args.fetch(1), project_path: project_path)
+  end
+
+  def store_github_issues
     comments.each do |item|
       StoreIssue.call(
         project_path: project_path,
