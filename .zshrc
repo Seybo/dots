@@ -106,7 +106,7 @@ export FZF_DEFAULT_COMMAND='fd --type f --strip-cwd-prefix --hidden --follow --e
 export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 # setup key bindings and fuzzy completion
 source <(fzf --zsh)
-# Free Ctrl-T for Zellij; use Ctrl-F for fzf file search instead
+# Use Ctrl-F for fzf file search; leave Ctrl-T unbound in zsh.
 bindkey '^F' fzf-file-widget
 bindkey -r '^T'
 
@@ -134,11 +134,10 @@ lf() {
   esac
 }
 
-# SSH → attach-to/create a zellij session, exit shell on detach
-# locally zellij is started manually (or by the terminal emulator)
-if [ -n "$SSH_CONNECTION" ] && [ -z "$ZELLIJ" ]; then
-  zj remote_dev
-  exit
+# SSH → attach to/create the base tmux session; detaching closes the SSH connection.
+# Local Ghostty sessions use the normal tmux workspace launchers.
+if [ -n "$SSH_CONNECTION" ] && [ -z "$TMUX" ]; then
+  exec tmux new-session -A -s base
 fi
 export PI_AGENT_SHAKACODE_SESSIONS_DIR=~/.pi/work/agent/sessions
 export PATH="$HOME/.local/bin:$PATH"
