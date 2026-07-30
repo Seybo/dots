@@ -118,7 +118,7 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, or `hermes.yaml` 
 3. If the active theme is the one being edited and the app supports hot reload:
    - Pi reloads the active custom theme file automatically.
    - fzf in the current shell updates only after `source themes/active/fzf.zsh` or `re_fzf`.
-   - Ghostty usually needs manual reload (`cmd+shift+,`) or restart.
+   - Ghostty usually needs manual reload (`cmd+ctrl+shift+r`) or restart.
    - Neovim usually needs restart/re-source because `active/nvim.lua` runs during plugin config.
    - Starship updates on a new prompt render after active file changes.
    - tmux reloads the active theme with `tmux source-file ~/.tmux.conf`.
@@ -215,7 +215,7 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, or `hermes.yaml` 
 - Switch command fails: verify `$STOW_DIR`, theme directory exists, and name is not `active`.
 - Active edits disappear: changes were made directly in `themes/active/`; update the source `themes/<name>/` instead.
 - fzf unchanged in an old shell: run `re_fzf` or `re_source`; new shells source active fzf automatically.
-- Ghostty unchanged: reload with `cmd+shift+,` or restart Ghostty.
+- Ghostty unchanged: reload with `cmd+ctrl+shift+r` or restart Ghostty.
 - Starship unchanged: verify `.config/starship.toml` import and the palette name in active `starship.toml`; trigger a new prompt.
 - tmux unchanged: verify `themes/active/tmux.conf` exists when the theme should style tmux, then run `tmux source-file ~/.tmux.conf`.
 - Neovim missing colorscheme: check `.config/nvim/lua/plugins/theme.lua`, Lazy install state, and `themes/active/nvim.lua`.

@@ -17,7 +17,7 @@ theme() {
     tmux source-file "$STOW_DIR/.tmux.conf"
   fi
   if [ "$TERM_PROGRAM" = "ghostty" ]; then
-    echo "ghostty: press cmd+shift+, to reload config"
+    echo "ghostty: press cmd+ctrl+shift+r to reload config"
   fi
   re_fzf
 }
