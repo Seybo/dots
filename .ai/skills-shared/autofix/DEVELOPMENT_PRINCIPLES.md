@@ -25,6 +25,18 @@ state.
 - Build for the normal current workflow. Add support for unusual cases only
   after real usage demonstrates the need.
 
+## Operator visibility
+
+- Autofix runs locally for its owner. No Autofix domain or runtime metadata is
+  confidential from the operator.
+- Show identifiers, database IDs, paths, source values, commands, workflow
+  state, and errors when they make the implementation or interaction simpler.
+- Do not add hidden state, indirection, or alternate identifiers merely to keep
+  implementation details out of operator-facing output.
+- Credentials, authentication data, and secrets are not Autofix domain data.
+  Keep them out of code, persisted debug data, and committed files because those
+  artifacts may leave the local machine.
+
 ## Priority of principles
 
 1. KISS is the main design principle.

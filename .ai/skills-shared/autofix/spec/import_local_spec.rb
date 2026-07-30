@@ -18,7 +18,7 @@ RSpec.describe ImportLocal do
     output = described_class.call(path: json_path, project_path: '/project')
     rows = issues.order(:id).all
 
-    expect(output).to eq('> First issue.')
+    expect(output).to eq("Issue: #{rows.first.fetch(:id)}\n\n> First issue.")
     expect(rows.map { |row| row.fetch(:body) }).to eq(['First issue.', 'Second issue.'])
     expect(rows).to all(
       include(

@@ -3,18 +3,23 @@
 class RenderIssue
   include ServiceObject
 
-  arguments :body, author: nil, path: nil, line: nil
+  arguments :issue, author: nil, path: nil, line: nil
 
   def call
-    return 'No unresolved comments.' if body.nil?
-    return quoted_body if author.nil?
+    return 'No unresolved issues.' if issue.nil?
 
-    ["Author: @#{author}", "Path: #{path}:#{line}", '', quoted_body].join("\n")
+    (metadata + ['', quoted_body]).join("\n")
   end
 
   private
 
+  def metadata
+    values = ["Issue: #{issue.fetch(:id)}"]
+    values.push("Author: @#{author}", "Path: #{path}:#{line}") unless author.nil?
+    values
+  end
+
   def quoted_body
-    body.lines(chomp: true).map { |text| text.empty? ? '>' : "> #{text}" }.join("\n")
+    issue.fetch(:body).lines(chomp: true).map { |text| text.empty? ? '>' : "> #{text}" }.join("\n")
   end
 end

@@ -12,26 +12,27 @@ RSpec.describe RenderIssue do
       ```
     MARKDOWN
   end
+  let(:issue) { { id: 12, body: body } }
 
-  it 'renders GitHub metadata and the full Markdown body' do
+  it 'renders the issue ID, GitHub metadata, and full Markdown body' do
     output = described_class.call(
-      body: body,
+      issue: issue,
       author: 'reviewer',
       path: 'app/services/example.rb',
       line: 42
     )
 
     expect(output).to eq(
-      "Author: @reviewer\nPath: app/services/example.rb:42\n\n#{quoted_body}"
+      "Issue: 12\nAuthor: @reviewer\nPath: app/services/example.rb:42\n\n#{quoted_body}"
     )
   end
 
-  it 'renders only the quoted local body' do
-    expect(described_class.call(body: body)).to eq(quoted_body)
+  it 'renders the issue ID and quoted local body' do
+    expect(described_class.call(issue: issue)).to eq("Issue: 12\n\n#{quoted_body}")
   end
 
   it 'reports an empty queue' do
-    expect(described_class.call(body: nil)).to eq('No unresolved comments.')
+    expect(described_class.call(issue: nil)).to eq('No unresolved issues.')
   end
 
   def quoted_body

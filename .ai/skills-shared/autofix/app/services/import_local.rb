@@ -11,7 +11,7 @@ class ImportLocal
     return 'No issues found.' if bodies.empty?
 
     store_issues
-    RenderIssue.call(body: issue.fetch(:body))
+    RenderIssue.call(issue: issue)
   end
 
   private

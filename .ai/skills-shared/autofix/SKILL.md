@@ -1,8 +1,8 @@
 ---
 name: autofix
 description: >-
-  Import reported issues from the current GitHub pull request or a local review
-  copied to the clipboard. Command-only skill.
+  Import and decide reported issues from the current GitHub pull request or a
+  local review copied to the clipboard. Command-only skill.
 disable-model-invocation: true
 ---
 
@@ -24,8 +24,7 @@ The supported invocations are:
 ## GitHub
 
 With no arguments, run the helper without arguments from the current checkout.
-Return its stdout unchanged, with no introduction, summary, code fence, or
-follow-up interaction.
+Return its stdout unchanged, with no introduction, summary, or code fence.
 
 ## Local
 
@@ -43,11 +42,32 @@ With the exact argument `--local`:
 
 6. Delete `/tmp/autofix-local-issues.json` after the importer returns, including
    when it fails.
-7. Return the importer's stdout unchanged, with no introduction, summary, code
-   fence, or follow-up interaction. Surface importer failures after deleting the
-   temporary file.
+7. Return the importer's stdout unchanged, with no introduction, summary, or
+   code fence. Surface importer failures after deleting the temporary file.
 
 Do not add special handling for empty clipboard text. Do not store the original
 clipboard review.
+
+## Decisions
+
+When either flow displays `Issue: <id>`, use that ID for the operator's next
+clear decision about the issue:
+
+- Treat affirmative continuation such as `go`, `yes`, or `approved` as
+  `approved`.
+- Treat a clear request to skip, ignore, reject, or mark the issue invalid as
+  `skipped`.
+- A question or unrelated message is not a decision.
+
+For a decision, run:
+
+```text
+/Users/inseybo/.ai/skills-shared/autofix/bin/autofix store-decision <id> <approved|skipped>
+```
+
+Return stdout unchanged, with no introduction, summary, or code fence. When the
+output displays another issue, apply the same behavior to the operator's next
+reply. Run one decision command per reply; do not process the queue
+automatically.
 
 Reject any other skill arguments.
