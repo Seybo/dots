@@ -141,3 +141,10 @@ if [ -n "$SSH_CONNECTION" ] && [ -z "$TMUX" ]; then
 fi
 export PI_AGENT_SHAKACODE_SESSIONS_DIR=~/.pi/work/agent/sessions
 export PATH="$HOME/.local/bin:$PATH"
+
+# bun completions
+[ -s "/Users/inseybo/.bun/_bun" ] && source "/Users/inseybo/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
