@@ -5,6 +5,7 @@
 - `nvim --help`
 
 ## Local configs
+- `~/.dots/.config/nvim/lua/config/mappings.lua`
 - `~/.dots/.config/nvim/lua/plugins/theme.lua`
 - `~/.dots/themes/active/nvim.lua`
 - `~/.dots/themes/theme_switcher.rb`

@@ -171,6 +171,11 @@ vim.keymap.set('n', '<S-down>', function() vim.cmd('resize -' .. 3) end, { silen
 -- -- [[ Files ]] -- --
 
 vim.keymap.set('n', '<leader>pa', ":let @+ = expand('%:p')<cr>", { desc = '[ Files ] Copy absolute path', silent = true })
+vim.keymap.set('n', '<leader>pc', function()
+  local location = string.format('%s:%d', vim.fn.expand('%:p'), vim.fn.line('.'))
+  vim.fn.setreg('+', location)
+  vim.api.nvim_echo({ { 'Copied' } }, false, {})
+end, { desc = '[ Files ] Copy absolute path with cursor line', silent = true })
 vim.keymap.set('n', '<leader>pr', ":let @+ = expand('%:.')<cr>", { desc = '[ Files ] Copy relative path', silent = true })
 vim.keymap.set('v', '<leader>pf', ":let @+ = expand('%:t')<cr>", { desc = '[ Files ] Copy filename', silent = true })
 vim.keymap.set('n', '<leader>pd', ":let @+ = fnamemodify(expand('%:p:h'), ':t')<cr>", { desc = '[ Files ] Copy file parent dir', silent = true })
