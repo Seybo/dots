@@ -1,12 +1,11 @@
 # frozen_string_literal: true
 
-class StartWorkerReviewWorkCycle
+class StartReviewerReviewWorkCycle
   include ServiceObject
 
   arguments :previous_work_cycle_id
 
   def call
-    ensure_no_worker_review
     ValidateWorkCycleGitState.call(project_path: review.fetch(:project_path))
     Database.connection.transaction(savepoint: true) do
       work_cycle_id = create_work_cycle
@@ -32,24 +31,13 @@ class StartWorkerReviewWorkCycle
                          select_map(:reported_issue_id)
   end
 
-  def ensure_no_worker_review
-    is_existing = Database.connection[:work_cycles].where(
-      review_id: review.fetch(:id),
-      role: 'worker',
-      action: 'review'
-    ).any?
-    return unless is_existing
-
-    raise "Review #{review.fetch(:id)} already has a Worker review Work Cycle"
-  end
-
   def create_work_cycle
     Database.connection[:work_cycles].insert(
       created_at: Time.now,
       completed_at: nil,
       review_id: review.fetch(:id),
       previous_work_cycle_id: previous_work_cycle_id,
-      role: 'worker',
+      role: 'reviewer',
       action: 'review',
       result: nil,
       provider: nil,

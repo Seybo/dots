@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'fileutils'
+require 'json'
 require 'open3'
 require 'tmpdir'
 require_relative 'spec_helper'
@@ -44,7 +45,7 @@ RSpec.describe ResumeReview do
     output = described_class.call(project_path: project_path, branch_name: 'feature')
     work_cycle = db[:work_cycles].first
 
-    expect(output).to eq("AutoFixCycle #{work_cycle.fetch(:id)}")
+    expect(output).to eq("AutoFixCycle #{work_cycle.fetch(:id)}\nAutoFixRole worker")
     expect(work_cycle).to include(review_id: review_id, role: 'worker', action: 'implementation')
   end
 
@@ -60,24 +61,24 @@ RSpec.describe ResumeReview do
     expect(db[:work_cycles].count).to eq(1)
   end
 
-  it 'creates and exposes a missing Worker review Work Cycle' do
-    review_id, implementation_work_cycle_id = complete_implementation
+  it 'creates and exposes a missing Reviewer review Work Cycle' do
+    review_id, implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
 
     output = described_class.call(project_path: project_path, branch_name: 'feature')
     review_work_cycle = db[:work_cycles].order(:id).last
 
-    expect(output).to eq("AutoFixCycle #{review_work_cycle.fetch(:id)}")
+    expect(output).to eq("AutoFixCycle #{review_work_cycle.fetch(:id)}\nAutoFixRole reviewer")
     expect(review_work_cycle).to include(
       review_id: review_id,
       previous_work_cycle_id: implementation_work_cycle_id,
-      role: 'worker',
+      role: 'reviewer',
       action: 'review'
     )
   end
 
-  it 'waits for an existing incomplete Worker review Work Cycle without redispatching it' do
-    _review_id, implementation_work_cycle_id = complete_implementation
-    review_work_cycle_id = StartWorkerReviewWorkCycle.call(
+  it 'waits for an existing incomplete Reviewer review Work Cycle without redispatching it' do
+    _review_id, implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
+    review_work_cycle_id = StartReviewerReviewWorkCycle.call(
       previous_work_cycle_id: implementation_work_cycle_id
     )
 
@@ -87,7 +88,45 @@ RSpec.describe ResumeReview do
     expect(db[:work_cycles].count).to eq(2)
   end
 
-  def complete_implementation
+  it 'does not bypass completed Reviewer findings' do
+    _review_id, reviewer_work_cycle_id = complete_reviewer_review(findings: ['Reviewer finding.'])
+
+    output = described_class.call(project_path: project_path, branch_name: 'feature')
+
+    expect(output).to eq(
+      "Reviewer review completed (Cycle #{reviewer_work_cycle_id}). Findings:\n- Reviewer finding."
+    )
+    expect(db[:work_cycles].count).to eq(2)
+  end
+
+  it 'creates and exposes the final Worker review Work Cycle after Reviewer passes' do
+    review_id, reviewer_work_cycle_id = complete_reviewer_review(findings: [])
+
+    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    review_work_cycle = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("AutoFixCycle #{review_work_cycle.fetch(:id)}\nAutoFixRole worker")
+    expect(review_work_cycle).to include(
+      review_id: review_id,
+      previous_work_cycle_id: reviewer_work_cycle_id,
+      role: 'worker',
+      action: 'review'
+    )
+  end
+
+  it 'waits for an existing incomplete final Worker review Work Cycle without redispatching it' do
+    _review_id, reviewer_work_cycle_id = complete_reviewer_review(findings: [])
+    review_work_cycle_id = StartWorkerReviewWorkCycle.call(
+      previous_work_cycle_id: reviewer_work_cycle_id
+    )
+
+    output = described_class.call(project_path: project_path, branch_name: 'feature')
+
+    expect(output).to eq("WaitWorkCycle #{review_work_cycle_id}")
+    expect(db[:work_cycles].count).to eq(3)
+  end
+
+  def complete_implementation(review_state:)
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first
     db[:reported_issues].where(id: issue_id).update(decision: 'approved')
@@ -97,9 +136,24 @@ RSpec.describe ResumeReview do
       result: '{"status":"completed"}',
       commit_sha: git!('rev-parse', 'HEAD').strip
     )
-    db[:reviews].where(id: review_id).update(state: 'worker_review')
+    db[:reviews].where(id: review_id).update(state: review_state)
 
     [review_id, implementation_work_cycle_id]
+  end
+
+  def complete_reviewer_review(findings:)
+    review_id, implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
+    reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(
+      previous_work_cycle_id: implementation_work_cycle_id
+    )
+    db[:work_cycles].where(id: reviewer_work_cycle_id).update(
+      completed_at: Time.now,
+      result: JSON.generate('findings' => findings)
+    )
+    next_state = findings.empty? ? 'worker_review' : 'reviewer_review'
+    db[:reviews].where(id: review_id).update(state: next_state)
+
+    [review_id, reviewer_work_cycle_id]
   end
 
   def store_review(issue_bodies)

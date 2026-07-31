@@ -111,17 +111,20 @@ RSpec.describe AutofixCli do
       )
     )
 
+    expected_output = Regexp.new(
+      "Worker implementation completed \\(Cycle #{work_cycle_id}\\) at [0-9a-f]{40}\\.\\n" \
+      'AutoFixCycle \d+\n' \
+      'AutoFixRole reviewer\n'
+    )
     begin
       expect do
         described_class.call(cli_args: ['wait-work-cycle', work_cycle_id.to_s])
-      end.to output(
-        /Work Cycle #{work_cycle_id} completed at [0-9a-f]{40}\.\nAutoFixCycle \d+\n/
-      ).to_stdout
+      end.to output(expected_output).to_stdout
     ensure
       FileUtils.rm_f(result_path)
     end
 
-    expect(reviews.where(id: review_id).get(:state)).to eq('worker_review')
+    expect(reviews.where(id: review_id).get(:state)).to eq('reviewer_review')
   end
 
   it 'stores a decision and displays the next issue from the same Review' do
@@ -175,7 +178,7 @@ RSpec.describe AutofixCli do
     end.to output("Decision: approved\n\nIssue: #{issue_ids.last}\n\n> Skipped issue.\n").to_stdout
     expect do
       described_class.call(cli_args: ['store-decision', issue_ids.last.to_s, 'skipped'])
-    end.to output(/Decision: skipped\n\nAutoFixCycle \d+\n/).to_stdout
+    end.to output(/Decision: skipped\n\nAutoFixCycle \d+\nAutoFixRole worker\n/).to_stdout
 
     expect(reviews.where(id: review_id).first).to include(
       state: 'worker_implementation',

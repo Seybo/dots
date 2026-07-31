@@ -44,6 +44,25 @@ For role `worker` and action `review`:
 9. Write a completed result with the common fields plus a `findings` array. Use one self-contained actionable concern string per finding. Use an empty array when there are no findings.
 10. Add no verdict, severity, summary, file-list, issue-ID, or commit-SHA fields.
 
+## Reviewer review
+
+For role `reviewer` and action `review`:
+
+1. Work only in the returned `project_path` checkout.
+2. Review the exact commit in `previous_implementation_commit_sha` against every Reported Issue in `inputs`.
+3. Inspect that commit's diff, relevant surrounding code, and affected flows. Look for concrete regressions outside the directly changed behavior instead of reviewing the diff in isolation.
+4. Reach your own conclusions from the implementation and inputs. Do not seek or infer another participant's review result.
+5. Report only:
+   - an input that the commit did not implement fully or correctly
+   - a concrete bug or regression introduced by the commit
+   - a concrete security problem, data-loss risk, or meaningful performance problem introduced by the commit
+6. Do not report pre-existing or unrelated problems, style preferences, nits, speculative improvements, or missing tests without a concrete defect.
+7. Do not edit, stage, or commit anything.
+8. Do not run linters, specs, tests, or other checks.
+9. Do not write Autofix state.
+10. Write a completed result with the common fields plus a `findings` array. Use one self-contained actionable concern string per finding. Use an empty array when there are no findings.
+11. Add no verdict, severity, summary, file-list, issue-ID, or commit-SHA fields.
+
 ## Report
 
 Write valid JSON to `/tmp/autofix-work-cycle-<id>.json` only after the action finishes.
@@ -64,7 +83,7 @@ Every completed result contains these common fields:
 
 Use the actual numeric Work Cycle ID. Copy the returned `work_cycle_id`, `role`, and `action`. Copy `PI_PROVIDER`, `PI_MODEL`, and `PI_REASONING_LEVEL` when present; otherwise use JSON `null`. Do not infer missing provenance.
 
-A completed Worker review result also contains:
+A completed review result also contains:
 
 ```json
 {

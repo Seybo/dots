@@ -5,9 +5,9 @@ require 'open3'
 require 'tmpdir'
 require_relative 'spec_helper'
 
-RSpec.describe StartWorkerReviewWorkCycle do
+RSpec.describe StartReviewerReviewWorkCycle do
   let(:db) { Database.connection }
-  let(:project_path) { Dir.mktmpdir('autofix-worker-review-spec') }
+  let(:project_path) { Dir.mktmpdir('autofix-reviewer-review-spec') }
 
   before do
     git!('init', '-q')
@@ -22,15 +22,15 @@ RSpec.describe StartWorkerReviewWorkCycle do
     FileUtils.remove_entry(project_path)
   end
 
-  it 'creates one final Worker review Work Cycle after Reviewer passes' do
-    review_id, reviewer_work_cycle_id, issue_ids = complete_reviewer_pass
+  it 'creates one Reviewer review Work Cycle with the implementation inputs' do
+    review_id, implementation_work_cycle_id, issue_ids = complete_implementation
 
-    review_work_cycle_id = described_class.call(previous_work_cycle_id: reviewer_work_cycle_id)
+    review_work_cycle_id = described_class.call(previous_work_cycle_id: implementation_work_cycle_id)
 
     expect(db[:work_cycles].where(id: review_work_cycle_id).first).to include(
       review_id: review_id,
-      previous_work_cycle_id: reviewer_work_cycle_id,
-      role: 'worker',
+      previous_work_cycle_id: implementation_work_cycle_id,
+      role: 'reviewer',
       action: 'review',
       completed_at: nil,
       result: nil,
@@ -38,31 +38,21 @@ RSpec.describe StartWorkerReviewWorkCycle do
     )
     expect(db[:work_cycle_inputs].where(work_cycle_id: review_work_cycle_id).order(:id).
       select_map(:reported_issue_id)).to eq(issue_ids)
-    expect(db[:reviews].where(id: review_id).get(:state)).to eq('worker_review')
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('reviewer_review')
   end
 
   it 'creates nothing when the working tree is dirty' do
-    _review_id, reviewer_work_cycle_id, = complete_reviewer_pass
+    _review_id, implementation_work_cycle_id, = complete_implementation
     File.write(File.join(project_path, 'tracked.txt'), "changed\n")
 
-    expect { described_class.call(previous_work_cycle_id: reviewer_work_cycle_id) }.
+    expect { described_class.call(previous_work_cycle_id: implementation_work_cycle_id) }.
       to raise_error(RuntimeError, /Working tree is not clean/)
 
-    expect(db[:work_cycles].count).to eq(2)
-    expect(db[:work_cycle_inputs].count).to eq(4)
+    expect(db[:work_cycles].count).to eq(1)
+    expect(db[:work_cycle_inputs].count).to eq(2)
   end
 
-  it 'does not create a second Worker review for the Review' do
-    review_id, reviewer_work_cycle_id, = complete_reviewer_pass
-    described_class.call(previous_work_cycle_id: reviewer_work_cycle_id)
-
-    expect { described_class.call(previous_work_cycle_id: reviewer_work_cycle_id) }.
-      to raise_error(RuntimeError, "Review #{review_id} already has a Worker review Work Cycle")
-
-    expect(db[:work_cycles].count).to eq(3)
-  end
-
-  def complete_reviewer_pass
+  def complete_implementation
     review_id = StoreReview.call(
       project_path: project_path,
       source: 'local',
@@ -83,16 +73,8 @@ RSpec.describe StartWorkerReviewWorkCycle do
       commit_sha: git!('rev-parse', 'HEAD').strip
     )
     db[:reviews].where(id: review_id).update(state: 'reviewer_review')
-    reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(
-      previous_work_cycle_id: implementation_work_cycle_id
-    )
-    db[:work_cycles].where(id: reviewer_work_cycle_id).update(
-      completed_at: Time.now,
-      result: '{"findings":[]}'
-    )
-    db[:reviews].where(id: review_id).update(state: 'worker_review')
 
-    [review_id, reviewer_work_cycle_id, issue_ids]
+    [review_id, implementation_work_cycle_id, issue_ids]
   end
 
   def git!(*arguments)

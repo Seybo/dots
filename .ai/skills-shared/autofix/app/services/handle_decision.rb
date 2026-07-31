@@ -15,7 +15,7 @@ class HandleDecision
       render(RenderIssue.call(issue: nil))
     else
       work_cycle_id = StartImplementationWorkCycle.call(review_id: review.fetch(:id))
-      render("AutoFixCycle #{work_cycle_id}")
+      render(RenderWorkCycleHandoff.call(work_cycle_id: work_cycle_id))
     end
   end
 

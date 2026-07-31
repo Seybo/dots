@@ -53,8 +53,9 @@ state.
   capabilities, but workflow logic must not be split into shell scripts.
 - Keep the fixed three-pane workflow:
   - `agent-manager` settles issues, coordinates Reviews, creates commits, and performs the final review.
-  - `agent-worker` performs implementation and Worker review Work Cycles.
+  - `agent-worker` performs implementation and the one final Worker review Work Cycle.
   - `agent-reviewer` performs independent Reviewer review Work Cycles.
+- Reviewer reviews the initial implementation and every correction until it reports no findings. Worker review runs at most once per Review, after Reviewer first passes. Corrections caused by Worker findings return through Reviewer and do not trigger another Worker review.
 - Do not build a generic agent executor, provider SDK integration, background job
   system, plugin system, or concurrency framework.
 - Build a modular monolith: one CLI and one SQLite database, split into small,
@@ -73,11 +74,13 @@ state.
   not invoke external commands during import.
 - After an approved issue authorizes Git mutation, Ruby owns deterministic Git
   staging, commit creation, SHA lookup, final squash, and normal push.
+- One `/skill:autofix` invocation continues through the entire normal Review workflow. A later invocation is only for resuming after an error, interruption, or another stop condition.
 - Manager blocks in Ruby while waiting for a Work Cycle result and performs no
   other Autofix work. Interruption preserves the incomplete Work Cycle; resume
   waits for the same result without redispatch.
 - Agent prompts own judgment such as normalizing feedback, choosing an
   implementation, and reviewing a result.
+- Manager uses a critical approach throughout the Review. It actively looks for missing requirements, contradictions, gotchas, incomplete work, and regressions while preserving operator ownership of reported-issue decisions.
 - `SKILL.md` owns Manager's external-command and agent orchestration. Delegate
   deterministic workflow behavior to the Ruby CLI instead of duplicating it.
 - Manager and Ruby own every Work Cycle lifecycle and all Autofix database
@@ -199,6 +202,9 @@ protocol are intentionally deferred to implementation-task grilling.
   participants act on a stable committed state and Manager cannot commit
   unrelated existing changes. Preserve the Review for resume when this
   check fails.
+- Worker implementation temporarily creates unstaged changes. Ruby stages and creates one new `Work cycle <id>` commit when implementation completes, returning the tree to clean before the next Work Cycle.
+- Review Work Cycles do not modify the checkout. Every correction creates another new interim commit; Autofix never amends an interim Work Cycle commit.
+- Finalization replaces the Review's interim implementation commits with one squashed `Review N` commit before the normal push. This is the only planned replacement of those commits.
 - A Review with no approved issues authorizes no Git mutation and does not
   require a clean working tree.
 - Force-push, branch changes, and unrelated Git operations remain unauthorized.

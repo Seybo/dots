@@ -38,15 +38,15 @@ One bounded implementation or review action performed by one workflow participan
 
 ## Manager
 
-The participant that settles reported issues, coordinates Work Cycles, creates commits, and performs the final review.
+The participant that settles reported issues, coordinates Work Cycles, creates commits, and performs the final review. Manager is deliberately critical: it actively looks for missing requirements, contradictions, gotchas, incomplete work, and regressions instead of acting as a passive router. The operator still makes reported-issue decisions.
 
 ## Worker
 
-The participant that implements approved reported issues and performs worker review Work Cycles.
+The participant that implements approved reported issues and performs one final Worker review Work Cycle per Review after Reviewer has no findings. If that Worker review produces corrections, Reviewer reviews them and Worker does not review again.
 
 ## Reviewer
 
-The participant that performs independent review Work Cycles.
+The participant that performs independent, context-aware review Work Cycles. Reviewer evaluates the implementation commit together with relevant surrounding code and affected flows so fixes do not introduce regressions elsewhere.
 
 ## Project Path
 

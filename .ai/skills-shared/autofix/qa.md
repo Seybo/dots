@@ -6,11 +6,13 @@ Use this process before every manual Autofix QA round.
 
 Before asking the operator to prepare anything, the agent owns all deterministic QA setup:
 
+- Derive Manager's current tmux window from dynamic `$TMUX_PANE` and restrict all participant setup and routing to that exact resolved window. Never use `tmux list-panes -a`, search other windows or sessions, hardcode tmux IDs, or fall back outside the resolved window. Fail when a required participant pane is absent there.
+
 - Create or prepare the target checkout, branch, fixture files, Git configuration, remotes, and base refs.
 - Create the feature-specific test data.
 - Put the Autofix runtime database into the state required by the QA scenario.
 - Create or remove temporary result files and other QA artifacts as required.
-- State the target checkout path that participant panes must use.
+- Set each required participant pane's working directory to the target checkout and state that checkout path.
 
 Do not include agent-owned setup in the operator prerequisite list.
 
@@ -21,7 +23,7 @@ Do not include agent-owned setup in the operator prerequisite list.
 3. Include a source prerequisite only when that source boundary is part of the feature under test. For example, require clipboard state only when testing clipboard extraction, and GitHub state only when testing GitHub collection.
 4. End with `Confirm when this QA environment is ready.`
 5. Wait for the operator's confirmation.
-6. Trust the confirmation. Do not inspect tmux panes, pane titles, pane roots, current commands, sessions, windows, working directories, clipboard contents, Git status, authentication, or other prerequisite state.
+6. Trust the confirmation. Do not inspect tmux panes, pane titles, current commands, sessions, windows, working directories, clipboard contents, Git status, authentication, or other prerequisite state.
 7. Start the QA flow directly after confirmation.
 
 If QA fails because a prerequisite was not met, report it and stop. Do not add doctor behavior or preflight checks.
@@ -31,7 +33,7 @@ If QA fails because a prerequisite was not met, report it and stop. Do not add d
 Include only the items used by the current feature:
 
 - Required participant panes exist in the current tmux window, with each required title appearing exactly once: `agent-manager`, `agent-worker`, or `agent-reviewer`.
-- Required panes run Pi and are rooted in the target checkout supplied by the agent.
+- Required panes run Pi. Autofix supplies and owns the target checkout through Work Cycle `project_path`.
 - Required Pi sessions have loaded the current shared rules, skill, prompt, and permissions.
 - Participant panes contain no extra instructions; Autofix sends only `AutoFixCycle <id>`.
 - No unrelated work will modify the target checkout, Autofix state, result files, or participant panes during QA.

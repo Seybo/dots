@@ -129,35 +129,55 @@ clipboard review.
 
 ## Work Cycle handoff
 
-When helper stdout contains a line exactly `AutoFixCycle <id>`:
+A new Work Cycle handoff contains these paired Manager control lines:
 
-1. Run `tmux list-panes -F '#{pane_id}\t#{pane_title}'` in the current tmux
-   window.
-2. Select the only pane whose title is exactly `agent-worker`. Fail if there is
-   not exactly one. Do not add pane-root checks or other preflight behavior.
-3. Send the literal message without interpretation:
+```text
+AutoFixCycle <id>
+AutoFixRole <worker|reviewer>
+```
+
+When helper stdout contains that pair:
+
+1. Retain any completed-step block before the control lines. A completed-step
+   block begins with `Worker implementation completed`, `Reviewer review
+   completed`, or `Worker review completed`. Do not retain or display the
+   `AutoFixCycle` or `AutoFixRole` control lines.
+2. Map the role to the fixed pane title:
+   - `worker` → `agent-worker`
+   - `reviewer` → `agent-reviewer`
+3. Require the dynamic `$TMUX_PANE` value for Manager's pane. Resolve its window
+   with `tmux display-message -p -t "$TMUX_PANE" '#{window_id}'`, then run
+   `tmux list-panes -t <resolved-window-id> -F '#{pane_id}\t#{pane_title}'`.
+   Select the only pane with the mapped title and fail if there is not exactly
+   one in that window. Never use `tmux list-panes -a`, search another window or
+   session, hardcode a tmux ID, or fall back outside Manager's resolved window.
+   Do not add pane-root checks or other preflight behavior.
+4. Send only the literal participant message without the role line:
 
    ```text
    tmux send-keys -t <pane-id> -l 'AutoFixCycle <id>'
    tmux send-keys -t <pane-id> Enter
    ```
 
-4. Immediately run the following command without a tool timeout and perform no
+5. Immediately run the following command without a tool timeout and perform no
    other Autofix work while it blocks:
 
    ```text
    /Volumes/dev/bin/skills/autofix wait-work-cycle <id>
    ```
 
-5. If wait-command stdout contains another line exactly `AutoFixCycle <id>`,
-   repeat this handoff for that Work Cycle in the same invocation.
-6. Otherwise return wait-command stdout unchanged. Surface failures unchanged.
+6. If wait-command stdout contains another paired handoff, retain its completed
+   block and repeat the handoff in this invocation.
+7. Otherwise append its final completed-step block to the retained blocks and
+   return all retained blocks in Work Cycle order. Separate completed review
+   blocks with one blank line. Surface failures unchanged and do not expose
+   Manager control lines.
 
 When helper stdout contains a line exactly `WaitWorkCycle <id>`, do not send
 another tmux message. Run the same blocking `wait-work-cycle` command without a
-tool timeout. If its stdout contains an `AutoFixCycle <id>` line, repeat this
-handoff for that Work Cycle in the same invocation. Otherwise return its stdout
-or failure unchanged.
+tool timeout. If its stdout contains a paired handoff, follow the role routing
+above in the same invocation. Otherwise return its completed-step output or
+failure unchanged.
 
 ## Decisions
 

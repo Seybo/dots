@@ -72,12 +72,14 @@ class WaitWorkCycle
       project_path: review.fetch(:project_path),
       branch_name: review.fetch(:branch_name)
     )
-    "Work Cycle #{work_cycle.fetch(:id)} completed at #{commit_sha}.\n#{next_action}"
+    "Worker implementation completed (Cycle #{work_cycle.fetch(:id)}) at #{commit_sha}.\n#{next_action}"
   end
 
   def complete_review
     output = RenderWorkCycleResult.call(
       work_cycle_id: work_cycle.fetch(:id),
+      role: work_cycle.fetch(:role),
+      action: work_cycle.fetch(:action),
       findings: work_cycle_result.fetch('findings')
     )
     StoreWorkCycleCompletion.call(
@@ -85,7 +87,17 @@ class WaitWorkCycle
       work_cycle_result: work_cycle_result
     )
     File.delete(result_path)
-    output
+    return output unless start_worker_review?
+
+    next_action = ResumeReview.call(
+      project_path: review.fetch(:project_path),
+      branch_name: review.fetch(:branch_name)
+    )
+    "#{output}\n#{next_action}"
+  end
+
+  def start_worker_review?
+    work_cycle.fetch(:role) == 'reviewer' && work_cycle_result.fetch('findings').empty?
   end
 
   def review
