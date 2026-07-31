@@ -3,11 +3,11 @@
 require_relative 'spec_helper'
 
 RSpec.describe StoreIssue do
-  let(:issues) { Database.connection[:reported_issues] }
+  let(:reported_issues) { Database.connection[:reported_issues] }
 
   it 'stores one issue with generated fields' do
     id = store_issue
-    issue = issues.where(id: id).first
+    issue = reported_issues.where(id: id).first
 
     expect(issue).to include(
       id: id,
@@ -25,7 +25,7 @@ RSpec.describe StoreIssue do
     store_issue(project_path: '/other-project')
     store_issue(source_id: 2)
 
-    expect(issues.count).to eq(3)
+    expect(reported_issues.count).to eq(3)
   end
 
   it 'stores every local issue with no source ID' do
@@ -33,26 +33,26 @@ RSpec.describe StoreIssue do
     second_id = store_issue(source: 'local', source_id: nil)
 
     expect(first_id).not_to eq(second_id)
-    expect(issues.where(source: 'local').select_map(:source_id)).to eq([nil, nil])
+    expect(reported_issues.where(source: 'local').select_map(:source_id)).to eq([nil, nil])
   end
 
   it 'updates only the body of an unresolved issue' do
     id = store_issue
-    original = issues.where(id: id).first
+    original = reported_issues.where(id: id).first
 
     store_issue(body: 'Changed body')
 
-    expect(issues.where(id: id).first).to eq(original.merge(body: 'Changed body'))
+    expect(reported_issues.where(id: id).first).to eq(original.merge(body: 'Changed body'))
   end
 
   it 'does not change a decided issue' do
     id = store_issue
-    issues.where(id: id).update(decision: 'approved')
-    original = issues.where(id: id).first
+    reported_issues.where(id: id).update(decision: 'approved')
+    original = reported_issues.where(id: id).first
 
     store_issue(body: 'Changed body')
 
-    expect(issues.where(id: id).first).to eq(original)
+    expect(reported_issues.where(id: id).first).to eq(original)
   end
 
   def store_issue(overrides = {})

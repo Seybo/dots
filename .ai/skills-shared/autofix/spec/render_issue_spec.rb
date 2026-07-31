@@ -14,20 +14,7 @@ RSpec.describe RenderIssue do
   end
   let(:issue) { { id: 12, body: body } }
 
-  it 'renders the issue ID, GitHub metadata, and full Markdown body' do
-    output = described_class.call(
-      issue: issue,
-      author: 'reviewer',
-      path: 'app/services/example.rb',
-      line: 42
-    )
-
-    expect(output).to eq(
-      "Issue: 12\nAuthor: @reviewer\nPath: app/services/example.rb:42\n\n#{quoted_body}"
-    )
-  end
-
-  it 'renders the issue ID and quoted local body' do
+  it 'renders the issue ID and quoted source-neutral body' do
     expect(described_class.call(issue: issue)).to eq("Issue: 12\n\n#{quoted_body}")
   end
 

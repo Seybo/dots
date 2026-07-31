@@ -2,7 +2,7 @@
 
 require 'open3'
 
-class FindProjectPath
+class ResolveProjectPath
   include ServiceObject
 
   def call

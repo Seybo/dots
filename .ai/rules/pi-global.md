@@ -38,6 +38,11 @@ Language- and project-neutral rules for all agents unless a project's local inst
 - Staging files (`git add`) is also a git state mutation. Ask first unless the user explicitly asked to commit or prepare a commit.
 - If approval is ambiguous, stop and ask.
 
+## Autofix Work Cycle messages
+
+- When the complete user message matches the case-sensitive pattern `^AutoFixCycle [0-9]+$`, immediately read and follow `~/.ai/skills-shared/autofix/app/prompts/work_cycle.md` using the supplied Work Cycle ID.
+- Do not trigger the Autofix participant protocol when the message contains any other text or uses different capitalization.
+
 ## Review state assumptions
 
 - An unmerged PR's intermediate state is not a compatibility contract. Do not require compatibility for temporary commits, filenames, schemas, or behavior that never shipped; review the final branch against the merge base and deployed state.

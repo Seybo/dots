@@ -6,71 +6,53 @@ class AutofixCli
   arguments :cli_args
 
   def call
-    MigrateDatabase.call
-    puts output
+    MigrateDatabase.call unless cli_args.first == 'show-work-cycle'
+    puts handle_command
   end
 
   private
 
-  def output
-    return github_output if cli_args.empty?
-    return ImportLocal.call(path: cli_args.fetch(1), project_path: project_path) if cli_args.first == 'import-local'
-    return decision_output if cli_args.first == 'store-decision'
+  def handle_command
+    return handle_github_review if cli_args.first == 'import-github-review'
+    return handle_local_review if cli_args.first == 'import-local-review'
+    return handle_decision if cli_args.first == 'store-decision'
+    return handle_resume if cli_args.first == 'resume'
+    return show_work_cycle if cli_args.first == 'show-work-cycle'
+    return wait_work_cycle if cli_args.first == 'wait-work-cycle'
 
-    raise ArgumentError, 'Usage: autofix [import-local <json-path> | store-decision <issue-id> <decision>]'
+    raise ArgumentError, usage
   end
 
-  def github_output
-    store_github_issues(project_path)
-    render_issue(next_issue(project_path: project_path, source: 'github'))
+  def handle_github_review
+    HandleGithubReview.call(json_path: cli_args.fetch(1), project_path: project_path)
   end
 
-  def decision_output
-    decision = cli_args.fetch(2)
-    issue = StoreDecision.call(issue_id: cli_args.fetch(1), decision: decision)
-    store_github_issues(issue.fetch(:project_path)) if issue.fetch(:source) == 'github'
-    rendered_issue = render_issue(next_issue(project_path: issue.fetch(:project_path), source: issue.fetch(:source)))
-
-    RenderDecision.call(decision: decision, next_issue: rendered_issue)
+  def handle_local_review
+    HandleLocalReview.call(json_path: cli_args.fetch(1), project_path: project_path)
   end
 
-  def next_issue(project_path:, source:)
-    NextIssue.call(
-      project_path: project_path,
-      source: source,
-      source_ids: source == 'github' ? comments.map { |item| item.fetch('id') } : nil
-    )
+  def handle_decision
+    HandleDecision.call(issue_id: cli_args.fetch(1), decision: cli_args.fetch(2))
   end
 
-  def render_issue(issue)
-    return RenderIssue.call(issue: nil) if issue.nil?
-    return RenderIssue.call(issue: issue) if issue.fetch(:source) == 'local'
-
-    comment = comments.find { |item| item.fetch('id').to_s == issue.fetch(:source_id) }
-    RenderIssue.call(
-      issue: issue,
-      author: comment.fetch('user').fetch('login'),
-      path: comment.fetch('path'),
-      line: comment.fetch('line')
-    )
+  def handle_resume
+    ResumeReview.call(project_path: project_path, branch_name: cli_args.fetch(1))
   end
 
-  def store_github_issues(project_path)
-    comments.each do |item|
-      StoreIssue.call(
-        project_path: project_path,
-        source: 'github',
-        source_id: item.fetch('id'),
-        body: item.fetch('body')
-      )
-    end
+  def show_work_cycle
+    ShowWorkCycle.call(work_cycle_id: cli_args.fetch(1))
   end
 
-  def comments
-    @comments ||= FetchComments.call
+  def wait_work_cycle
+    WaitWorkCycle.call(work_cycle_id: cli_args.fetch(1))
   end
 
   def project_path
-    @project_path ||= FindProjectPath.call
+    @project_path ||= ResolveProjectPath.call
+  end
+
+  def usage
+    'Usage: autofix [import-github-review <json-path> | import-local-review <json-path> | ' \
+      'store-decision <issue-id> <decision> | resume <branch> | show-work-cycle <id> | wait-work-cycle <id>]'
   end
 end

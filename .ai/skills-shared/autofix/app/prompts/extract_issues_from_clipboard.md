@@ -1,4 +1,4 @@
-# Parse clipboard review
+# Extract issues from clipboard
 
 Turn the clipboard review into reported issues.
 

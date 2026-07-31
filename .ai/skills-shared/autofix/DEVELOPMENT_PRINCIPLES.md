@@ -52,9 +52,9 @@ state.
 - Use Ruby for application behavior. External executables may provide system
   capabilities, but workflow logic must not be split into shell scripts.
 - Keep the fixed three-pane workflow:
-  - `agent-manager` coordinates the run through the Ruby CLI.
-  - `agent-worker` performs implementation and other worker actions.
-  - `agent-reviewer` performs reviewer actions.
+  - `agent-manager` settles issues, coordinates Reviews, creates commits, and performs the final review.
+  - `agent-worker` performs implementation and Worker review Work Cycles.
+  - `agent-reviewer` performs independent Reviewer review Work Cycles.
 - Do not build a generic agent executor, provider SDK integration, background job
   system, plugin system, or concurrency framework.
 - Build a modular monolith: one CLI and one SQLite database, split into small,
@@ -66,13 +66,23 @@ state.
 
 ## Deterministic behavior and agent judgment
 
-- Ruby owns deterministic mechanics such as state changes, persistence, command
-  execution, GitHub fetching, Git operations, agent dispatch, and required
-  input handling.
-- Agent prompts own judgment such as evaluating feedback, choosing an
+- Ruby owns deterministic mechanics such as validation, state changes,
+  persistence, selection, and required input handling.
+- Manager invokes `gh`, `tmux`, `pbpaste`, and read-only Git commands needed to
+  collect import context, then gives their structured results to Ruby. Ruby does
+  not invoke external commands during import.
+- After an approved issue authorizes Git mutation, Ruby owns deterministic Git
+  staging, commit creation, SHA lookup, final squash, and normal push.
+- Manager blocks in Ruby while waiting for a Work Cycle result and performs no
+  other Autofix work. Interruption preserves the incomplete Work Cycle; resume
+  waits for the same result without redispatch.
+- Agent prompts own judgment such as normalizing feedback, choosing an
   implementation, and reviewing a result.
-- `SKILL.md` should only contain what Pi needs to invoke and operate the CLI. It
-  must not duplicate the workflow implementation.
+- `SKILL.md` owns Manager's external-command and agent orchestration. Delegate
+  deterministic workflow behavior to the Ruby CLI instead of duplicating it.
+- Manager and Ruby own every Work Cycle lifecycle and all Autofix database
+  writes. Worker and Reviewer report completion through structured result files;
+  those files are transport, not authoritative state.
 
 ## Language and naming
 
@@ -80,10 +90,35 @@ state.
   prompts, tests, task files, and documentation.
 - Prefer the shortest name that preserves the full meaning. Remove words already
   clear from the local context, but do not shorten names into ambiguity.
-- Use established domain terms consistently. Avoid synonyms and unnecessary
-  abbreviations.
+- Use the domain terms Reported Issue, Review, Work Cycle, Manager, Worker, and
+  Reviewer consistently. Avoid synonyms and unnecessary abbreviations.
+- Before choosing a name, inspect nearby code and existing names for the same
+  responsibility or data shape. Reuse their domain terms, verbs, qualifiers,
+  and suffix patterns unless an existing name is inaccurate. Do not introduce a
+  synonym or a new naming pattern for an established concept.
+- Name root services for their complete use case and lower-level services for
+  their exact effect. Use `Handle` for use-case orchestration, `Store` for
+  database writes, `Find` for lookup without mutation, `Resolve` for deriving a
+  canonical value, and `Render` for text output.
 - A singular service name acts on one item. Use a plural name only when the
   service owns collection behavior.
+- Name a loaded Reported Issue record `issue` and a collection of those records
+  `issues`, never `row` or `rows`. Use `reported_issues` for the Sequel dataset.
+- Use `issue_data` for unstored issue hashes and add a source or state qualifier
+  only when it distinguishes the value, such as `github_issue_data`,
+  `normalized_issue_data`, or `unassigned_issue_data`.
+- Use `review_input` for parsed import content and `json_path` for the path to
+  its JSON file. Do not use generic names such as `payload` or `path` when the
+  narrower meaning is known.
+- Use explicit identifier and value suffixes such as `_id`, `_sha`, and `_name`.
+  Boolean attributes, arguments, and variables start with `is_`; Ruby predicate
+  methods end with `?`. Count names use a count-like suffix.
+- Keep Work Cycle terms distinct: `role` identifies the participant, `action`
+  identifies the work, `inputs` are Reported Issues received by the participant,
+  and `findings` are Reported Issues produced by review.
+- Prefer separate tables for distinct relationships over a generic relationship
+  table with a discriminator, as with `work_cycle_inputs` and
+  `work_cycle_findings`.
 - Keep headings, sentences, examples, and explanations short. Include details
   that affect behavior; remove repetition and filler.
 
@@ -135,18 +170,40 @@ not a requirement to create empty scaffolding.
 - Do not create ORM models, callbacks, or a repository layer.
 - Put genuine data invariants in SQLite with foreign keys, unique indexes, and
   check constraints. Let violations raise naturally.
+- Persist each source import's issue changes, Review, and `review_issues` links
+  in one transaction so a failed import leaves no partial Review.
 - Every persisted table must declare an integer primary `id` with Sequel's
   `primary_key :id`; SQLite generates its value automatically. Application
   services must not calculate or supply IDs.
 - Every persisted table must have a non-null `created_at` timestamp supplied when
   the row is inserted. Add `updated_at` only when a concrete workflow needs it.
   Keep domain identity enforced separately with unique constraints.
-- Runs, reported issues, decisions, and agent results belong in SQLite. Generated
-  Markdown or JSON handoff files are not authoritative state.
+- Work Cycles, Reviews, reported issues, decisions, and agent results belong
+  in SQLite. Generated JSON handoff files are not authoritative state.
+- Manager is Autofix's only database writer. Participants read their authoritative
+  context through the deterministic `autofix show-work-cycle <id>` command; do
+  not give them arbitrary SQLite command access.
 - Do not support legacy Addressit state.
 
 The exact schema, persisted workflow boundaries, state names, and handoff
 protocol are intentionally deferred to implementation-task grilling.
+
+## Git ownership
+
+- Invoking Autofix does not authorize Git mutation by itself.
+- The first approved issue in a Review authorizes Autofix's deterministic
+  Ruby workflow to stage that Review's changes, create local `Work cycle <id>`
+  commits, squash them into one `Review N` commit, and normally push that
+  final commit.
+- Require a clean working tree immediately before every Work Cycle so
+  participants act on a stable committed state and Manager cannot commit
+  unrelated existing changes. Preserve the Review for resume when this
+  check fails.
+- A Review with no approved issues authorizes no Git mutation and does not
+  require a clean working tree.
+- Force-push, branch changes, and unrelated Git operations remain unauthorized.
+  Rebase is authorized only by the explicit `/skill:autofix --rebase-base`
+  operation.
 
 ## Prompts
 
@@ -156,13 +213,22 @@ protocol are intentionally deferred to implementation-task grilling.
 - Use `.md` for static prompts and `.md.erb` when runtime interpolation is
   required. Render delivered prompts as Markdown.
 - Use Ruby's standard `ERB`; do not add a template framework.
-- Give each agent action its own self-contained prompt. Do not build shared
-  partial machinery until repeated real use proves it helpful.
-- Use headings, lists, and code fences when they improve clarity. Do not force
-  every prompt into a generic schema.
+- Keep GitHub issue normalization in
+  `app/prompts/normalize_github_issue.md` and shared Work Cycle participant
+  instructions in `app/prompts/work_cycle.md`. Global agent rules make the exact message
+  `AutoFixCycle <id>` load those instructions; participants read role, action,
+  inputs, and findings from SQLite.
+- Do not generate or persist dynamic Work Cycle prompts. Use headings, lists,
+  and code fences in static prompts when they improve clarity.
 
 ## Failures and safety
 
+- Work Cycle participants report inability to complete through a structured
+  `failed` result with a sanitized error. Manager exposes the error, leaves the
+  Work Cycle incomplete, retains the result file, and does not retry or commit.
+- Process successful implementation results in one straight sequence: stage,
+  commit, read the SHA, persist completion, advance state, and delete the result.
+  Fail immediately without cross-system transaction or recovery machinery.
 - Native Ruby and gem exceptions are acceptable, including `NoMethodError`,
   `KeyError`, `JSON::ParserError`, and SQLite constraint errors.
 - Do not add validations merely to make every error friendlier.
@@ -233,7 +299,7 @@ future task-specific grilling:
 - Autofix may be outcome-compatible with Addressit rather than interface-compatible.
 - Its intended role may be a supervised closer rather than a fully autonomous
   system or a passive assistant.
-- A run may own one bounded feedback round.
+- A run may own one bounded Review.
 - Human supervision may use an initial scope gate and a final-result gate.
 
 ## Explicitly deferred

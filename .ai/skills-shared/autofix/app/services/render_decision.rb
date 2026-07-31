@@ -3,9 +3,9 @@
 class RenderDecision
   include ServiceObject
 
-  arguments :decision, :next_issue
+  arguments :decision, :next_action
 
   def call
-    "Decision: #{decision}\n\n#{next_issue}"
+    "Decision: #{decision}\n\n#{next_action}"
   end
 end

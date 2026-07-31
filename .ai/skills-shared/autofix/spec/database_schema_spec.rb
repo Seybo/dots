@@ -7,19 +7,25 @@ RSpec.describe 'database schema' do
   let(:db) { Database.connection }
 
   it 'creates reported issues with generated IDs and creation times' do
-    expect(db.schema(:reported_issues).map(&:first)).to eq(
+    expect(columns(:reported_issues)).to eq(
       %i[id created_at project_path source source_id body decision]
     )
-    expect(column(:id)).to include(primary_key: true, auto_increment: true)
-    expect(column(:created_at)).to include(allow_null: false)
+    expect(column(:reported_issues, :id)).to include(primary_key: true, auto_increment: true)
+    expect(column(:reported_issues, :created_at)).to include(allow_null: false)
+  end
+
+  it 'opens a read-only participant connection' do
+    expect(Database.readonly_connection[:reported_issues].count).to eq(0)
+    expect { Database.readonly_connection[:reported_issues].insert(issue_attributes) }.
+      to raise_error(Sequel::DatabaseError)
   end
 
   it 'requires issue data' do
     %i[project_path source body].each do |name|
-      expect(column(name)).to include(allow_null: false)
+      expect(column(:reported_issues, name)).to include(allow_null: false)
     end
-    expect(column(:source_id)).to include(allow_null: true)
-    expect(column(:decision)).to include(allow_null: true)
+    expect(column(:reported_issues, :source_id)).to include(allow_null: true)
+    expect(column(:reported_issues, :decision)).to include(allow_null: true)
     expect { db[:reported_issues].insert(issue_attributes.except(:created_at)) }.
       to raise_error(Sequel::NotNullConstraintViolation)
   end
@@ -47,7 +53,11 @@ RSpec.describe 'database schema' do
     expect { db[:reported_issues].insert(issue_attributes(source: 'local')) }.
       to raise_error(Sequel::CheckConstraintViolation)
 
-    expect { db[:reported_issues].insert(issue_attributes(source: 'local', source_id: nil)) }.not_to raise_error
+    %w[local autowork worker reviewer manager].each_with_index do |source, index|
+      expect do
+        db[:reported_issues].insert(issue_attributes(source: source, source_id: nil, body: "Issue #{index}."))
+      end.not_to raise_error
+    end
   end
 
   it 'allows only known decisions' do
@@ -58,7 +68,7 @@ RSpec.describe 'database schema' do
     expect { db[:reported_issues].insert(issue_attributes(source_id: '2', decision: 'skipped')) }.not_to raise_error
   end
 
-  it 'adds the identity and queue indexes' do
+  it 'adds the reported issue identity and queue indexes' do
     indexes = db.indexes(:reported_issues)
 
     expect(indexes.fetch(:reported_issues_identity_index)).to include(
@@ -71,6 +81,126 @@ RSpec.describe 'database schema' do
     )
   end
 
+  it 'creates Reviews with required metadata and nullable lifecycle values' do
+    expect(columns(:reviews)).to eq(
+      %i[
+        id created_at completed_at project_path number source branch_name starting_commit_sha original_base_ref
+        original_base_commit_sha active_base_ref active_base_commit_sha state final_commit_sha
+      ]
+    )
+    expect_generated_id_and_created_at(:reviews)
+
+    required = %i[
+      project_path number source branch_name original_base_ref original_base_commit_sha active_base_ref
+      active_base_commit_sha state
+    ]
+    required.each { |name| expect(column(:reviews, name)).to include(allow_null: false) }
+    %i[completed_at starting_commit_sha final_commit_sha].each do |name|
+      expect(column(:reviews, name)).to include(allow_null: true)
+    end
+  end
+
+  it 'enforces Review source, state, and project-scoped number' do
+    db[:reviews].insert(review_attributes)
+
+    expect { db[:reviews].insert(review_attributes(number: 1)) }.
+      to raise_error(Sequel::UniqueConstraintViolation)
+    expect { db[:reviews].insert(review_attributes(number: 2, source: 'email')) }.
+      to raise_error(Sequel::CheckConstraintViolation)
+    expect { db[:reviews].insert(review_attributes(number: 2, state: 'running')) }.
+      to raise_error(Sequel::CheckConstraintViolation)
+    expect { db[:reviews].insert(review_attributes(number: 2, state: 'worker_review')) }.
+      not_to raise_error
+  end
+
+  it 'creates Review issue relationships with foreign keys and unique pairs' do
+    expect(columns(:review_issues)).to eq(
+      %i[id created_at review_id reported_issue_id]
+    )
+    expect_generated_id_and_created_at(:review_issues)
+
+    review_id = db[:reviews].insert(review_attributes)
+    issue_id = db[:reported_issues].insert(issue_attributes)
+    attributes = relationship_attributes(review_id: review_id, reported_issue_id: issue_id)
+    db[:review_issues].insert(attributes)
+
+    expect { db[:review_issues].insert(attributes) }.
+      to raise_error(Sequel::UniqueConstraintViolation)
+    expect { db[:review_issues].insert(attributes.merge(review_id: review_id + 1)) }.
+      to raise_error(Sequel::ForeignKeyConstraintViolation)
+  end
+
+  it 'creates Work Cycles with required identity and nullable result data' do
+    expect(columns(:work_cycles)).to eq(
+      %i[
+        id created_at completed_at review_id previous_work_cycle_id role action result provider model
+        reasoning_level commit_sha
+      ]
+    )
+    expect_generated_id_and_created_at(:work_cycles)
+
+    %i[review_id role action].each do |name|
+      expect(column(:work_cycles, name)).to include(allow_null: false)
+    end
+    %i[completed_at previous_work_cycle_id result provider model reasoning_level commit_sha].each do |name|
+      expect(column(:work_cycles, name)).to include(allow_null: true)
+    end
+  end
+
+  it 'enforces Work Cycle roles, actions, and foreign keys' do
+    review_id = db[:reviews].insert(review_attributes)
+    work_cycle_id = db[:work_cycles].insert(work_cycle_attributes(review_id: review_id))
+
+    expect(work_cycle_id).to be_a(Integer)
+    expect do
+      db[:work_cycles].insert(work_cycle_attributes(review_id: review_id, role: 'operator'))
+    end.to raise_error(Sequel::CheckConstraintViolation)
+    expect do
+      db[:work_cycles].insert(work_cycle_attributes(review_id: review_id, action: 'debate'))
+    end.to raise_error(Sequel::CheckConstraintViolation)
+    expect do
+      db[:work_cycles].insert(work_cycle_attributes(review_id: review_id + 1))
+    end.to raise_error(Sequel::ForeignKeyConstraintViolation)
+
+    expect do
+      db[:work_cycles].insert(
+        work_cycle_attributes(review_id: review_id, previous_work_cycle_id: work_cycle_id)
+      )
+    end.not_to raise_error
+  end
+
+  it 'creates Work Cycle input and finding relationships with foreign keys and unique pairs' do
+    %i[work_cycle_inputs work_cycle_findings].each do |table|
+      expect(columns(table)).to eq(%i[id created_at work_cycle_id reported_issue_id])
+      expect_generated_id_and_created_at(table)
+    end
+
+    review_id = db[:reviews].insert(review_attributes)
+    work_cycle_id = db[:work_cycles].insert(work_cycle_attributes(review_id: review_id))
+    input_issue_id = db[:reported_issues].insert(issue_attributes)
+    finding_issue_id = db[:reported_issues].insert(
+      issue_attributes(source: 'reviewer', source_id: nil, body: 'Reviewer finding.')
+    )
+    input_attributes = relationship_attributes(
+      work_cycle_id: work_cycle_id,
+      reported_issue_id: input_issue_id
+    )
+    finding_attributes = relationship_attributes(
+      work_cycle_id: work_cycle_id,
+      reported_issue_id: finding_issue_id
+    )
+    db[:work_cycle_inputs].insert(input_attributes)
+    db[:work_cycle_findings].insert(finding_attributes)
+
+    expect { db[:work_cycle_inputs].insert(input_attributes) }.
+      to raise_error(Sequel::UniqueConstraintViolation)
+    expect { db[:work_cycle_findings].insert(finding_attributes) }.
+      to raise_error(Sequel::UniqueConstraintViolation)
+    expect do
+      db[:work_cycle_inputs].insert(input_attributes.merge(reported_issue_id: input_issue_id + 2))
+    end.to raise_error(Sequel::ForeignKeyConstraintViolation)
+  end
+
   it 'rolls back the schema' do
     Dir.mktmpdir('autofix-schema-spec') do |dir|
       rollback_db = Sequel.sqlite(File.join(dir, 'rollback.db'))
@@ -78,23 +208,46 @@ RSpec.describe 'database schema' do
       begin
         Database.configure_connection(rollback_db)
         Sequel::Migrator.run(rollback_db, migrations_path)
-        expect(rollback_db.table_exists?(:reported_issues)).to eq(true)
+        expect(rollback_db.tables).to include(
+          :reported_issues,
+          :reviews,
+          :review_issues,
+          :work_cycles,
+          :work_cycle_inputs,
+          :work_cycle_findings
+        )
 
         Sequel::Migrator.run(rollback_db, migrations_path, target: 0)
-        expect(rollback_db.table_exists?(:reported_issues)).to eq(false)
+        expect(rollback_db.tables).not_to include(
+          :reported_issues,
+          :reviews,
+          :review_issues,
+          :work_cycles,
+          :work_cycle_inputs,
+          :work_cycle_findings
+        )
       ensure
         rollback_db.disconnect
       end
     end
   end
 
-  def column(name)
-    db.schema(:reported_issues).to_h.fetch(name)
+  def columns(table)
+    db.schema(table).map(&:first)
+  end
+
+  def column(table, name)
+    db.schema(table).to_h.fetch(name)
+  end
+
+  def expect_generated_id_and_created_at(table)
+    expect(column(table, :id)).to include(primary_key: true, auto_increment: true)
+    expect(column(table, :created_at)).to include(allow_null: false)
   end
 
   def issue_attributes(overrides = {})
     {
-      created_at: Time.local(2026, 7, 29, 12),
+      created_at: timestamp,
       project_path: '/project',
       source: 'github',
       source_id: '1',
@@ -103,7 +256,49 @@ RSpec.describe 'database schema' do
     }.merge(overrides)
   end
 
+  def review_attributes(overrides = {})
+    {
+      created_at: timestamp,
+      completed_at: nil,
+      project_path: '/project',
+      number: 1,
+      source: 'github',
+      branch_name: 'feature',
+      starting_commit_sha: nil,
+      original_base_ref: 'origin/main',
+      original_base_commit_sha: 'base-sha',
+      active_base_ref: 'origin/main',
+      active_base_commit_sha: 'base-sha',
+      state: 'manager_issue_selection',
+      final_commit_sha: nil
+    }.merge(overrides)
+  end
+
+  def work_cycle_attributes(overrides = {})
+    {
+      created_at: timestamp,
+      completed_at: nil,
+      review_id: nil,
+      previous_work_cycle_id: nil,
+      role: 'worker',
+      action: 'implementation',
+      result: nil,
+      provider: nil,
+      model: nil,
+      reasoning_level: nil,
+      commit_sha: nil
+    }.merge(overrides)
+  end
+
+  def relationship_attributes(overrides)
+    { created_at: timestamp }.merge(overrides)
+  end
+
+  def timestamp
+    Time.local(2026, 7, 29, 12)
+  end
+
   def migrations_path
-    Database.repo_root.join('db', 'migrations').to_s
+    Database.root.join('db', 'migrations').to_s
   end
 end

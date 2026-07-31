@@ -6,6 +6,16 @@ class StoreIssue
   arguments :project_path, :source, :body, source_id: nil
 
   def call
+    inserted_id = upsert
+
+    return inserted_id if source_id.nil?
+
+    issues.where(project_path: project_path, source: source, source_id: source_id.to_s).get(:id)
+  end
+
+  private
+
+  def upsert
     issues.
       insert_conflict(
         target: %i[project_path source source_id],
@@ -14,8 +24,6 @@ class StoreIssue
       ).
       insert(attributes)
   end
-
-  private
 
   def issues
     Database.connection[:reported_issues]

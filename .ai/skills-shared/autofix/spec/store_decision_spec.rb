@@ -3,16 +3,16 @@
 require_relative 'spec_helper'
 
 RSpec.describe StoreDecision do
-  let(:issues) { Database.connection[:reported_issues] }
+  let(:reported_issues) { Database.connection[:reported_issues] }
 
-  it 'approves the exact issue ID and returns the updated row' do
+  it 'approves the exact issue ID and returns the updated issue' do
     other_id = store_issue(source_id: 1)
     issue_id = store_issue(source_id: 2)
 
     issue = described_class.call(issue_id: issue_id, decision: 'approved')
 
-    expect(issues.where(id: other_id).get(:decision)).to be_nil
-    expect(issues.where(id: issue_id).get(:decision)).to eq('approved')
+    expect(reported_issues.where(id: other_id).get(:decision)).to be_nil
+    expect(reported_issues.where(id: issue_id).get(:decision)).to eq('approved')
     expect(issue).to include(id: issue_id, decision: 'approved')
   end
 

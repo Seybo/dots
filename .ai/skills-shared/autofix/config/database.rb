@@ -7,12 +7,12 @@ require 'sequel'
 module Database
   module_function
 
-  def repo_root
+  def root
     Pathname.new(__dir__).join('..').expand_path
   end
 
   def default_path
-    repo_root.join('db', 'autofix.db')
+    root.join('db', 'autofix.db')
   end
 
   def path
@@ -26,9 +26,15 @@ module Database
     end
   end
 
+  def readonly_connection
+    @readonly_connection ||= Sequel.sqlite(path.to_s, readonly: true, timeout: 5000)
+  end
+
   def disconnect
     @connection&.disconnect
+    @readonly_connection&.disconnect
     @connection = nil
+    @readonly_connection = nil
   end
 
   def configure_connection(db)

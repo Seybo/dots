@@ -12,6 +12,6 @@ class MigrateDatabase
   private
 
   def migrations_path
-    Database.repo_root.join('db', 'migrations')
+    Database.root.join('db', 'migrations')
   end
 end
