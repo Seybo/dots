@@ -60,12 +60,46 @@ RSpec.describe ResumeReview do
     expect(db[:work_cycles].count).to eq(1)
   end
 
-  it 'reports when the Review is ready for Worker review' do
+  it 'creates and exposes a missing Worker review Work Cycle' do
+    review_id, implementation_work_cycle_id = complete_implementation
+
+    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    review_work_cycle = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("AutoFixCycle #{review_work_cycle.fetch(:id)}")
+    expect(review_work_cycle).to include(
+      review_id: review_id,
+      previous_work_cycle_id: implementation_work_cycle_id,
+      role: 'worker',
+      action: 'review'
+    )
+  end
+
+  it 'waits for an existing incomplete Worker review Work Cycle without redispatching it' do
+    _review_id, implementation_work_cycle_id = complete_implementation
+    review_work_cycle_id = StartWorkerReviewWorkCycle.call(
+      previous_work_cycle_id: implementation_work_cycle_id
+    )
+
+    output = described_class.call(project_path: project_path, branch_name: 'feature')
+
+    expect(output).to eq("WaitWorkCycle #{review_work_cycle_id}")
+    expect(db[:work_cycles].count).to eq(2)
+  end
+
+  def complete_implementation
     review_id = store_review(['Approved issue.'])
+    issue_id = review_issue_ids(review_id).first
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
+    db[:work_cycles].where(id: implementation_work_cycle_id).update(
+      completed_at: Time.now,
+      result: '{"status":"completed"}',
+      commit_sha: git!('rev-parse', 'HEAD').strip
+    )
     db[:reviews].where(id: review_id).update(state: 'worker_review')
 
-    expect(described_class.call(project_path: project_path, branch_name: 'feature')).
-      to eq('Review 1 is ready for Worker review.')
+    [review_id, implementation_work_cycle_id]
   end
 
   def store_review(issue_bodies)

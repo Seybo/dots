@@ -12,9 +12,11 @@ Follow these instructions only when the complete user message is exactly `AutoFi
    ```
 
 3. Treat the returned JSON as authoritative. Do not query Autofix SQLite directly.
-4. Require role `worker` and action `implementation`. If either differs, write a failed result describing the mismatch and stop.
+4. Follow the section matching the returned `role` and `action`. If no section matches, write a failed result describing the mismatch and stop.
 
-## Implement
+## Worker implementation
+
+For role `worker` and action `implementation`:
 
 1. Work only in the returned `project_path` checkout.
 2. Inspect the current code and implement every Reported Issue in `inputs` as one coherent change.
@@ -22,12 +24,31 @@ Follow these instructions only when the complete user message is exactly `AutoFi
 4. Run focused checks when useful.
 5. Do not stage or commit changes.
 6. Do not write Autofix state.
+7. Write a completed result with exactly the common fields below.
+
+## Worker review
+
+For role `worker` and action `review`:
+
+1. Work only in the returned `project_path` checkout.
+2. Review the exact commit in `previous_implementation_commit_sha` against every Reported Issue in `inputs`.
+3. Inspect that commit's diff and relevant surrounding code.
+4. Report only:
+   - an input that the commit did not implement fully or correctly
+   - a concrete bug or regression introduced by the commit
+   - a concrete security problem, data-loss risk, or meaningful performance problem introduced by the commit
+5. Do not report pre-existing or unrelated problems, style preferences, nits, speculative improvements, or missing tests without a concrete defect.
+6. Do not edit, stage, or commit anything.
+7. Do not run linters, specs, tests, or other checks.
+8. Do not write Autofix state.
+9. Write a completed result with the common fields plus a `findings` array. Use one self-contained actionable concern string per finding. Use an empty array when there are no findings.
+10. Add no verdict, severity, summary, file-list, issue-ID, or commit-SHA fields.
 
 ## Report
 
-Write valid JSON to `/tmp/autofix-work-cycle-<id>.json` only after implementation and checks finish.
+Write valid JSON to `/tmp/autofix-work-cycle-<id>.json` only after the action finishes.
 
-For success, write exactly these fields:
+Every completed result contains these common fields:
 
 ```json
 {
@@ -41,8 +62,16 @@ For success, write exactly these fields:
 }
 ```
 
-Use the actual numeric Work Cycle ID. Copy the returned `work_cycle_id`, `role`, and `action` in every result. Copy `PI_PROVIDER`, `PI_MODEL`, and `PI_REASONING_LEVEL` when present; otherwise use JSON `null`. Do not infer missing provenance.
+Use the actual numeric Work Cycle ID. Copy the returned `work_cycle_id`, `role`, and `action`. Copy `PI_PROVIDER`, `PI_MODEL`, and `PI_REASONING_LEVEL` when present; otherwise use JSON `null`. Do not infer missing provenance.
 
-If implementation cannot complete, write the same fields with status `failed` and add a concise sanitized `error`. Do not include credentials, raw provider data, Issue IDs, project paths, changed-file lists, summaries, or commit SHAs.
+A completed Worker review result also contains:
+
+```json
+{
+  "findings": []
+}
+```
+
+If the action cannot complete, write the common fields with status `failed` and add a concise sanitized `error`. Do not include credentials or raw provider data.
 
 After writing the result, stop. Manager owns result import, Autofix database writes, staging, and commits.

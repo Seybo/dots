@@ -63,6 +63,41 @@ RSpec.describe ShowWorkCycle do
     )
   end
 
+  it 'returns Worker review context for the implementation commit and inputs' do
+    review_id = StoreReview.call(
+      project_path: project_path,
+      source: 'local',
+      branch_name: 'feature',
+      base_ref: 'origin/main',
+      base_commit_sha: 'base-sha',
+      issue_data: [{ source_id: nil, body: 'Original issue.' }]
+    )
+    issue_id = db[:review_issues].where(review_id: review_id).get(:reported_issue_id)
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
+    implementation_commit_sha = git!('rev-parse', 'HEAD').strip
+    db[:work_cycles].where(id: implementation_work_cycle_id).update(
+      completed_at: Time.now,
+      result: '{"status":"completed"}',
+      commit_sha: implementation_commit_sha
+    )
+    db[:reviews].where(id: review_id).update(state: 'worker_review')
+    review_work_cycle_id = StartWorkerReviewWorkCycle.call(
+      previous_work_cycle_id: implementation_work_cycle_id
+    )
+
+    context = JSON.parse(described_class.call(work_cycle_id: review_work_cycle_id))
+
+    expect(context).to include(
+      'role' => 'worker',
+      'action' => 'review',
+      'previous_work_cycle_id' => implementation_work_cycle_id,
+      'previous_implementation_commit_sha' => implementation_commit_sha,
+      'inputs' => [{ 'id' => issue_id, 'source' => 'local', 'body' => 'Original issue.' }],
+      'findings' => []
+    )
+  end
+
   it 'returns the nearest preceding implementation commit and review findings' do
     review_id = StoreReview.call(
       project_path: project_path,

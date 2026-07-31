@@ -23,9 +23,9 @@ class WaitWorkCycle
     validate_result
     raise_failed_result if work_cycle_result.fetch('status') == 'failed'
 
-    output = complete_work_cycle
-    File.delete(result_path)
-    output
+    return complete_implementation if work_cycle.fetch(:action) == 'implementation'
+
+    complete_review
   end
 
   private
@@ -65,16 +65,30 @@ class WaitWorkCycle
     raise "Work Cycle #{work_cycle.fetch(:id)} failed: #{work_cycle_result.fetch('error')}"
   end
 
-  def complete_work_cycle
-    if work_cycle.fetch(:action) == 'implementation'
-      commit_sha = CommitWorkCycle.call(work_cycle_id: work_cycle.fetch(:id), work_cycle_result: work_cycle_result)
-      "Work Cycle #{work_cycle.fetch(:id)} completed at #{commit_sha}."
-    else
-      StoreWorkCycleCompletion.call(
-        work_cycle_id: work_cycle.fetch(:id),
-        work_cycle_result: work_cycle_result
-      )
-      "Work Cycle #{work_cycle.fetch(:id)} completed."
-    end
+  def complete_implementation
+    commit_sha = CommitWorkCycle.call(work_cycle_id: work_cycle.fetch(:id), work_cycle_result: work_cycle_result)
+    File.delete(result_path)
+    next_action = ResumeReview.call(
+      project_path: review.fetch(:project_path),
+      branch_name: review.fetch(:branch_name)
+    )
+    "Work Cycle #{work_cycle.fetch(:id)} completed at #{commit_sha}.\n#{next_action}"
+  end
+
+  def complete_review
+    output = RenderWorkCycleResult.call(
+      work_cycle_id: work_cycle.fetch(:id),
+      findings: work_cycle_result.fetch('findings')
+    )
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: work_cycle.fetch(:id),
+      work_cycle_result: work_cycle_result
+    )
+    File.delete(result_path)
+    output
+  end
+
+  def review
+    @review ||= Database.connection[:reviews].where(id: work_cycle.fetch(:review_id)).first
   end
 end

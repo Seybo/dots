@@ -32,18 +32,49 @@ RSpec.describe WaitWorkCycle do
 
     output = described_class.call(work_cycle_id: work_cycle_id)
     commit_sha = git!('rev-parse', 'HEAD').strip
+    review_work_cycle = db[:work_cycles].exclude(id: work_cycle_id).first
 
-    expect(output).to eq("Work Cycle #{work_cycle_id} completed at #{commit_sha}.")
+    expect(output).to eq(
+      "Work Cycle #{work_cycle_id} completed at #{commit_sha}.\n" \
+      "AutoFixCycle #{review_work_cycle.fetch(:id)}"
+    )
     expect(git!('log', '-1', '--format=%s').strip).to eq("Work cycle #{work_cycle_id}")
     expect(db[:work_cycles].where(id: work_cycle_id).first).to include(
-      result: 'completed',
+      result: JSON.generate(completed_result(work_cycle_id)),
       provider: 'openai-codex',
       model: 'gpt-5.6-sol',
       reasoning_level: 'high',
       commit_sha: commit_sha
     )
     expect(db[:work_cycles].where(id: work_cycle_id).get(:completed_at)).not_to be_nil
+    expect(review_work_cycle).to include(
+      review_id: review_id,
+      previous_work_cycle_id: work_cycle_id,
+      role: 'worker',
+      action: 'review'
+    )
     expect(db[:reviews].where(id: review_id).get(:state)).to eq('worker_review')
+    expect(File.exist?(result_path(work_cycle_id))).to be(false)
+  end
+
+  it 'does not reprocess a committed result when the tree becomes dirty before review' do
+    review_id, work_cycle_id = start_implementation
+    File.write(File.join(project_path, 'tracked.txt'), "implemented\n")
+    hook_path = File.join(project_path, '.git', 'hooks', 'post-commit')
+    File.write(hook_path, "#!/bin/sh\nprintf 'dirty\\n' > tracked.txt\n")
+    File.chmod(0o755, hook_path)
+    write_result(work_cycle_id, completed_result(work_cycle_id))
+
+    expect { described_class.call(work_cycle_id: work_cycle_id) }.
+      to raise_error(RuntimeError, /Working tree is not clean/)
+
+    expect(db[:work_cycles].where(id: work_cycle_id).first).to include(
+      result: JSON.generate(completed_result(work_cycle_id)),
+      completed_at: be_a(Time),
+      commit_sha: git!('rev-parse', 'HEAD').strip
+    )
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('worker_review')
+    expect(db[:work_cycles].count).to eq(1)
     expect(File.exist?(result_path(work_cycle_id))).to be(false)
   end
 
@@ -162,14 +193,18 @@ RSpec.describe WaitWorkCycle do
       commit_sha: nil
     )
     original_head = git!('rev-parse', 'HEAD').strip
-    write_result(work_cycle_id, completed_result(work_cycle_id).merge('action' => 'review'))
+    review_result = completed_result(work_cycle_id).merge(
+      'action' => 'review',
+      'findings' => ['Review finding.']
+    )
+    write_result(work_cycle_id, review_result)
 
     output = described_class.call(work_cycle_id: work_cycle_id)
 
-    expect(output).to eq("Work Cycle #{work_cycle_id} completed.")
+    expect(output).to eq("Work Cycle #{work_cycle_id} completed. Findings:\n- Review finding.")
     expect(git!('rev-parse', 'HEAD').strip).to eq(original_head)
     expect(db[:work_cycles].where(id: work_cycle_id).first).to include(
-      result: 'completed',
+      result: JSON.generate(review_result),
       completed_at: be_a(Time),
       commit_sha: nil
     )

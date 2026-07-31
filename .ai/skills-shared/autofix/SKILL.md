@@ -149,11 +149,15 @@ When helper stdout contains a line exactly `AutoFixCycle <id>`:
    /Volumes/dev/bin/skills/autofix wait-work-cycle <id>
    ```
 
-5. Return wait-command stdout unchanged. Surface failures unchanged.
+5. If wait-command stdout contains another line exactly `AutoFixCycle <id>`,
+   repeat this handoff for that Work Cycle in the same invocation.
+6. Otherwise return wait-command stdout unchanged. Surface failures unchanged.
 
 When helper stdout contains a line exactly `WaitWorkCycle <id>`, do not send
 another tmux message. Run the same blocking `wait-work-cycle` command without a
-tool timeout and return its stdout or failure unchanged.
+tool timeout. If its stdout contains an `AutoFixCycle <id>` line, repeat this
+handoff for that Work Cycle in the same invocation. Otherwise return its stdout
+or failure unchanged.
 
 ## Decisions
 

@@ -114,7 +114,9 @@ RSpec.describe AutofixCli do
     begin
       expect do
         described_class.call(cli_args: ['wait-work-cycle', work_cycle_id.to_s])
-      end.to output(/Work Cycle #{work_cycle_id} completed at [0-9a-f]{40}\.\n/).to_stdout
+      end.to output(
+        /Work Cycle #{work_cycle_id} completed at [0-9a-f]{40}\.\nAutoFixCycle \d+\n/
+      ).to_stdout
     ensure
       FileUtils.rm_f(result_path)
     end

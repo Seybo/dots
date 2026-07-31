@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'json'
+
 class StoreWorkCycleCompletion
   include ServiceObject
 
@@ -10,7 +12,7 @@ class StoreWorkCycleCompletion
     Database.connection.transaction(savepoint: true) do
       Database.connection[:work_cycles].where(id: work_cycle_id).update(
         completed_at: completed_at,
-        result: work_cycle_result.fetch('status'),
+        result: JSON.generate(work_cycle_result),
         provider: work_cycle_result.fetch('provider'),
         model: work_cycle_result.fetch('model'),
         reasoning_level: work_cycle_result.fetch('reasoning_level'),
