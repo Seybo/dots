@@ -88,15 +88,25 @@ RSpec.describe ResumeReview do
     expect(db[:work_cycles].count).to eq(2)
   end
 
-  it 'does not bypass completed Reviewer findings' do
-    _review_id, reviewer_work_cycle_id = complete_reviewer_review(findings: ['Reviewer finding.'])
+  it 'resumes the next persisted Reviewer finding without importing it again' do
+    _review_id, _reviewer_work_cycle_id = complete_reviewer_review(findings: ['Reviewer finding.'])
+    finding = db[:reported_issues].where(source: 'reviewer').first
 
-    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    first_output = described_class.call(project_path: project_path, branch_name: 'feature')
+    second_output = described_class.call(project_path: project_path, branch_name: 'feature')
 
-    expect(output).to eq(
-      "Reviewer review completed (Cycle #{reviewer_work_cycle_id}). Findings:\n- Reviewer finding."
-    )
+    expect(first_output).to eq("Issue: #{finding.fetch(:id)}\n\n> Reviewer finding.")
+    expect(second_output).to eq(first_output)
+    expect(db[:reported_issues].where(source: 'reviewer').count).to eq(1)
     expect(db[:work_cycles].count).to eq(2)
+  end
+
+  it 'reports when finding selection has no unresolved findings' do
+    _review_id, _reviewer_work_cycle_id = complete_reviewer_review(findings: ['Reviewer finding.'])
+    db[:reported_issues].where(source: 'reviewer').update(decision: 'approved')
+
+    expect(described_class.call(project_path: project_path, branch_name: 'feature')).
+      to eq('No unresolved findings.')
   end
 
   it 'creates and exposes the final Worker review Work Cycle after Reviewer passes' do
@@ -146,12 +156,19 @@ RSpec.describe ResumeReview do
     reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(
       previous_work_cycle_id: implementation_work_cycle_id
     )
-    db[:work_cycles].where(id: reviewer_work_cycle_id).update(
-      completed_at: Time.now,
-      result: JSON.generate('findings' => findings)
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: reviewer_work_cycle_id,
+      work_cycle_result: {
+        'work_cycle_id' => reviewer_work_cycle_id,
+        'role' => 'reviewer',
+        'action' => 'review',
+        'status' => 'completed',
+        'provider' => nil,
+        'model' => nil,
+        'reasoning_level' => nil,
+        'findings' => findings
+      }
     )
-    next_state = findings.empty? ? 'worker_review' : 'reviewer_review'
-    db[:reviews].where(id: review_id).update(state: next_state)
 
     [review_id, reviewer_work_cycle_id]
   end

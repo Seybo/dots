@@ -9,6 +9,7 @@ class HandleDecision
     StoreDecision.call(issue_id: issue_id, decision: decision)
     next_issue = FindNextReviewIssue.call(review_id: review.fetch(:id))
     return render(RenderIssue.call(issue: next_issue)) unless next_issue.nil?
+    return 'No unresolved findings.' if finding_selection?
 
     if all_skipped?
       complete_review
@@ -29,6 +30,10 @@ class HandleDecision
               where(Sequel[:review_issues][:reported_issue_id] => issue_id).
               select_all(:reviews).
               first
+  end
+
+  def finding_selection?
+    review.fetch(:state) == 'manager_finding_selection'
   end
 
   def all_skipped?

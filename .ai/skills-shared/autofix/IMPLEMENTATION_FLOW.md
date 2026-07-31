@@ -88,7 +88,7 @@ Real QA: approve and skip real GitHub and local issues through natural Pi replie
 - After the first Work Cycle's clean-tree check passes, capture current `HEAD` as the Review's starting commit. Leave it null during `manager_issue_selection` and for an all-skipped Review.
 - If every issue is skipped, complete the numbered Review without requiring a clean tree or creating a Work Cycle, commit, or push.
 - Add durable Reviews, Work Cycles, Review issues, Work Cycle inputs, and Work Cycle findings.
-- Persist the Review state as `manager_issue_selection`, `worker_implementation`, `reviewer_review`, `worker_review`, `manager_review`, `manager_finalizing`, or `completed`.
+- Persist the Review state as `manager_issue_selection`, `manager_finding_selection`, `worker_implementation`, `reviewer_review`, `worker_review`, `manager_review`, `manager_finalizing`, or `completed`.
 - On every invocation, continue an incomplete Review for the current project and branch from its stored state instead of repeating source or base arguments.
 - Add shared participant instructions that every agent loads by default. The exact message `AutoFixCycle <id>` makes the participant run the read-only `autofix show-work-cycle <id>` command and follow the returned role, action, project, commit, inputs, and findings.
 - Allowlist that exact read command for both Pi and Claude; do not allow arbitrary SQLite commands.
@@ -113,7 +113,7 @@ Real QA: have `agent-worker` review one real Autofix implementation commit.
 - After implementation is committed, create a Reviewer review Work Cycle for that commit and its reported issues before Worker review.
 - Send only `AutoFixCycle <id>` to `agent-reviewer`; shared participant instructions make Reviewer load its review context through `autofix show-work-cycle <id>`, review independently without modification, and write the expected result file.
 - Reviewer evaluates the exact commit in the context of relevant surrounding code and affected flows. It looks for incomplete fixes and concrete regressions introduced outside the directly changed behavior, not only defects visible in the diff in isolation.
-- When Reviewer reports findings, retain and display them and do not start Worker review. Findings conversion and corrections continue in later tasks.
+- When Reviewer reports findings, retain and display them and do not start Worker review. Finding conversion and decisions continue in Task 9; corrections continue in later tasks.
 - When Reviewer reports no findings, create the Review's one final Worker review Work Cycle. Worker reviews independently without receiving Reviewer result content.
 - Worker review runs at most once per Review. Corrections caused by later Worker findings return through Reviewer and never trigger another Worker review.
 - Manager imports and deletes each result file and displays implementation, Reviewer, and Worker completion results in Work Cycle order.
@@ -124,10 +124,10 @@ Real QA: have `agent-reviewer` independently review one real Autofix implementat
 
 ### Task 9: Capture and settle review findings
 
-- Convert actionable findings from Worker or Reviewer review Work Cycles into reported issues sourced from those Work Cycles.
-- Link each finding to its producing review Work Cycle while preserving access to the reviewed commit and originating issue batch.
-- Present findings to Manager for `approved` or `skipped` decisions.
-- Stop without implementing corrections.
+- Convert each finding from a Worker or Reviewer review Work Cycle directly into one reported issue sourced as `worker` or `reviewer`, with no source ID or added finding metadata.
+- Atomically complete the Work Cycle, store its full result and provenance, create finding issues, link them to the Review and producing Work Cycle, and move the Review to `manager_finding_selection`.
+- Present unresolved findings to Manager in result order for `approved` or `skipped` decisions.
+- Stop in `manager_finding_selection` when no unresolved findings remain, without implementing corrections.
 
 Real QA: retain and settle at least one real review finding.
 

@@ -10,6 +10,7 @@ class ResumeReview
   def call
     return 'No incomplete Review.' if review.nil?
     return resume_manager_selection if review.fetch(:state) == 'manager_issue_selection'
+    return resume_finding_selection if review.fetch(:state) == 'manager_finding_selection'
     return resume_implementation if review.fetch(:state) == 'worker_implementation'
     return resume_reviewer_review if review.fetch(:state) == 'reviewer_review'
     return resume_worker_review if review.fetch(:state) == 'worker_review'
@@ -35,6 +36,13 @@ class ResumeReview
 
     work_cycle_id = StartImplementationWorkCycle.call(review_id: review.fetch(:id))
     RenderWorkCycleHandoff.call(work_cycle_id: work_cycle_id)
+  end
+
+  def resume_finding_selection
+    issue = FindNextReviewIssue.call(review_id: review.fetch(:id))
+    return 'No unresolved findings.' if issue.nil?
+
+    RenderIssue.call(issue: issue)
   end
 
   def resume_implementation

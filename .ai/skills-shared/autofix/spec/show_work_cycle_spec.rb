@@ -105,43 +105,31 @@ RSpec.describe ShowWorkCycle do
     expect(context.keys).not_to include('result', 'previous_result')
   end
 
-  it 'returns the nearest preceding implementation commit and review findings' do
-    review_id = StoreReview.call(
-      project_path: project_path,
-      source: 'local',
-      branch_name: 'feature',
-      base_ref: 'origin/main',
-      base_commit_sha: 'base-sha',
-      issue_data: [{ source_id: nil, body: 'Original issue.' }]
+  it 'returns the implementation commit, original inputs, and persisted review findings' do
+    _review_id, issue_id, _implementation_work_cycle_id, reviewer_work_cycle_id,
+      implementation_commit_sha = start_review_chain
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: reviewer_work_cycle_id,
+      work_cycle_result: {
+        'work_cycle_id' => reviewer_work_cycle_id,
+        'role' => 'reviewer',
+        'action' => 'review',
+        'status' => 'completed',
+        'provider' => 'openai-codex',
+        'model' => 'gpt-5.6-sol',
+        'reasoning_level' => 'high',
+        'findings' => ['Review finding.']
+      }
     )
-    implementation_id = insert_work_cycle(
-      review_id: review_id,
-      role: 'worker',
-      action: 'implementation',
-      commit_sha: 'implementation-sha'
-    )
-    review_work_cycle_id = insert_work_cycle(
-      review_id: review_id,
-      previous_work_cycle_id: implementation_id,
-      role: 'reviewer',
-      action: 'review'
-    )
-    finding_id = StoreIssue.call(
-      project_path: project_path,
-      source: 'reviewer',
-      body: 'Review finding.'
-    )
-    db[:work_cycle_findings].insert(
-      created_at: Time.now,
-      work_cycle_id: review_work_cycle_id,
-      reported_issue_id: finding_id
-    )
+    finding_id = db[:work_cycle_findings].where(work_cycle_id: reviewer_work_cycle_id).
+                 get(:reported_issue_id)
 
-    context = JSON.parse(described_class.call(work_cycle_id: review_work_cycle_id))
+    context = JSON.parse(described_class.call(work_cycle_id: reviewer_work_cycle_id))
 
-    expect(context.fetch('previous_implementation_commit_sha')).to eq('implementation-sha')
-    expect(context.fetch('findings')).to eq(
-      [{ 'id' => finding_id, 'source' => 'reviewer', 'body' => 'Review finding.' }]
+    expect(context).to include(
+      'previous_implementation_commit_sha' => implementation_commit_sha,
+      'inputs' => [{ 'id' => issue_id, 'source' => 'local', 'body' => 'Original issue.' }],
+      'findings' => [{ 'id' => finding_id, 'source' => 'reviewer', 'body' => 'Review finding.' }]
     )
   end
 

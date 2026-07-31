@@ -2,7 +2,7 @@
 
 ## Reported Issue
 
-One concern that the operator can decide and Autofix can address. It may come from GitHub, a local review, Autowork self-review, Worker review, Reviewer review, or Manager review. A reported issue may be invalid and skipped.
+One concern that the operator can decide and Autofix can address. It may come from GitHub, a local review, Worker review, Reviewer review, or Manager review. A reported issue may be invalid and skipped.
 
 ## GitHub Source
 
@@ -11,10 +11,6 @@ An inline pull request comment fetched from GitHub. Manager turns the comment an
 ## Local Source
 
 A review copied from another agent. Agent-manager turns its concrete concerns into concise, self-contained reported issues. The original clipboard text is not retained.
-
-## Autowork Source
-
-A concern imported from Autowork self-review. One finding produces one self-contained reported issue that can enter the shared Review workflow.
 
 ## Worker Source
 
@@ -30,7 +26,7 @@ A finding produced by a Manager review Work Cycle. One finding produces one repo
 
 ## Review
 
-One complete cycle for a non-empty set of new GitHub, local, or Autowork feedback in one project. It contains the feedback's decisions and all Work Cycles needed to address it. It ends when one squashed commit is pushed, or when every issue is skipped and no change is needed. Empty feedback creates no Review. Later feedback starts the next Review.
+One complete cycle for a non-empty set of new GitHub or local feedback in one project. It contains the feedback's decisions and all Work Cycles needed to address it. It ends when one squashed commit is pushed, or when every issue is skipped and no change is needed. Empty feedback creates no Review. Later feedback starts the next Review.
 
 ## Work Cycle
 

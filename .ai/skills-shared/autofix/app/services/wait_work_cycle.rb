@@ -87,13 +87,17 @@ class WaitWorkCycle
       work_cycle_result: work_cycle_result
     )
     File.delete(result_path)
+    return "#{output}\n\n#{resume_review}" unless work_cycle_result.fetch('findings').empty?
     return output unless start_worker_review?
 
-    next_action = ResumeReview.call(
+    "#{output}\n#{resume_review}"
+  end
+
+  def resume_review
+    ResumeReview.call(
       project_path: review.fetch(:project_path),
       branch_name: review.fetch(:branch_name)
     )
-    "#{output}\n#{next_action}"
   end
 
   def start_worker_review?

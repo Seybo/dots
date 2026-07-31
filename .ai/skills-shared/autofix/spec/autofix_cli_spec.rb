@@ -169,6 +169,41 @@ RSpec.describe AutofixCli do
     expect(db[:work_cycles].count).to eq(0)
   end
 
+  it 'settles findings one at a time and stops without starting corrections' do
+    review_id = store_review(['Original issue.'])
+    original_issue_id = review_issue_ids(review_id).first
+    reported_issues.where(id: original_issue_id).update(decision: 'approved')
+    finding_ids = ['First finding.', 'Second finding.'].map do |body|
+      issue_id = StoreIssue.call(project_path: project_path, source: 'reviewer', body: body)
+      db[:review_issues].insert(
+        created_at: Time.now,
+        review_id: review_id,
+        reported_issue_id: issue_id
+      )
+      issue_id
+    end
+    reviews.where(id: review_id).update(state: 'manager_finding_selection')
+    original_head = git!('rev-parse', 'HEAD').strip
+
+    expect do
+      described_class.call(cli_args: ['store-decision', finding_ids.first.to_s, 'approved'])
+    end.to output(
+      "Decision: approved\n\nIssue: #{finding_ids.last}\n\n> Second finding.\n"
+    ).to_stdout
+    expect do
+      described_class.call(cli_args: ['store-decision', finding_ids.last.to_s, 'skipped'])
+    end.to output("No unresolved findings.\n").to_stdout
+
+    expect(reported_issues.where(id: finding_ids.first).get(:decision)).to eq('approved')
+    expect(reported_issues.where(id: finding_ids.last).get(:decision)).to eq('skipped')
+    expect(reviews.where(id: review_id).first).to include(
+      state: 'manager_finding_selection',
+      completed_at: nil
+    )
+    expect(db[:work_cycles].count).to eq(0)
+    expect(git!('rev-parse', 'HEAD').strip).to eq(original_head)
+  end
+
   it 'starts implementation after classifying a Review with an approved issue' do
     review_id = store_review(['Approved issue.', 'Skipped issue.'])
     issue_ids = review_issue_ids(review_id)

@@ -177,7 +177,7 @@ RSpec.describe WaitWorkCycle do
     )
   end
 
-  it 'retains Reviewer findings without starting Worker review' do
+  it 'stores Reviewer findings and displays the first unresolved finding without starting Worker review' do
     review_id, _implementation_work_cycle_id, reviewer_work_cycle_id = start_reviewer_review
     original_head = git!('rev-parse', 'HEAD').strip
     review_result = review_result(
@@ -188,9 +188,11 @@ RSpec.describe WaitWorkCycle do
     write_result(reviewer_work_cycle_id, review_result)
 
     output = described_class.call(work_cycle_id: reviewer_work_cycle_id)
+    finding = db[:reported_issues].where(source: 'reviewer').first
 
     expect(output).to eq(
-      "Reviewer review completed (Cycle #{reviewer_work_cycle_id}). Findings:\n- Reviewer finding."
+      "Reviewer review completed (Cycle #{reviewer_work_cycle_id}). Findings:\n- Reviewer finding.\n\n" \
+      "Issue: #{finding.fetch(:id)}\n\n> Reviewer finding."
     )
     expect(git!('rev-parse', 'HEAD').strip).to eq(original_head)
     expect(db[:work_cycles].where(id: reviewer_work_cycle_id).first).to include(
@@ -198,7 +200,7 @@ RSpec.describe WaitWorkCycle do
       completed_at: be_a(Time),
       commit_sha: nil
     )
-    expect(db[:reviews].where(id: review_id).get(:state)).to eq('reviewer_review')
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_finding_selection')
     expect(db[:work_cycles].count).to eq(2)
     expect(File.exist?(result_path(reviewer_work_cycle_id))).to be(false)
   end
@@ -228,7 +230,7 @@ RSpec.describe WaitWorkCycle do
     expect(File.exist?(result_path(reviewer_work_cycle_id))).to be(false)
   end
 
-  it 'completes the final Worker review without creating a commit' do
+  it 'stores final Worker review findings without creating a commit' do
     review_id, _implementation_work_cycle_id, reviewer_work_cycle_id = start_reviewer_review
     db[:work_cycles].where(id: reviewer_work_cycle_id).update(
       completed_at: Time.now,
@@ -243,9 +245,11 @@ RSpec.describe WaitWorkCycle do
     write_result(worker_work_cycle_id, result)
 
     output = described_class.call(work_cycle_id: worker_work_cycle_id)
+    finding = db[:reported_issues].where(source: 'worker').first
 
     expect(output).to eq(
-      "Worker review completed (Cycle #{worker_work_cycle_id}). Findings:\n- Worker finding."
+      "Worker review completed (Cycle #{worker_work_cycle_id}). Findings:\n- Worker finding.\n\n" \
+      "Issue: #{finding.fetch(:id)}\n\n> Worker finding."
     )
     expect(git!('rev-parse', 'HEAD').strip).to eq(original_head)
     expect(db[:work_cycles].where(id: worker_work_cycle_id).first).to include(
@@ -253,8 +257,29 @@ RSpec.describe WaitWorkCycle do
       completed_at: be_a(Time),
       commit_sha: nil
     )
-    expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_review')
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_finding_selection')
     expect(File.exist?(result_path(worker_work_cycle_id))).to be(false)
+  end
+
+  it 'retains a review result when finding persistence rolls back' do
+    review_id, _implementation_work_cycle_id, reviewer_work_cycle_id = start_reviewer_review
+    result = review_result(
+      reviewer_work_cycle_id,
+      role: 'reviewer',
+      findings: ['Rolled back finding.', nil]
+    )
+    write_result(reviewer_work_cycle_id, result)
+
+    expect { described_class.call(work_cycle_id: reviewer_work_cycle_id) }.
+      to raise_error(Sequel::NotNullConstraintViolation)
+
+    expect(db[:work_cycles].where(id: reviewer_work_cycle_id).first).to include(
+      result: nil,
+      completed_at: nil
+    )
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('reviewer_review')
+    expect(db[:reported_issues].where(source: 'reviewer').count).to eq(0)
+    expect(File.exist?(result_path(reviewer_work_cycle_id))).to be(true)
   end
 
   def start_implementation

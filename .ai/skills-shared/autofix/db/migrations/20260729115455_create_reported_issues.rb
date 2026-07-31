@@ -13,13 +13,13 @@ Sequel.migration do
 
       constraint(
         :reported_issues_source_allowed,
-        source: %w[github local autowork worker reviewer manager]
+        source: %w[github local worker reviewer manager]
       )
       constraint(
         :reported_issues_source_id_matches_source,
         Sequel.|(
           Sequel.&({ source: 'github' }, Sequel.~(source_id: nil)),
-          { source: %w[local autowork worker reviewer manager], source_id: nil }
+          { source: %w[local worker reviewer manager], source_id: nil }
         )
       )
       constraint(
@@ -50,11 +50,12 @@ Sequel.migration do
       String :state, null: false
       String :final_commit_sha, text: true
 
-      constraint(:reviews_source_allowed, source: %w[github local autowork])
+      constraint(:reviews_source_allowed, source: %w[github local])
       constraint(
         :reviews_state_allowed,
         state: %w[
           manager_issue_selection
+          manager_finding_selection
           worker_implementation
           worker_review
           reviewer_review

@@ -46,14 +46,17 @@ RSpec.describe 'database schema' do
   end
 
   it 'allows only known sources with matching source IDs' do
-    expect { db[:reported_issues].insert(issue_attributes(source: 'email')) }.
-      to raise_error(Sequel::CheckConstraintViolation)
+    %w[email autowork work_cycle].each do |source|
+      expect do
+        db[:reported_issues].insert(issue_attributes(source: source, source_id: nil))
+      end.to raise_error(Sequel::CheckConstraintViolation)
+    end
     expect { db[:reported_issues].insert(issue_attributes(source_id: nil)) }.
       to raise_error(Sequel::CheckConstraintViolation)
     expect { db[:reported_issues].insert(issue_attributes(source: 'local')) }.
       to raise_error(Sequel::CheckConstraintViolation)
 
-    %w[local autowork worker reviewer manager].each_with_index do |source, index|
+    %w[local worker reviewer manager].each_with_index do |source, index|
       expect do
         db[:reported_issues].insert(issue_attributes(source: source, source_id: nil, body: "Issue #{index}."))
       end.not_to raise_error
@@ -105,11 +108,13 @@ RSpec.describe 'database schema' do
 
     expect { db[:reviews].insert(review_attributes(number: 1)) }.
       to raise_error(Sequel::UniqueConstraintViolation)
-    expect { db[:reviews].insert(review_attributes(number: 2, source: 'email')) }.
-      to raise_error(Sequel::CheckConstraintViolation)
+    %w[email autowork].each do |source|
+      expect { db[:reviews].insert(review_attributes(number: 2, source: source)) }.
+        to raise_error(Sequel::CheckConstraintViolation)
+    end
     expect { db[:reviews].insert(review_attributes(number: 2, state: 'running')) }.
       to raise_error(Sequel::CheckConstraintViolation)
-    expect { db[:reviews].insert(review_attributes(number: 2, state: 'worker_review')) }.
+    expect { db[:reviews].insert(review_attributes(number: 2, state: 'manager_finding_selection')) }.
       not_to raise_error
   end
 
