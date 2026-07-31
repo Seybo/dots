@@ -12,6 +12,8 @@ Build Autofix through small vertical increments. At the end of every task:
 
 Do not test `gh`, `git`, or `tmux` behavior through complex stubs. Real-PR QA is the integration test for GitHub boundaries. Real clipboard extraction must be QAed through the manager model in Pi; deterministic Ruby persistence and validation receive automated specs.
 
+Before every manual QA round, follow `qa.md`: show the applicable prerequisites, wait for the operator to confirm readiness, and trust that confirmation instead of inspecting setup state. Continue to verify actual outcomes after QA starts.
+
 Before implementing each task:
 
 1. Run a grilling session limited to that task.

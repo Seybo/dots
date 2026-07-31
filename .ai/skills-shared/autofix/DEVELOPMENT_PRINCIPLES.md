@@ -263,6 +263,7 @@ protocol are intentionally deferred to implementation-task grilling.
 - Do not build elaborate command fakes, stubs, or dependency-injection layers
   solely for tests. Prefer simpler and less reliable tests over complex tests
   coupled to implementation details.
+- Before every manual QA round, read `qa.md`, show the operator the applicable prerequisites, and wait for confirmation that the environment is ready. Trust that confirmation and do not inspect prerequisite state. Verify actual workflow outcomes after QA starts.
 - Test external integration manually.
 - Use local RSpec and RuboCop as quality gates.
 - Do not add coverage thresholds, static typing, or CI initially.
