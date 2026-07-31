@@ -9,6 +9,13 @@ Language- and project-neutral rules for all agents unless a project's local inst
 - Staging files (`git add`) is also a git state mutation. Ask first unless the user explicitly asked to commit or prepare a commit.
 - If approval is ambiguous, stop and ask.
 
+## Tmux process and layout safety
+
+- Never run a tmux command or command sequence that terminates, replaces, respawns, recreates, resets, or closes an existing pane, window, session, shell, or pane process. This prohibition includes `respawn-pane`, `respawn-window`, `kill-pane`, `kill-window`, and `kill-session`, plus any command, option, signal, or workaround with an equivalent effect.
+- Never replace a pane's shell with Pi or another interactive application, including through `exec`, a tmux direct-command argument, or any equivalent process replacement. Interactive applications must remain child processes of the pane's existing shell so exiting them returns to that shell.
+- Do not create, split, move, join, swap, or break tmux panes/windows unless the user explicitly requested that exact layout change.
+- Keep long-lived participant panes and Pi sessions in their normal working directory. When a workflow supplies an authoritative project path, target it explicitly with absolute file paths, `git -C`, or a per-command `cd`; do not change the pane's cwd or restart Pi. If a workflow truly requires shell setup, send ordinary commands only to an idle shell. If an idle shell is unavailable, stop and ask the operator; do not force, restart, or replace its current process.
+
 ## Autofix Work Cycle messages
 
 - When the complete user message matches the case-sensitive pattern `^AutoFixCycle [0-9]+$`, immediately read and follow `~/.ai/skills-shared/autofix/app/prompts/work_cycle.md` using the supplied Work Cycle ID.

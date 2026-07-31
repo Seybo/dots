@@ -12,7 +12,8 @@ Follow these instructions only when the complete user message is exactly `AutoFi
    ```
 
 3. Treat the returned JSON as authoritative. Do not query Autofix SQLite directly.
-4. Follow the section matching the returned `role` and `action`. If no section matches, write a failed result describing the mismatch and stop.
+4. Keep the Pi session and pane in their existing working directory. For every file operation and command, target the returned `project_path` explicitly with absolute paths, `git -C`, or a per-command `cd`. Never rely on or change Pi's starting cwd.
+5. Follow the section matching the returned `role` and `action`. If no section matches, write a failed result describing the mismatch and stop.
 
 ## Worker implementation
 
