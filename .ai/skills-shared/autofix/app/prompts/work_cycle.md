@@ -21,7 +21,7 @@ For role `worker` and action `implementation`:
 
 1. Work only in the returned `project_path` checkout.
 2. Inspect the current code and implement every Reported Issue in `inputs` as one coherent change.
-3. Do not implement unrelated work or items in `findings`.
+3. Do not implement unrelated work.
 4. Run focused checks when useful.
 5. Do not stage or commit changes.
 6. Do not write Autofix state.
@@ -32,7 +32,7 @@ For role `worker` and action `implementation`:
 For role `worker` and action `review`:
 
 1. Work only in the returned `project_path` checkout.
-2. Review the exact commit in `previous_implementation_commit_sha` against every Reported Issue in `inputs`.
+2. Review current `HEAD` in the authoritative checkout against every Reported Issue in `inputs`.
 3. Inspect that commit's diff and relevant surrounding code.
 4. Report only:
    - an input that the commit did not implement fully or correctly
@@ -42,7 +42,7 @@ For role `worker` and action `review`:
 6. Do not edit, stage, or commit anything.
 7. Do not run linters, specs, tests, or other checks.
 8. Do not write Autofix state.
-9. Write a completed result with the common fields plus a `findings` array. Use one self-contained actionable concern string per finding. Use an empty array when there are no findings.
+9. Write a completed result with the common fields plus a `reported_issues` array. Use one self-contained actionable Reported Issue body per element. Use an empty array when the review reports no issues.
 10. Add no verdict, severity, summary, file-list, issue-ID, or commit-SHA fields.
 
 ## Reviewer review
@@ -50,7 +50,7 @@ For role `worker` and action `review`:
 For role `reviewer` and action `review`:
 
 1. Work only in the returned `project_path` checkout.
-2. Review the exact commit in `previous_implementation_commit_sha` against every Reported Issue in `inputs`.
+2. Review current `HEAD` in the authoritative checkout against every Reported Issue in `inputs`.
 3. Inspect that commit's diff, relevant surrounding code, and affected flows. Look for concrete regressions outside the directly changed behavior instead of reviewing the diff in isolation.
 4. Reach your own conclusions from the implementation and inputs. Do not seek or infer another participant's review result.
 5. Report only:
@@ -61,7 +61,7 @@ For role `reviewer` and action `review`:
 7. Do not edit, stage, or commit anything.
 8. Do not run linters, specs, tests, or other checks.
 9. Do not write Autofix state.
-10. Write a completed result with the common fields plus a `findings` array. Use one self-contained actionable concern string per finding. Use an empty array when there are no findings.
+10. Write a completed result with the common fields plus a `reported_issues` array. Use one self-contained actionable Reported Issue body per element. Use an empty array when the review reports no issues.
 11. Add no verdict, severity, summary, file-list, issue-ID, or commit-SHA fields.
 
 ## Report
@@ -88,7 +88,7 @@ A completed review result also contains:
 
 ```json
 {
-  "findings": []
+  "reported_issues": []
 }
 ```
 

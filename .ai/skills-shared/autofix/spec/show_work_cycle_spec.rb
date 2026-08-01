@@ -50,8 +50,6 @@ RSpec.describe ShowWorkCycle do
       'starting_commit_sha' => git!('rev-parse', 'HEAD').strip,
       'active_base_ref' => 'origin/main',
       'active_base_commit_sha' => 'base-sha',
-      'previous_implementation_commit_sha' => nil,
-      'previous_work_cycle_id' => nil,
       'inputs' => [
         {
           'id' => issue_id,
@@ -59,55 +57,45 @@ RSpec.describe ShowWorkCycle do
           'body' => 'Approved issue.'
         },
       ],
-      'findings' => []
+      'reported_issues' => []
     )
   end
 
-  it 'returns Reviewer context for the implementation commit without prior results' do
-    _review_id, issue_id, implementation_work_cycle_id, reviewer_work_cycle_id,
-      implementation_commit_sha = start_review_chain
+  it 'returns Reviewer context without an interim commit SHA' do
+    _review_id, issue_id, _implementation_work_cycle_id, reviewer_work_cycle_id = start_review_sequence
 
     context = JSON.parse(described_class.call(work_cycle_id: reviewer_work_cycle_id))
 
     expect(context).to include(
       'role' => 'reviewer',
       'action' => 'review',
-      'previous_work_cycle_id' => implementation_work_cycle_id,
-      'previous_implementation_commit_sha' => implementation_commit_sha,
       'inputs' => [{ 'id' => issue_id, 'source' => 'local', 'body' => 'Original issue.' }],
-      'findings' => []
+      'reported_issues' => []
     )
-    expect(context.keys).not_to include('result', 'previous_result')
+    expect(context.keys).not_to include('result')
   end
 
-  it 'returns final Worker context through Reviewer without exposing the Reviewer result' do
-    review_id, issue_id, _implementation_work_cycle_id, reviewer_work_cycle_id,
-      implementation_commit_sha = start_review_chain
+  it 'returns final Worker context without the Reviewer result or an interim commit SHA' do
+    review_id, issue_id, _implementation_work_cycle_id, reviewer_work_cycle_id = start_review_sequence
     db[:work_cycles].where(id: reviewer_work_cycle_id).update(
-      completed_at: Time.now,
-      result: JSON.generate('findings' => [])
+      completed_at: Time.now
     )
     db[:reviews].where(id: review_id).update(state: 'worker_review')
-    worker_work_cycle_id = StartWorkerReviewWorkCycle.call(
-      previous_work_cycle_id: reviewer_work_cycle_id
-    )
+    worker_work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review_id)
 
     context = JSON.parse(described_class.call(work_cycle_id: worker_work_cycle_id))
 
     expect(context).to include(
       'role' => 'worker',
       'action' => 'review',
-      'previous_work_cycle_id' => reviewer_work_cycle_id,
-      'previous_implementation_commit_sha' => implementation_commit_sha,
       'inputs' => [{ 'id' => issue_id, 'source' => 'local', 'body' => 'Original issue.' }],
-      'findings' => []
+      'reported_issues' => []
     )
-    expect(context.keys).not_to include('result', 'previous_result')
+    expect(context.keys).not_to include('result')
   end
 
-  it 'returns the implementation commit, original inputs, and persisted review findings' do
-    _review_id, issue_id, _implementation_work_cycle_id, reviewer_work_cycle_id,
-      implementation_commit_sha = start_review_chain
+  it 'returns original inputs and review-reported issues' do
+    _review_id, issue_id, _implementation_work_cycle_id, reviewer_work_cycle_id = start_review_sequence
     StoreWorkCycleCompletion.call(
       work_cycle_id: reviewer_work_cycle_id,
       work_cycle_result: {
@@ -118,22 +106,23 @@ RSpec.describe ShowWorkCycle do
         'provider' => 'openai-codex',
         'model' => 'gpt-5.6-sol',
         'reasoning_level' => 'high',
-        'findings' => ['Review finding.']
+        'reported_issues' => ['Review-reported issue.']
       }
     )
-    finding_id = db[:work_cycle_findings].where(work_cycle_id: reviewer_work_cycle_id).
-                 get(:reported_issue_id)
+    reported_issue_id = db[:work_cycle_reported_issues].where(work_cycle_id: reviewer_work_cycle_id).
+                        get(:reported_issue_id)
 
     context = JSON.parse(described_class.call(work_cycle_id: reviewer_work_cycle_id))
 
     expect(context).to include(
-      'previous_implementation_commit_sha' => implementation_commit_sha,
       'inputs' => [{ 'id' => issue_id, 'source' => 'local', 'body' => 'Original issue.' }],
-      'findings' => [{ 'id' => finding_id, 'source' => 'reviewer', 'body' => 'Review finding.' }]
+      'reported_issues' => [
+        { 'id' => reported_issue_id, 'source' => 'reviewer', 'body' => 'Review-reported issue.' },
+      ]
     )
   end
 
-  def start_review_chain
+  def start_review_sequence
     review_id = StoreReview.call(
       project_path: project_path,
       source: 'local',
@@ -145,34 +134,13 @@ RSpec.describe ShowWorkCycle do
     issue_id = db[:review_issues].where(review_id: review_id).get(:reported_issue_id)
     db[:reported_issues].where(id: issue_id).update(decision: 'approved')
     implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
-    implementation_commit_sha = git!('rev-parse', 'HEAD').strip
     db[:work_cycles].where(id: implementation_work_cycle_id).update(
-      completed_at: Time.now,
-      result: '{"status":"completed"}',
-      commit_sha: implementation_commit_sha
+      completed_at: Time.now
     )
     db[:reviews].where(id: review_id).update(state: 'reviewer_review')
-    reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(
-      previous_work_cycle_id: implementation_work_cycle_id
-    )
+    reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(review_id: review_id)
 
-    [review_id, issue_id, implementation_work_cycle_id, reviewer_work_cycle_id, implementation_commit_sha]
-  end
-
-  def insert_work_cycle(review_id:, role:, action:, previous_work_cycle_id: nil, commit_sha: nil)
-    db[:work_cycles].insert(
-      created_at: Time.now,
-      completed_at: commit_sha.nil? ? nil : Time.now,
-      review_id: review_id,
-      previous_work_cycle_id: previous_work_cycle_id,
-      role: role,
-      action: action,
-      result: nil,
-      provider: nil,
-      model: nil,
-      reasoning_level: nil,
-      commit_sha: commit_sha
-    )
+    [review_id, issue_id, implementation_work_cycle_id, reviewer_work_cycle_id]
   end
 
   def git!(*arguments)

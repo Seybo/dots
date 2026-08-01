@@ -66,13 +66,23 @@ class WaitWorkCycle
   end
 
   def complete_implementation
-    commit_sha = CommitWorkCycle.call(work_cycle_id: work_cycle.fetch(:id), work_cycle_result: work_cycle_result)
+    CommitWorkCycle.call(work_cycle_id: work_cycle.fetch(:id), work_cycle_result: work_cycle_result)
     File.delete(result_path)
+    output = "Worker implementation completed (Cycle #{work_cycle.fetch(:id)})."
+    return output if later_implementation?
+
     next_action = ResumeReview.call(
       project_path: review.fetch(:project_path),
       branch_name: review.fetch(:branch_name)
     )
-    "Worker implementation completed (Cycle #{work_cycle.fetch(:id)}) at #{commit_sha}.\n#{next_action}"
+    "#{output}\n#{next_action}"
+  end
+
+  def later_implementation?
+    Database.connection[:work_cycles].
+      where(review_id: review.fetch(:id), action: 'implementation').
+      where(Sequel[:work_cycles][:id] < work_cycle.fetch(:id)).
+      any?
   end
 
   def complete_review
@@ -80,14 +90,14 @@ class WaitWorkCycle
       work_cycle_id: work_cycle.fetch(:id),
       role: work_cycle.fetch(:role),
       action: work_cycle.fetch(:action),
-      findings: work_cycle_result.fetch('findings')
+      reported_issues: work_cycle_result.fetch('reported_issues')
     )
     StoreWorkCycleCompletion.call(
       work_cycle_id: work_cycle.fetch(:id),
       work_cycle_result: work_cycle_result
     )
     File.delete(result_path)
-    return "#{output}\n\n#{resume_review}" unless work_cycle_result.fetch('findings').empty?
+    return "#{output}\n\n#{resume_review}" unless work_cycle_result.fetch('reported_issues').empty?
     return output unless start_worker_review?
 
     "#{output}\n#{resume_review}"
@@ -101,7 +111,7 @@ class WaitWorkCycle
   end
 
   def start_worker_review?
-    work_cycle.fetch(:role) == 'reviewer' && work_cycle_result.fetch('findings').empty?
+    work_cycle.fetch(:role) == 'reviewer' && work_cycle_result.fetch('reported_issues').empty?
   end
 
   def review

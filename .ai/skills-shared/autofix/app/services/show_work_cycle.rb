@@ -19,10 +19,8 @@ class ShowWorkCycle
       starting_commit_sha: review.fetch(:starting_commit_sha),
       active_base_ref: review.fetch(:active_base_ref),
       active_base_commit_sha: review.fetch(:active_base_commit_sha),
-      previous_implementation_commit_sha: previous_implementation_commit_sha,
-      previous_work_cycle_id: work_cycle.fetch(:previous_work_cycle_id),
       inputs: issues(:work_cycle_inputs),
-      findings: issues(:work_cycle_findings)
+      reported_issues: issues(:work_cycle_reported_issues)
     )
   end
 
@@ -44,18 +42,5 @@ class ShowWorkCycle
       order(Sequel[:reported_issues][:id]).
       all.
       map { |issue| issue.slice(:id, :source, :body) }
-  end
-
-  def previous_implementation_commit_sha
-    previous_work_cycle_id = work_cycle.fetch(:previous_work_cycle_id)
-    until previous_work_cycle_id.nil?
-      previous_work_cycle = Database.readonly_connection[:work_cycles].where(id: previous_work_cycle_id).first
-      if previous_work_cycle.fetch(:action) == 'implementation' && !previous_work_cycle.fetch(:commit_sha).nil?
-        return previous_work_cycle.fetch(:commit_sha)
-      end
-
-      previous_work_cycle_id = previous_work_cycle.fetch(:previous_work_cycle_id)
-    end
-    nil
   end
 end

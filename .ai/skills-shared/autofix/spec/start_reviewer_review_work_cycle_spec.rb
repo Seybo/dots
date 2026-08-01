@@ -23,18 +23,15 @@ RSpec.describe StartReviewerReviewWorkCycle do
   end
 
   it 'creates one Reviewer review Work Cycle with the implementation inputs' do
-    review_id, implementation_work_cycle_id, issue_ids = complete_implementation
+    review_id, _, issue_ids = complete_implementation
 
-    review_work_cycle_id = described_class.call(previous_work_cycle_id: implementation_work_cycle_id)
+    review_work_cycle_id = described_class.call(review_id: review_id)
 
     expect(db[:work_cycles].where(id: review_work_cycle_id).first).to include(
       review_id: review_id,
-      previous_work_cycle_id: implementation_work_cycle_id,
       role: 'reviewer',
       action: 'review',
-      completed_at: nil,
-      result: nil,
-      commit_sha: nil
+      completed_at: nil
     )
     expect(db[:work_cycle_inputs].where(work_cycle_id: review_work_cycle_id).order(:id).
       select_map(:reported_issue_id)).to eq(issue_ids)
@@ -42,10 +39,10 @@ RSpec.describe StartReviewerReviewWorkCycle do
   end
 
   it 'creates nothing when the working tree is dirty' do
-    _review_id, implementation_work_cycle_id, = complete_implementation
+    review_id, _implementation_work_cycle_id, = complete_implementation
     File.write(File.join(project_path, 'tracked.txt'), "changed\n")
 
-    expect { described_class.call(previous_work_cycle_id: implementation_work_cycle_id) }.
+    expect { described_class.call(review_id: review_id) }.
       to raise_error(RuntimeError, /Working tree is not clean/)
 
     expect(db[:work_cycles].count).to eq(1)
@@ -68,9 +65,7 @@ RSpec.describe StartReviewerReviewWorkCycle do
     db[:reported_issues].where(id: issue_ids).update(decision: 'approved')
     implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
     db[:work_cycles].where(id: implementation_work_cycle_id).update(
-      completed_at: Time.now,
-      result: '{"status":"completed"}',
-      commit_sha: git!('rev-parse', 'HEAD').strip
+      completed_at: Time.now
     )
     db[:reviews].where(id: review_id).update(state: 'reviewer_review')
 

@@ -28,7 +28,7 @@ RSpec.describe ResumeReview do
       to eq('No incomplete Review.')
   end
 
-  it 'displays the next unresolved issue in Manager selection' do
+  it 'displays the next unresolved issue in Manager assessment' do
     review_id = store_review(['Pending issue.'])
     issue_id = review_issue_ids(review_id).first
 
@@ -49,6 +49,20 @@ RSpec.describe ResumeReview do
     expect(work_cycle).to include(review_id: review_id, role: 'worker', action: 'implementation')
   end
 
+  it 'completes an all-skipped imported Review during resume' do
+    review_id = store_review(['Skipped issue.'])
+    issue_id = review_issue_ids(review_id).first
+    db[:reported_issues].where(id: issue_id).update(decision: 'skipped')
+
+    expect(described_class.call(project_path: project_path, branch_name: 'feature')).
+      to eq('No unresolved issues.')
+    expect(db[:reviews].where(id: review_id).first).to include(
+      state: 'completed',
+      completed_at: be_a(Time)
+    )
+    expect(db[:work_cycles].count).to eq(0)
+  end
+
   it 'waits for an existing incomplete implementation Work Cycle without redispatching it' do
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first
@@ -62,7 +76,7 @@ RSpec.describe ResumeReview do
   end
 
   it 'creates and exposes a missing Reviewer review Work Cycle' do
-    review_id, implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
+    review_id, _implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
 
     output = described_class.call(project_path: project_path, branch_name: 'feature')
     review_work_cycle = db[:work_cycles].order(:id).last
@@ -70,17 +84,14 @@ RSpec.describe ResumeReview do
     expect(output).to eq("AutoFixCycle #{review_work_cycle.fetch(:id)}\nAutoFixRole reviewer")
     expect(review_work_cycle).to include(
       review_id: review_id,
-      previous_work_cycle_id: implementation_work_cycle_id,
       role: 'reviewer',
       action: 'review'
     )
   end
 
   it 'waits for an existing incomplete Reviewer review Work Cycle without redispatching it' do
-    _review_id, implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
-    review_work_cycle_id = StartReviewerReviewWorkCycle.call(
-      previous_work_cycle_id: implementation_work_cycle_id
-    )
+    review_id, _implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
+    review_work_cycle_id = StartReviewerReviewWorkCycle.call(review_id: review_id)
 
     output = described_class.call(project_path: project_path, branch_name: 'feature')
 
@@ -88,29 +99,53 @@ RSpec.describe ResumeReview do
     expect(db[:work_cycles].count).to eq(2)
   end
 
-  it 'resumes the next persisted Reviewer finding without importing it again' do
-    _review_id, _reviewer_work_cycle_id = complete_reviewer_review(findings: ['Reviewer finding.'])
-    finding = db[:reported_issues].where(source: 'reviewer').first
+  it 'resumes the next persisted Reviewer-reported issue without importing it again' do
+    _review_id, _reviewer_work_cycle_id = complete_reviewer_review(reported_issues: ['Reviewer-reported issue.'])
+    reported_issue = db[:reported_issues].where(source: 'reviewer').first
 
     first_output = described_class.call(project_path: project_path, branch_name: 'feature')
     second_output = described_class.call(project_path: project_path, branch_name: 'feature')
 
-    expect(first_output).to eq("Issue: #{finding.fetch(:id)}\n\n> Reviewer finding.")
+    expect(first_output).to eq("Issue: #{reported_issue.fetch(:id)}\n\n> Reviewer-reported issue.")
     expect(second_output).to eq(first_output)
     expect(db[:reported_issues].where(source: 'reviewer').count).to eq(1)
     expect(db[:work_cycles].count).to eq(2)
   end
 
-  it 'reports when finding selection has no unresolved findings' do
-    _review_id, _reviewer_work_cycle_id = complete_reviewer_review(findings: ['Reviewer finding.'])
-    db[:reported_issues].where(source: 'reviewer').update(decision: 'approved')
+  it 'reports when assessment has no approved undispatched issues after implementation' do
+    _review_id, _reviewer_work_cycle_id = complete_reviewer_review(
+      reported_issues: ['Reviewer-reported issue.']
+    )
+    db[:reported_issues].where(source: 'reviewer').update(decision: 'skipped')
 
     expect(described_class.call(project_path: project_path, branch_name: 'feature')).
-      to eq('No unresolved findings.')
+      to eq('No unresolved issues.')
+  end
+
+  it 'starts another implementation for an approved review-reported issue' do
+    review_id, _reviewer_work_cycle_id = complete_reviewer_review(
+      reported_issues: ['Reviewer-reported issue.']
+    )
+    reported_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
+    db[:reported_issues].where(id: reported_issue_id).update(decision: 'approved')
+
+    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    implementation_work_cycle = db[:work_cycles].order(:id).last
+
+    expect(output).to eq(
+      "AutoFixCycle #{implementation_work_cycle.fetch(:id)}\nAutoFixRole worker"
+    )
+    expect(implementation_work_cycle).to include(
+      review_id: review_id,
+      role: 'worker',
+      action: 'implementation'
+    )
+    expect(db[:work_cycle_inputs].where(work_cycle_id: implementation_work_cycle.fetch(:id)).
+      select_map(:reported_issue_id)).to eq([reported_issue_id])
   end
 
   it 'creates and exposes the final Worker review Work Cycle after Reviewer passes' do
-    review_id, reviewer_work_cycle_id = complete_reviewer_review(findings: [])
+    review_id, _reviewer_work_cycle_id = complete_reviewer_review(reported_issues: [])
 
     output = described_class.call(project_path: project_path, branch_name: 'feature')
     review_work_cycle = db[:work_cycles].order(:id).last
@@ -118,17 +153,14 @@ RSpec.describe ResumeReview do
     expect(output).to eq("AutoFixCycle #{review_work_cycle.fetch(:id)}\nAutoFixRole worker")
     expect(review_work_cycle).to include(
       review_id: review_id,
-      previous_work_cycle_id: reviewer_work_cycle_id,
       role: 'worker',
       action: 'review'
     )
   end
 
   it 'waits for an existing incomplete final Worker review Work Cycle without redispatching it' do
-    _review_id, reviewer_work_cycle_id = complete_reviewer_review(findings: [])
-    review_work_cycle_id = StartWorkerReviewWorkCycle.call(
-      previous_work_cycle_id: reviewer_work_cycle_id
-    )
+    review_id, _reviewer_work_cycle_id = complete_reviewer_review(reported_issues: [])
+    review_work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review_id)
 
     output = described_class.call(project_path: project_path, branch_name: 'feature')
 
@@ -142,20 +174,16 @@ RSpec.describe ResumeReview do
     db[:reported_issues].where(id: issue_id).update(decision: 'approved')
     implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
     db[:work_cycles].where(id: implementation_work_cycle_id).update(
-      completed_at: Time.now,
-      result: '{"status":"completed"}',
-      commit_sha: git!('rev-parse', 'HEAD').strip
+      completed_at: Time.now
     )
     db[:reviews].where(id: review_id).update(state: review_state)
 
     [review_id, implementation_work_cycle_id]
   end
 
-  def complete_reviewer_review(findings:)
-    review_id, implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
-    reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(
-      previous_work_cycle_id: implementation_work_cycle_id
-    )
+  def complete_reviewer_review(reported_issues:)
+    review_id, _implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
+    reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(review_id: review_id)
     StoreWorkCycleCompletion.call(
       work_cycle_id: reviewer_work_cycle_id,
       work_cycle_result: {
@@ -166,7 +194,7 @@ RSpec.describe ResumeReview do
         'provider' => nil,
         'model' => nil,
         'reasoning_level' => nil,
-        'findings' => findings
+        'reported_issues' => reported_issues
       }
     )
 

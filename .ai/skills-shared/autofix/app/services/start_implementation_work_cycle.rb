@@ -7,7 +7,7 @@ class StartImplementationWorkCycle
 
   def call
     issue_ids = approved_issue_ids
-    raise 'No approved issues remain for implementation' if issue_ids.empty?
+    return if issue_ids.empty?
 
     head_sha = ValidateWorkCycleGitState.call(project_path: review.fetch(:project_path))
     work_cycle_id = nil
@@ -53,14 +53,11 @@ class StartImplementationWorkCycle
       created_at: Time.now,
       completed_at: nil,
       review_id: review_id,
-      previous_work_cycle_id: nil,
       role: 'worker',
       action: 'implementation',
-      result: nil,
       provider: nil,
       model: nil,
-      reasoning_level: nil,
-      commit_sha: nil
+      reasoning_level: nil
     )
   end
 

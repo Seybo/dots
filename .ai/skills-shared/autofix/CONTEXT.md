@@ -14,15 +14,15 @@ A review copied from another agent. Agent-manager turns its concrete concerns in
 
 ## Worker Source
 
-A finding produced by a Worker review Work Cycle. One finding produces one reported issue linked to the Work Cycle that reported it.
+A reported issue produced by a Worker review Work Cycle and linked to that exact Work Cycle.
 
 ## Reviewer Source
 
-A finding produced by a Reviewer review Work Cycle. One finding produces one reported issue linked to the Work Cycle that reported it.
+A reported issue produced by a Reviewer review Work Cycle and linked to that exact Work Cycle.
 
 ## Manager Source
 
-A finding produced by a Manager review Work Cycle. One finding produces one reported issue linked to the Work Cycle that reported it.
+A reported issue produced by a Manager review Work Cycle and linked to that exact Work Cycle.
 
 ## Review
 
@@ -30,7 +30,7 @@ One complete cycle for a non-empty set of new GitHub or local feedback in one pr
 
 ## Work Cycle
 
-One bounded implementation or review action performed by one workflow participant, with recorded input and result. Every Work Cycle belongs to one Review.
+One bounded implementation or review action performed by one workflow participant, with recorded inputs, completion provenance, and any Reported Issues. Every Work Cycle belongs to one Review.
 
 ## Manager
 
@@ -38,7 +38,7 @@ The participant that settles reported issues, coordinates Work Cycles, creates c
 
 ## Worker
 
-The participant that implements approved reported issues and performs one final Worker review Work Cycle per Review after Reviewer has no findings. If that Worker review produces corrections, Reviewer reviews them and Worker does not review again.
+The participant that implements approved reported issues and performs one final Worker review Work Cycle per Review after Reviewer reports no issues. If that Worker review reports issues, Reviewer reviews the later implementation and Worker does not review again.
 
 ## Reviewer
 

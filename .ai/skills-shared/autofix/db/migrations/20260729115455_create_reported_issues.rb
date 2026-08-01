@@ -54,8 +54,7 @@ Sequel.migration do
       constraint(
         :reviews_state_allowed,
         state: %w[
-          manager_issue_selection
-          manager_finding_selection
+          manager_issues_assessment
           worker_implementation
           worker_review
           reviewer_review
@@ -86,14 +85,11 @@ Sequel.migration do
       DateTime :created_at, null: false
       DateTime :completed_at
       foreign_key :review_id, :reviews, null: false
-      foreign_key :previous_work_cycle_id, :work_cycles
       String :role, null: false
       String :action, null: false
-      String :result, text: true
       String :provider, text: true
       String :model, text: true
       String :reasoning_level, text: true
-      String :commit_sha, text: true
 
       constraint(:work_cycles_role_allowed, role: %w[manager worker reviewer])
       constraint(:work_cycles_action_allowed, action: %w[implementation review])
@@ -110,7 +106,7 @@ Sequel.migration do
             name: :work_cycle_inputs_identity_index
     end
 
-    create_table(:work_cycle_findings) do
+    create_table(:work_cycle_reported_issues) do
       primary_key :id
       DateTime :created_at, null: false
       foreign_key :work_cycle_id, :work_cycles, null: false
@@ -118,12 +114,12 @@ Sequel.migration do
 
       index %i[work_cycle_id reported_issue_id],
             unique: true,
-            name: :work_cycle_findings_identity_index
+            name: :work_cycle_reported_issues_identity_index
     end
   end
 
   down do
-    drop_table(:work_cycle_findings)
+    drop_table(:work_cycle_reported_issues)
     drop_table(:work_cycle_inputs)
     drop_table(:work_cycles)
     drop_table(:review_issues)

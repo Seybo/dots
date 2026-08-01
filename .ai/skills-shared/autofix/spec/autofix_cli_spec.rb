@@ -112,7 +112,7 @@ RSpec.describe AutofixCli do
     )
 
     expected_output = Regexp.new(
-      "Worker implementation completed \\(Cycle #{work_cycle_id}\\) at [0-9a-f]{40}\\.\\n" \
+      "Worker implementation completed \\(Cycle #{work_cycle_id}\\)\\.\\n" \
       'AutoFixCycle \d+\n' \
       'AutoFixRole reviewer\n'
     )
@@ -163,44 +163,53 @@ RSpec.describe AutofixCli do
 
     expect(reported_issues.where(id: issue_id).get(:decision)).to eq('approved')
     expect(reviews.where(id: review_id).first).to include(
-      state: 'manager_issue_selection',
+      state: 'manager_issues_assessment',
       starting_commit_sha: nil
     )
     expect(db[:work_cycles].count).to eq(0)
   end
 
-  it 'settles findings one at a time and stops without starting corrections' do
+  it 'settles review-reported issues one at a time and stops when all are skipped' do
     review_id = store_review(['Original issue.'])
     original_issue_id = review_issue_ids(review_id).first
     reported_issues.where(id: original_issue_id).update(decision: 'approved')
-    finding_ids = ['First finding.', 'Second finding.'].map do |body|
-      issue_id = StoreIssue.call(project_path: project_path, source: 'reviewer', body: body)
-      db[:review_issues].insert(
-        created_at: Time.now,
-        review_id: review_id,
-        reported_issue_id: issue_id
-      )
-      issue_id
-    end
-    reviews.where(id: review_id).update(state: 'manager_finding_selection')
+    implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
+    db[:work_cycles].where(id: implementation_work_cycle_id).update(
+      completed_at: Time.now
+    )
+    reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(review_id: review_id)
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: reviewer_work_cycle_id,
+      work_cycle_result: {
+        'work_cycle_id' => reviewer_work_cycle_id,
+        'role' => 'reviewer',
+        'action' => 'review',
+        'status' => 'completed',
+        'provider' => nil,
+        'model' => nil,
+        'reasoning_level' => nil,
+        'reported_issues' => ['First issue.', 'Second issue.']
+      }
+    )
+    reported_issue_ids = db[:work_cycle_reported_issues].where(work_cycle_id: reviewer_work_cycle_id).
+                         order(:id).select_map(:reported_issue_id)
     original_head = git!('rev-parse', 'HEAD').strip
 
     expect do
-      described_class.call(cli_args: ['store-decision', finding_ids.first.to_s, 'approved'])
+      described_class.call(cli_args: ['store-decision', reported_issue_ids.first.to_s, 'skipped'])
     end.to output(
-      "Decision: approved\n\nIssue: #{finding_ids.last}\n\n> Second finding.\n"
+      "Decision: skipped\n\nIssue: #{reported_issue_ids.last}\n\n> Second issue.\n"
     ).to_stdout
     expect do
-      described_class.call(cli_args: ['store-decision', finding_ids.last.to_s, 'skipped'])
-    end.to output("No unresolved findings.\n").to_stdout
+      described_class.call(cli_args: ['store-decision', reported_issue_ids.last.to_s, 'skipped'])
+    end.to output("No unresolved issues.\n").to_stdout
 
-    expect(reported_issues.where(id: finding_ids.first).get(:decision)).to eq('approved')
-    expect(reported_issues.where(id: finding_ids.last).get(:decision)).to eq('skipped')
+    expect(reported_issues.where(id: reported_issue_ids).select_map(:decision)).to eq(%w[skipped skipped])
     expect(reviews.where(id: review_id).first).to include(
-      state: 'manager_finding_selection',
+      state: 'manager_issues_assessment',
       completed_at: nil
     )
-    expect(db[:work_cycles].count).to eq(0)
+    expect(db[:work_cycles].count).to eq(2)
     expect(git!('rev-parse', 'HEAD').strip).to eq(original_head)
   end
 

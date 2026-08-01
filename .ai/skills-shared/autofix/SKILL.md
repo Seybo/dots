@@ -169,7 +169,7 @@ When helper stdout contains that pair:
 6. If wait-command stdout contains another paired handoff, retain its completed
    block and repeat the handoff in this invocation.
 7. Otherwise append its complete final workflow output to the retained blocks,
-   including any `Issue: <id>` or `No unresolved findings.` block after the
+   including any `Issue: <id>` or `No unresolved issues.` block after the
    completed-step block. Return all retained output in Work Cycle order and
    separate completed review blocks with one blank line. Surface failures
    unchanged and do not expose Manager control lines.
@@ -178,7 +178,7 @@ When helper stdout contains a line exactly `WaitWorkCycle <id>`, do not send
 another tmux message. Run the same blocking `wait-work-cycle` command without a
 tool timeout. If its stdout contains a paired handoff, follow the role routing
 above in the same invocation. Otherwise return its complete workflow output or
-failure unchanged, including any finding-selection block.
+failure unchanged, including any issues-assessment block.
 
 ## Decisions
 
@@ -200,7 +200,7 @@ For a decision, run:
 When stdout contains an `AutoFixCycle <id>` line, follow **Work Cycle handoff**.
 Otherwise return stdout unchanged. When the output displays another issue, apply
 the same behavior to the operator's next reply. When stdout is exactly
-`No unresolved findings.`, return it and stop without dispatching corrections.
+`No unresolved issues.`, return it and stop without dispatching an implementation Work Cycle.
 Run one decision command per reply; do not process the queue automatically. Do
 not refetch or re-import source data between decisions.
 

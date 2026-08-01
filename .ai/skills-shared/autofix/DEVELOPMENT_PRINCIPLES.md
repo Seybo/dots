@@ -55,7 +55,7 @@ state.
   - `agent-manager` settles issues, coordinates Reviews, creates commits, and performs the final review.
   - `agent-worker` performs implementation and the one final Worker review Work Cycle.
   - `agent-reviewer` performs independent Reviewer review Work Cycles.
-- Reviewer reviews the initial implementation and every correction until it reports no findings. Worker review runs at most once per Review, after Reviewer first passes. Corrections caused by Worker findings return through Reviewer and do not trigger another Worker review.
+- Reviewer reviews every implementation Work Cycle until it reports no issues. Worker review runs at most once per Review, after Reviewer first passes. Later implementations caused by Worker-reported issues return through Reviewer and do not trigger another Worker review.
 - Do not build a generic agent executor, provider SDK integration, background job
   system, plugin system, or concurrency framework.
 - Build a modular monolith: one CLI and one SQLite database, split into small,
@@ -118,10 +118,10 @@ state.
   methods end with `?`. Count names use a count-like suffix.
 - Keep Work Cycle terms distinct: `role` identifies the participant, `action`
   identifies the work, `inputs` are Reported Issues received by the participant,
-  and `findings` are Reported Issues produced by review.
+  and `reported_issues` are Reported Issues produced by review.
 - Prefer separate tables for distinct relationships over a generic relationship
   table with a discriminator, as with `work_cycle_inputs` and
-  `work_cycle_findings`.
+  `work_cycle_reported_issues`.
 - Keep headings, sentences, examples, and explanations short. Include details
   that affect behavior; remove repetition and filler.
 
@@ -181,8 +181,8 @@ not a requirement to create empty scaffolding.
 - Every persisted table must have a non-null `created_at` timestamp supplied when
   the row is inserted. Add `updated_at` only when a concrete workflow needs it.
   Keep domain identity enforced separately with unique constraints.
-- Work Cycles, Reviews, reported issues, decisions, and agent results belong
-  in SQLite. Generated JSON handoff files are not authoritative state.
+- Work Cycles, Reviews, reported issues, decisions, and agent provenance belong
+  in SQLite. Generated JSON result files are transport, not authoritative state.
 - Manager is Autofix's only database writer. Participants read their authoritative
   context through the deterministic `autofix show-work-cycle <id>` command; do
   not give them arbitrary SQLite command access.
@@ -203,7 +203,7 @@ protocol are intentionally deferred to implementation-task grilling.
   unrelated existing changes. Preserve the Review for resume when this
   check fails.
 - Worker implementation temporarily creates unstaged changes. Ruby stages and creates one new `Work cycle <id>` commit when implementation completes, returning the tree to clean before the next Work Cycle.
-- Review Work Cycles do not modify the checkout. Every correction creates another new interim commit; Autofix never amends an interim Work Cycle commit.
+- Review Work Cycles do not modify the checkout. Every implementation Work Cycle creates another new interim commit; Autofix never amends an interim Work Cycle commit.
 - Finalization replaces the Review's interim implementation commits with one squashed `Review N` commit before the normal push. This is the only planned replacement of those commits.
 - A Review with no approved issues authorizes no Git mutation and does not
   require a clean working tree.
@@ -223,7 +223,7 @@ protocol are intentionally deferred to implementation-task grilling.
   `app/prompts/normalize_github_issue.md` and shared Work Cycle participant
   instructions in `app/prompts/work_cycle.md`. Global agent rules make the exact message
   `AutoFixCycle <id>` load those instructions; participants read role, action,
-  inputs, and findings from SQLite.
+  inputs and review-reported issues from SQLite.
 - Do not generate or persist dynamic Work Cycle prompts. Use headings, lists,
   and code fences in static prompts when they improve clarity.
 
@@ -233,7 +233,7 @@ protocol are intentionally deferred to implementation-task grilling.
   `failed` result with a sanitized error. Manager exposes the error, leaves the
   Work Cycle incomplete, retains the result file, and does not retry or commit.
 - Process successful implementation results in one straight sequence: stage,
-  commit, read the SHA, persist completion, advance state, and delete the result.
+  commit, persist completion, advance state, and delete the result.
   Fail immediately without cross-system transaction or recovery machinery.
 - Native Ruby and gem exceptions are acceptable, including `NoMethodError`,
   `KeyError`, `JSON::ParserError`, and SQLite constraint errors.

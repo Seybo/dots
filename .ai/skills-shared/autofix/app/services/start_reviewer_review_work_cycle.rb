@@ -3,7 +3,7 @@
 class StartReviewerReviewWorkCycle
   include ServiceObject
 
-  arguments :previous_work_cycle_id
+  arguments :review_id
 
   def call
     ValidateWorkCycleGitState.call(project_path: review.fetch(:project_path))
@@ -16,17 +16,28 @@ class StartReviewerReviewWorkCycle
 
   private
 
-  def previous_work_cycle
-    @previous_work_cycle ||= Database.connection[:work_cycles].where(id: previous_work_cycle_id).first
+  def review
+    @review ||= Database.connection[:reviews].where(id: review_id).first
   end
 
-  def review
-    @review ||= Database.connection[:reviews].where(id: previous_work_cycle.fetch(:review_id)).first
+  def implementation_work_cycle
+    return @implementation_work_cycle if defined?(@implementation_work_cycle)
+
+    @implementation_work_cycle = Database.connection[:work_cycles].
+                                 where(review_id: review_id, role: 'worker', action: 'implementation').
+                                 exclude(completed_at: nil).
+                                 order(:id).
+                                 last
+    if @implementation_work_cycle.nil?
+      raise "Review #{review.fetch(:number)} has no completed implementation Work Cycle"
+    end
+
+    @implementation_work_cycle
   end
 
   def input_issue_ids
     @input_issue_ids ||= Database.connection[:work_cycle_inputs].
-                         where(work_cycle_id: previous_work_cycle_id).
+                         where(work_cycle_id: implementation_work_cycle.fetch(:id)).
                          order(:id).
                          select_map(:reported_issue_id)
   end
@@ -35,15 +46,12 @@ class StartReviewerReviewWorkCycle
     Database.connection[:work_cycles].insert(
       created_at: Time.now,
       completed_at: nil,
-      review_id: review.fetch(:id),
-      previous_work_cycle_id: previous_work_cycle_id,
+      review_id: review_id,
       role: 'reviewer',
       action: 'review',
-      result: nil,
       provider: nil,
       model: nil,
-      reasoning_level: nil,
-      commit_sha: nil
+      reasoning_level: nil
     )
   end
 

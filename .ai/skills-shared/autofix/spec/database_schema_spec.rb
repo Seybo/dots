@@ -114,7 +114,7 @@ RSpec.describe 'database schema' do
     end
     expect { db[:reviews].insert(review_attributes(number: 2, state: 'running')) }.
       to raise_error(Sequel::CheckConstraintViolation)
-    expect { db[:reviews].insert(review_attributes(number: 2, state: 'manager_finding_selection')) }.
+    expect { db[:reviews].insert(review_attributes(number: 2, state: 'manager_issues_assessment')) }.
       not_to raise_error
   end
 
@@ -135,11 +135,10 @@ RSpec.describe 'database schema' do
       to raise_error(Sequel::ForeignKeyConstraintViolation)
   end
 
-  it 'creates Work Cycles with required identity and nullable result data' do
+  it 'creates Work Cycles with required identity and nullable provenance' do
     expect(columns(:work_cycles)).to eq(
       %i[
-        id created_at completed_at review_id previous_work_cycle_id role action result provider model
-        reasoning_level commit_sha
+        id created_at completed_at review_id role action provider model reasoning_level
       ]
     )
     expect_generated_id_and_created_at(:work_cycles)
@@ -147,7 +146,7 @@ RSpec.describe 'database schema' do
     %i[review_id role action].each do |name|
       expect(column(:work_cycles, name)).to include(allow_null: false)
     end
-    %i[completed_at previous_work_cycle_id result provider model reasoning_level commit_sha].each do |name|
+    %i[completed_at provider model reasoning_level].each do |name|
       expect(column(:work_cycles, name)).to include(allow_null: true)
     end
   end
@@ -166,16 +165,10 @@ RSpec.describe 'database schema' do
     expect do
       db[:work_cycles].insert(work_cycle_attributes(review_id: review_id + 1))
     end.to raise_error(Sequel::ForeignKeyConstraintViolation)
-
-    expect do
-      db[:work_cycles].insert(
-        work_cycle_attributes(review_id: review_id, previous_work_cycle_id: work_cycle_id)
-      )
-    end.not_to raise_error
   end
 
-  it 'creates Work Cycle input and finding relationships with foreign keys and unique pairs' do
-    %i[work_cycle_inputs work_cycle_findings].each do |table|
+  it 'creates Work Cycle input and reported-issue relationships with foreign keys and unique pairs' do
+    %i[work_cycle_inputs work_cycle_reported_issues].each do |table|
       expect(columns(table)).to eq(%i[id created_at work_cycle_id reported_issue_id])
       expect_generated_id_and_created_at(table)
     end
@@ -183,23 +176,23 @@ RSpec.describe 'database schema' do
     review_id = db[:reviews].insert(review_attributes)
     work_cycle_id = db[:work_cycles].insert(work_cycle_attributes(review_id: review_id))
     input_issue_id = db[:reported_issues].insert(issue_attributes)
-    finding_issue_id = db[:reported_issues].insert(
-      issue_attributes(source: 'reviewer', source_id: nil, body: 'Reviewer finding.')
+    reported_issue_id = db[:reported_issues].insert(
+      issue_attributes(source: 'reviewer', source_id: nil, body: 'Reviewer issue.')
     )
     input_attributes = relationship_attributes(
       work_cycle_id: work_cycle_id,
       reported_issue_id: input_issue_id
     )
-    finding_attributes = relationship_attributes(
+    reported_issue_attributes = relationship_attributes(
       work_cycle_id: work_cycle_id,
-      reported_issue_id: finding_issue_id
+      reported_issue_id: reported_issue_id
     )
     db[:work_cycle_inputs].insert(input_attributes)
-    db[:work_cycle_findings].insert(finding_attributes)
+    db[:work_cycle_reported_issues].insert(reported_issue_attributes)
 
     expect { db[:work_cycle_inputs].insert(input_attributes) }.
       to raise_error(Sequel::UniqueConstraintViolation)
-    expect { db[:work_cycle_findings].insert(finding_attributes) }.
+    expect { db[:work_cycle_reported_issues].insert(reported_issue_attributes) }.
       to raise_error(Sequel::UniqueConstraintViolation)
     expect do
       db[:work_cycle_inputs].insert(input_attributes.merge(reported_issue_id: input_issue_id + 2))
@@ -219,7 +212,7 @@ RSpec.describe 'database schema' do
           :review_issues,
           :work_cycles,
           :work_cycle_inputs,
-          :work_cycle_findings
+          :work_cycle_reported_issues
         )
 
         Sequel::Migrator.run(rollback_db, migrations_path, target: 0)
@@ -229,7 +222,7 @@ RSpec.describe 'database schema' do
           :review_issues,
           :work_cycles,
           :work_cycle_inputs,
-          :work_cycle_findings
+          :work_cycle_reported_issues
         )
       ensure
         rollback_db.disconnect
@@ -274,7 +267,7 @@ RSpec.describe 'database schema' do
       original_base_commit_sha: 'base-sha',
       active_base_ref: 'origin/main',
       active_base_commit_sha: 'base-sha',
-      state: 'manager_issue_selection',
+      state: 'manager_issues_assessment',
       final_commit_sha: nil
     }.merge(overrides)
   end
@@ -284,14 +277,11 @@ RSpec.describe 'database schema' do
       created_at: timestamp,
       completed_at: nil,
       review_id: nil,
-      previous_work_cycle_id: nil,
       role: 'worker',
       action: 'implementation',
-      result: nil,
       provider: nil,
       model: nil,
-      reasoning_level: nil,
-      commit_sha: nil
+      reasoning_level: nil
     }.merge(overrides)
   end
 

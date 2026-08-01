@@ -85,25 +85,25 @@ Real QA: approve and skip real GitHub and local issues through natural Pi replie
 - Associate every active issue, including skipped issues, with that Review.
 - Treat its approved issues as one implementation batch after the unresolved queue becomes empty.
 - Immediately before every Work Cycle, require `git status --porcelain` to be empty. A dirty tree fails before participant action or delivery and preserves the Review for resume.
-- After the first Work Cycle's clean-tree check passes, capture current `HEAD` as the Review's starting commit. Leave it null during `manager_issue_selection` and for an all-skipped Review.
+- After the first Work Cycle's clean-tree check passes, capture current `HEAD` as the Review's starting commit. Leave it null during `manager_issues_assessment` and for an all-skipped Review.
 - If every issue is skipped, complete the numbered Review without requiring a clean tree or creating a Work Cycle, commit, or push.
-- Add durable Reviews, Work Cycles, Review issues, Work Cycle inputs, and Work Cycle findings.
-- Persist the Review state as `manager_issue_selection`, `manager_finding_selection`, `worker_implementation`, `reviewer_review`, `worker_review`, `manager_review`, `manager_finalizing`, or `completed`.
+- Add durable Reviews, Work Cycles, Review issues, Work Cycle inputs, and Work Cycle reported-issue relationships.
+- Persist the Review state as `manager_issues_assessment`, `worker_implementation`, `reviewer_review`, `worker_review`, `manager_review`, `manager_finalizing`, or `completed`.
 - On every invocation, continue an incomplete Review for the current project and branch from its stored state instead of repeating source or base arguments.
-- Add shared participant instructions that every agent loads by default. The exact message `AutoFixCycle <id>` makes the participant run the read-only `autofix show-work-cycle <id>` command and follow the returned role, action, project, commit, inputs, and findings.
+- Add shared participant instructions that every agent loads by default. The exact message `AutoFixCycle <id>` makes the participant run the read-only `autofix show-work-cycle <id>` command and follow the returned role, action, project, commit, inputs, and review-reported issues.
 - Allowlist that exact read command for both Pi and Claude; do not allow arbitrary SQLite commands.
 - Manager sends only `AutoFixCycle <id>` to `agent-worker`, then blocks in `autofix wait-work-cycle <id>` while Ruby polls `/tmp/autofix-work-cycle-<id>.json` once per second with no timeout.
 - If waiting is interrupted, resume waits for the same Work Cycle without redispatching it.
 - Worker modifies the correct checkout and writes a `completed` or `failed` result without writing the database.
 - A failed result includes an error; Manager exposes it, leaves the Work Cycle incomplete, retains the file, and does not retry or commit.
-- For a completed implementation result, Ruby stages all changes, creates local `Work cycle <id>`, reads and stores its full SHA with the result and actual provenance, advances the Review, and deletes the result file. Do not push interim commits.
-- Completed review Work Cycles store their result and advance state without creating a commit.
+- For a completed implementation result, Ruby stages all changes, creates local `Work cycle <id>`, stores completion and actual agent provenance without the interim commit SHA, advances the Review, and deletes the result file. Do not push interim commits.
+- Completed review Work Cycles store completion, provenance, and any Reported Issues, then advance state without creating a commit.
 
 Real QA: classify a real multi-issue source, send one approved batch to `agent-worker`, receive completion, and create the implementation commit.
 
 ### Task 7: Add one Worker review Work Cycle
 
-- Add the deterministic Worker review Work Cycle, result, persistence, and participant behavior.
+- Add the deterministic Worker review Work Cycle, result transport, completion persistence, and participant behavior.
 - Task 8 reorders this capability so Worker review no longer starts immediately after implementation.
 
 Real QA: have `agent-worker` review one real Autofix implementation commit.
@@ -113,43 +113,43 @@ Real QA: have `agent-worker` review one real Autofix implementation commit.
 - After implementation is committed, create a Reviewer review Work Cycle for that commit and its reported issues before Worker review.
 - Send only `AutoFixCycle <id>` to `agent-reviewer`; shared participant instructions make Reviewer load its review context through `autofix show-work-cycle <id>`, review independently without modification, and write the expected result file.
 - Reviewer evaluates the exact commit in the context of relevant surrounding code and affected flows. It looks for incomplete fixes and concrete regressions introduced outside the directly changed behavior, not only defects visible in the diff in isolation.
-- When Reviewer reports findings, retain and display them and do not start Worker review. Finding conversion and decisions continue in Task 9; corrections continue in later tasks.
-- When Reviewer reports no findings, create the Review's one final Worker review Work Cycle. Worker reviews independently without receiving Reviewer result content.
-- Worker review runs at most once per Review. Corrections caused by later Worker findings return through Reviewer and never trigger another Worker review.
+- When Reviewer reports issues, retain and display them and do not start Worker review. Persistence and decisions continue in Task 9; later implementation continues in subsequent tasks.
+- When Reviewer reports no issues, create the Review's one final Worker review Work Cycle. Worker reviews independently without receiving Reviewer result content.
+- Worker review runs at most once per Review. Later implementations caused by Worker-reported issues return through Reviewer and never trigger another Worker review.
 - Manager imports and deletes each result file and displays implementation, Reviewer, and Worker completion results in Work Cycle order.
 
 Real QA: have `agent-reviewer` independently review one real Autofix implementation commit, then automatically run the one final Worker review only after Reviewer passes.
 
-## Phase 3: Turn findings into corrections
+## Phase 3: Handle issues reported by reviews
 
-### Task 9: Capture and settle review findings
+### Task 9: Capture and settle review-reported issues
 
-- Convert each finding from a Worker or Reviewer review Work Cycle directly into one reported issue sourced as `worker` or `reviewer`, with no source ID or added finding metadata.
-- Atomically complete the Work Cycle, store its full result and provenance, create finding issues, link them to the Review and producing Work Cycle, and move the Review to `manager_finding_selection`.
-- Present unresolved findings to Manager in result order for `approved` or `skipped` decisions.
-- Stop in `manager_finding_selection` when no unresolved findings remain, without implementing corrections.
+- Store each Reported Issue from a Worker or Reviewer review Work Cycle directly with source `worker` or `reviewer`, no source ID, and no extra issue metadata.
+- Atomically complete the Work Cycle, store its provenance, create its Reported Issues, link them to the Review and producing Work Cycle, and move the Review to `manager_issues_assessment`.
+- Present unresolved Reported Issues to Manager in result order for `approved` or `skipped` decisions.
+- After the final decision, start the same implementation Work Cycle when approved undispatched Reported Issues remain. If every newly reported issue was skipped, stop in `manager_issues_assessment` without another Work Cycle.
 
-Real QA: retain and settle at least one real review finding.
+Real QA: retain and settle at least one real issue reported by a review.
 
-### Task 10: Run one correction Work Cycle
+### Task 10: Run one later implementation Work Cycle
 
-- Send approved review findings to `agent-worker` as one correction implementation Work Cycle.
-- Preserve the Work Cycle chain and original issue context.
-- Let Manager create one local `Work cycle <id>` commit for the completed corrections and retain its SHA. Do not push interim commits.
+- Send approved Reported Issues from a review to `agent-worker` as one implementation Work Cycle.
+- Preserve chronological Work Cycle order and original issue context.
+- Let Manager create one local `Work cycle <id>` commit for the completed implementation without persisting or exposing its interim SHA. Do not push interim commits.
 - Stop before another review.
 
-Real QA: implement and commit one real approved review correction batch.
+Real QA: implement and commit one real approved batch reported by a review.
 
-### Task 11: Repeat Reviewer and correction Work Cycles
+### Task 11: Repeat Reviewer and implementation Work Cycles
 
-- Run independent Reviewer review Work Cycles for each correction commit until Reviewer reports no findings.
+- Run an independent Reviewer review Work Cycle for each implementation commit until Reviewer reports no issues.
 - After Reviewer first passes, run the Review's one final Worker review Work Cycle.
-- Convert new findings into reported issues and let Manager settle them.
-- If Worker findings cause corrections, send those corrections through Reviewer until it passes, then proceed without another Worker review.
-- Continue with another correction implementation Work Cycle when approved findings remain.
+- Store newly reported issues and let Manager settle them.
+- If Worker reports approved issues, send the later implementation through Reviewer until it passes, then proceed without another Worker review.
+- Continue with another implementation Work Cycle when approved undispatched Reported Issues remain.
 - Escalate ambiguity to the operator instead of adding automatic debate machinery.
 
-Real QA: complete at least one correction and repeated Reviewer cycle, then verify Worker review runs only once.
+Real QA: complete at least one later implementation and repeated Reviewer cycle, then verify Worker review runs only once.
 
 ## Phase 4: Make Autofix durable and final
 
@@ -157,7 +157,7 @@ Real QA: complete at least one correction and repeated Reviewer cycle, then veri
 
 - Add explicit `/skill:autofix --rebase-base [<base-ref>]` using frozen original and mutable active base metadata.
 - Rebase the stored Review branch onto the current or supplied base without switching branches, pushing, or automatically continuing orchestration.
-- Update active base metadata, the rebased Review starting commit, and rebased Work Cycle commit SHAs while preserving original base metadata.
+- Update active base metadata and the rebased Review starting commit while preserving original base metadata.
 
 Real QA: rebase one active Review onto an advanced or different base and then continue it through normal Autofix invocation.
 
@@ -173,7 +173,7 @@ Real QA: process two external Reviews without reselecting terminal issues.
 
 - Record the final Manager review as a Manager review Work Cycle after Reviewer has passed and the Review's one final Worker review has completed.
 - Manager critically reviews the complete result for missing requirements, contradictions, integration gotchas, incomplete work, and regressions instead of treating prior reviews as sufficient.
-- Convert Manager findings into reported issues and route approved findings through correction and Reviewer review. Do not rerun the already completed Worker review.
+- Store Manager-reported issues and route approved issues through implementation and Reviewer review. Do not rerun the already completed Worker review.
 - After Manager review passes, enter `manager_finalizing` and run configured final checks.
 - Stop and report failing checks before squash or push. Interrupted checks may run again on resume.
 - After checks pass, squash the Review's implementation commits into one `Review N` commit and push it.
@@ -183,7 +183,7 @@ Real QA: complete one real run with passing Manager review and final checks, and
 
 ### Task 15: Assess Addressit replacement
 
-- Compare actual Autofix usage with Addressit for GitHub and local sources, including Reviewer-led correction loops and one final Worker review per Review.
+- Compare actual Autofix usage with Addressit for GitHub and local sources, including repeated Reviewer and implementation loops and one final Worker review per Review.
 - Add only missing behavior proven necessary by real usage.
 - Decide whether Autofix can become the default.
 

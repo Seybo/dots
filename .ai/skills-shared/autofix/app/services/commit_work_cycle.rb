@@ -10,13 +10,10 @@ class CommitWorkCycle
   def call
     capture!('git', '-C', project_path, 'add', '-A')
     capture!('git', '-C', project_path, 'commit', '-m', "Work cycle #{work_cycle_id}")
-    commit_sha = capture!('git', '-C', project_path, 'rev-parse', 'HEAD').strip
     StoreWorkCycleCompletion.call(
       work_cycle_id: work_cycle_id,
-      work_cycle_result: work_cycle_result,
-      commit_sha: commit_sha
+      work_cycle_result: work_cycle_result
     )
-    commit_sha
   end
 
   private

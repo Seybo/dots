@@ -3,12 +3,12 @@
 class RenderWorkCycleResult
   include ServiceObject
 
-  arguments :work_cycle_id, :role, :action, :findings
+  arguments :work_cycle_id, :role, :action, :reported_issues
 
   def call
-    rendered_findings = findings.empty? ? ['None'] : findings
-    lines = ["#{role.capitalize} #{action} completed (Cycle #{work_cycle_id}). Findings:"]
-    lines.concat(rendered_findings.map { |finding| "- #{finding}" })
+    rendered_issues = reported_issues.empty? ? ['None'] : reported_issues
+    lines = ["#{role.capitalize} #{action} completed (Cycle #{work_cycle_id}). Reported issues:"]
+    lines.concat(rendered_issues.map { |reported_issue| "- #{reported_issue}" })
     lines.join("\n")
   end
 end

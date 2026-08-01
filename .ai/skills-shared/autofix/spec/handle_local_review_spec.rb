@@ -41,7 +41,7 @@ RSpec.describe HandleLocalReview do
       original_base_commit_sha: 'base-sha',
       active_base_ref: 'origin/main',
       active_base_commit_sha: 'base-sha',
-      state: 'manager_issue_selection'
+      state: 'manager_issues_assessment'
     )
     expect(review_issues.where(review_id: review.fetch(:id)).order(:id).select_map(:reported_issue_id)).
       to eq(issues.map { |issue| issue.fetch(:id) })
