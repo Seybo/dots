@@ -9,6 +9,7 @@ class StartWorkerReviewWorkCycle
     ensure_no_worker_review
     ValidateWorkCycleGitState.call(project_path: review.fetch(:project_path))
     Database.connection.transaction(savepoint: true) do
+      update_review
       work_cycle_id = create_work_cycle
       link_inputs(work_cycle_id)
       work_cycle_id
@@ -52,6 +53,10 @@ class StartWorkerReviewWorkCycle
     return unless is_existing
 
     raise "Review #{review_id} already has a Worker review Work Cycle"
+  end
+
+  def update_review
+    Database.connection[:reviews].where(id: review_id).update(state: 'worker_review')
   end
 
   def create_work_cycle

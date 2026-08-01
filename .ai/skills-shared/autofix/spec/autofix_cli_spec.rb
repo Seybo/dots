@@ -169,7 +169,7 @@ RSpec.describe AutofixCli do
     expect(db[:work_cycles].count).to eq(0)
   end
 
-  it 'settles review-reported issues one at a time and stops when all are skipped' do
+  it 'settles skipped Reviewer issues and starts the final Worker review' do
     review_id = store_review(['Original issue.'])
     original_issue_id = review_issue_ids(review_id).first
     reported_issues.where(id: original_issue_id).update(decision: 'approved')
@@ -202,15 +202,50 @@ RSpec.describe AutofixCli do
     ).to_stdout
     expect do
       described_class.call(cli_args: ['store-decision', reported_issue_ids.last.to_s, 'skipped'])
-    end.to output("No unresolved issues.\n").to_stdout
+    end.to output(/Decision: skipped\n\nAutoFixCycle \d+\nAutoFixRole worker\n/).to_stdout
 
     expect(reported_issues.where(id: reported_issue_ids).select_map(:decision)).to eq(%w[skipped skipped])
     expect(reviews.where(id: review_id).first).to include(
-      state: 'manager_issues_assessment',
+      state: 'worker_review',
       completed_at: nil
     )
-    expect(db[:work_cycles].count).to eq(2)
+    expect(db[:work_cycles].count).to eq(3)
+    expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(1)
     expect(git!('rev-parse', 'HEAD').strip).to eq(original_head)
+  end
+
+  it 'moves all-skipped Worker issues directly to Manager review' do
+    review_id = store_review(['Original issue.'])
+    original_issue_id = review_issue_ids(review_id).first
+    reported_issues.where(id: original_issue_id).update(decision: 'approved')
+    implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
+    db[:work_cycles].where(id: implementation_work_cycle_id).update(completed_at: Time.now)
+    reviews.where(id: review_id).update(state: 'reviewer_review')
+    reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(review_id: review_id)
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: reviewer_work_cycle_id,
+      work_cycle_result: review_result(reviewer_work_cycle_id, role: 'reviewer', reported_issues: [])
+    )
+    worker_work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review_id)
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: worker_work_cycle_id,
+      work_cycle_result: review_result(
+        worker_work_cycle_id,
+        role: 'worker',
+        reported_issues: ['Worker-reported issue.']
+      )
+    )
+    reported_issue_id = reported_issues.where(source: 'worker').get(:id)
+
+    expect do
+      described_class.call(cli_args: ['store-decision', reported_issue_id.to_s, 'skipped'])
+    end.to output("No unresolved issues.\n").to_stdout
+
+    expect(reviews.where(id: review_id).first).to include(
+      state: 'manager_review',
+      completed_at: nil
+    )
+    expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(1)
   end
 
   it 'starts implementation after classifying a Review with an approved issue' do
@@ -258,6 +293,19 @@ RSpec.describe AutofixCli do
 
   def review_issue_ids(review_id)
     db[:review_issues].where(review_id: review_id).order(:id).select_map(:reported_issue_id)
+  end
+
+  def review_result(work_cycle_id, role:, reported_issues:)
+    {
+      'work_cycle_id' => work_cycle_id,
+      'role' => role,
+      'action' => 'review',
+      'status' => 'completed',
+      'provider' => nil,
+      'model' => nil,
+      'reasoning_level' => nil,
+      'reported_issues' => reported_issues
+    }
   end
 
   def git!(*arguments)

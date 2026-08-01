@@ -142,14 +142,16 @@ Real QA: implement and commit one real approved batch reported by a review.
 
 ### Task 11: Repeat Reviewer and implementation Work Cycles
 
-- Run an independent Reviewer review Work Cycle for each implementation commit until Reviewer reports no issues.
-- After Reviewer first passes, run the Review's one final Worker review Work Cycle.
-- Store newly reported issues and let Manager settle them.
-- If Worker reports approved issues, send the later implementation through Reviewer until it passes, then proceed without another Worker review.
-- Continue with another implementation Work Cycle when approved undispatched Reported Issues remain.
-- Escalate ambiguity to the operator instead of adding automatic debate machinery.
+- Run an independent Reviewer review Work Cycle after every implementation Work Cycle.
+- Store newly reported issues and let Manager settle them one at a time. Continue with another implementation Work Cycle when approved undispatched Reported Issues remain.
+- Treat a Reviewer implementation as settled when Reviewer reports no issues or Manager skips every reported issue. If Worker review has not run, create the Review's one final Worker review Work Cycle.
+- Determine whether Worker review ran from persisted Work Cycle history. Never create a second Worker review.
+- If Worker reports approved issues, send them through implementation and Reviewer. Continue Reviewer-reported issue, decision, and implementation loops without a numeric limit.
+- After Worker review ran, move directly to `manager_review` when Reviewer reports no issues, Manager skips every later Reviewer issue, or Manager skips every Worker-reported issue.
+- Require the normal clean-tree check before each implementation or review Work Cycle. Database-only decisions and direct state progression do not require it.
+- Escalate ambiguity conversationally: identify the affected Reported Issue IDs, ask the operator one precise question, and persist no decision or escalation state until clarified.
 
-Real QA: complete at least one later implementation and repeated Reviewer cycle, then verify Worker review runs only once.
+Real QA: complete repeated implementation and Reviewer loops before and after the one final Worker review, including approved and all-skipped batches, then verify the Review stops in `manager_review` with exactly one Worker review.
 
 ## Phase 4: Make Autofix durable and final
 

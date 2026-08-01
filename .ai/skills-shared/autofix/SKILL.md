@@ -190,6 +190,9 @@ clear decision about the issue:
 - Treat a clear request to skip, ignore, reject, or mark the issue invalid as
   `skipped`.
 - A question or unrelated message is not a decision.
+- For genuine ambiguity, name the affected Reported Issue IDs and ask one precise
+  question. Do not run `store-decision`, persist escalation state, or create a
+  Work Cycle until the operator gives a clear decision.
 
 For a decision, run:
 
@@ -199,9 +202,11 @@ For a decision, run:
 
 When stdout contains an `AutoFixCycle <id>` line, follow **Work Cycle handoff**.
 Otherwise return stdout unchanged. When the output displays another issue, apply
-the same behavior to the operator's next reply. When stdout is exactly
-`No unresolved issues.`, return it and stop without dispatching an implementation Work Cycle.
-Run one decision command per reply; do not process the queue automatically. Do
-not refetch or re-import source data between decisions.
+the same behavior to the operator's next reply. An all-skipped Reviewer batch
+may return the Review's one final Worker handoff; follow it normally. When
+stdout is exactly `No unresolved issues.`, return it and stop without
+creating another Work Cycle. Run one decision command per reply; do not process
+the queue automatically. Do not refetch or re-import source data between
+decisions.
 
 Reject any other skill arguments.

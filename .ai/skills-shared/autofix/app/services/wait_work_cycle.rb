@@ -69,20 +69,11 @@ class WaitWorkCycle
     CommitWorkCycle.call(work_cycle_id: work_cycle.fetch(:id), work_cycle_result: work_cycle_result)
     File.delete(result_path)
     output = "Worker implementation completed (Cycle #{work_cycle.fetch(:id)})."
-    return output if later_implementation?
-
     next_action = ResumeReview.call(
       project_path: review.fetch(:project_path),
       branch_name: review.fetch(:branch_name)
     )
     "#{output}\n#{next_action}"
-  end
-
-  def later_implementation?
-    Database.connection[:work_cycles].
-      where(review_id: review.fetch(:id), action: 'implementation').
-      where(Sequel[:work_cycles][:id] < work_cycle.fetch(:id)).
-      any?
   end
 
   def complete_review
@@ -97,10 +88,14 @@ class WaitWorkCycle
       work_cycle_result: work_cycle_result
     )
     File.delete(result_path)
-    return "#{output}\n\n#{resume_review}" unless work_cycle_result.fetch('reported_issues').empty?
-    return output unless start_worker_review?
 
-    "#{output}\n#{resume_review}"
+    case review.fetch(:state)
+    when 'manager_issues_assessment' then "#{output}\n\n#{resume_review}"
+    when 'worker_review' then "#{output}\n#{resume_review}"
+    when 'manager_review' then output
+    else
+      raise "Cannot continue Review #{review.fetch(:number)} from state #{review.fetch(:state)}"
+    end
   end
 
   def resume_review
@@ -108,10 +103,6 @@ class WaitWorkCycle
       project_path: review.fetch(:project_path),
       branch_name: review.fetch(:branch_name)
     )
-  end
-
-  def start_worker_review?
-    work_cycle.fetch(:role) == 'reviewer' && work_cycle_result.fetch('reported_issues').empty?
   end
 
   def review

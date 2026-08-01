@@ -70,11 +70,26 @@ class StoreWorkCycleCompletion
   def next_review_state
     case [work_cycle.fetch(:role), work_cycle.fetch(:action)]
     when %w[worker implementation] then 'reviewer_review'
-    when %w[reviewer review] then reported_issues.empty? ? 'worker_review' : 'manager_issues_assessment'
+    when %w[reviewer review] then reviewer_review_state
     when %w[worker review] then reported_issues.empty? ? 'manager_review' : 'manager_issues_assessment'
     when %w[manager review] then 'manager_finalizing'
     else
       raise "Unsupported Work Cycle completion: #{work_cycle.fetch(:role)}/#{work_cycle.fetch(:action)}"
     end
+  end
+
+  def reviewer_review_state
+    return 'manager_issues_assessment' unless reported_issues.empty?
+    return 'manager_review' if worker_review?
+
+    'worker_review'
+  end
+
+  def worker_review?
+    Database.connection[:work_cycles].where(
+      review_id: review.fetch(:id),
+      role: 'worker',
+      action: 'review'
+    ).any?
   end
 end

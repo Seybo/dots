@@ -10,13 +10,12 @@ class StartImplementationWorkCycle
     return if issue_ids.empty?
 
     head_sha = ValidateWorkCycleGitState.call(project_path: review.fetch(:project_path))
-    work_cycle_id = nil
     Database.connection.transaction(savepoint: true) do
       update_review(head_sha)
       work_cycle_id = create_work_cycle
       link_inputs(work_cycle_id, issue_ids)
+      work_cycle_id
     end
-    work_cycle_id
   end
 
   private

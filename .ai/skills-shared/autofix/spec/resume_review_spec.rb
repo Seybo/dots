@@ -89,6 +89,33 @@ RSpec.describe ResumeReview do
     )
   end
 
+  it 'creates Reviewer review for the latest implementation after an older Reviewer completed' do
+    review_id, first_reviewer_work_cycle_id = complete_reviewer_review(
+      reported_issues: ['Reviewer-reported issue.']
+    )
+    reported_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
+    db[:reported_issues].where(id: reported_issue_id).update(decision: 'approved')
+    later_implementation_id = StartImplementationWorkCycle.call(review_id: review_id)
+    db[:work_cycles].where(id: later_implementation_id).update(completed_at: Time.now)
+    db[:reviews].where(id: review_id).update(state: 'reviewer_review')
+
+    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    next_reviewer_work_cycle = db[:work_cycles].order(:id).last
+
+    expect(output).to eq(
+      "AutoFixCycle #{next_reviewer_work_cycle.fetch(:id)}\nAutoFixRole reviewer"
+    )
+    expect(first_reviewer_work_cycle_id).to be < later_implementation_id
+    expect(later_implementation_id).to be < next_reviewer_work_cycle.fetch(:id)
+    expect(next_reviewer_work_cycle).to include(
+      review_id: review_id,
+      role: 'reviewer',
+      action: 'review'
+    )
+    expect(db[:work_cycle_inputs].where(work_cycle_id: next_reviewer_work_cycle.fetch(:id)).
+      select_map(:reported_issue_id)).to eq([reported_issue_id])
+  end
+
   it 'waits for an existing incomplete Reviewer review Work Cycle without redispatching it' do
     review_id, _implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
     review_work_cycle_id = StartReviewerReviewWorkCycle.call(review_id: review_id)
@@ -112,14 +139,97 @@ RSpec.describe ResumeReview do
     expect(db[:work_cycles].count).to eq(2)
   end
 
-  it 'reports when assessment has no approved undispatched issues after implementation' do
-    _review_id, _reviewer_work_cycle_id = complete_reviewer_review(
+  it 'starts final Worker review when all Reviewer issues are skipped' do
+    review_id, _reviewer_work_cycle_id = complete_reviewer_review(
       reported_issues: ['Reviewer-reported issue.']
+    )
+    reported_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
+    db[:reported_issues].where(id: reported_issue_id).update(decision: 'skipped')
+
+    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    worker_work_cycle = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("AutoFixCycle #{worker_work_cycle.fetch(:id)}\nAutoFixRole worker")
+    expect(worker_work_cycle).to include(review_id: review_id, role: 'worker', action: 'review')
+    expect(db[:work_cycle_inputs].where(work_cycle_id: worker_work_cycle.fetch(:id)).
+      select_map(:reported_issue_id)).not_to include(reported_issue_id)
+  end
+
+  it 'retries final Worker review after an all-skipped Reviewer batch is blocked by a dirty tree' do
+    review_id, _reviewer_work_cycle_id = complete_reviewer_review(
+      reported_issues: ['Reviewer-reported issue.']
+    )
+    reported_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
+    db[:reported_issues].where(id: reported_issue_id).update(decision: 'skipped')
+    File.write(File.join(project_path, 'tracked.txt'), "changed\n")
+
+    expect do
+      described_class.call(project_path: project_path, branch_name: 'feature')
+    end.to raise_error(RuntimeError, /Working tree is not clean/)
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_issues_assessment')
+    expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(0)
+
+    git!('restore', 'tracked.txt')
+    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    worker_work_cycle = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("AutoFixCycle #{worker_work_cycle.fetch(:id)}\nAutoFixRole worker")
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('worker_review')
+  end
+
+  it 'moves all-skipped Worker issues directly to Manager review' do
+    review_id, _reviewer_work_cycle_id = complete_reviewer_review(reported_issues: [])
+    worker_work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review_id)
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: worker_work_cycle_id,
+      work_cycle_result: review_result(
+        worker_work_cycle_id,
+        role: 'worker',
+        reported_issues: ['Worker-reported issue.']
+      )
+    )
+    db[:reported_issues].where(source: 'worker').update(decision: 'skipped')
+
+    expect(described_class.call(project_path: project_path, branch_name: 'feature')).
+      to eq('No unresolved issues.')
+    expect(db[:reviews].where(id: review_id).first).to include(
+      state: 'manager_review',
+      completed_at: nil
+    )
+    expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(1)
+  end
+
+  it 'moves an all-skipped later Reviewer batch directly to Manager review' do
+    review_id, _first_reviewer_work_cycle_id = complete_reviewer_review(reported_issues: [])
+    worker_work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review_id)
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: worker_work_cycle_id,
+      work_cycle_result: review_result(
+        worker_work_cycle_id,
+        role: 'worker',
+        reported_issues: ['Worker-reported issue.']
+      )
+    )
+    worker_issue_id = db[:reported_issues].where(source: 'worker').get(:id)
+    db[:reported_issues].where(id: worker_issue_id).update(decision: 'approved')
+    implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
+    db[:work_cycles].where(id: implementation_work_cycle_id).update(completed_at: Time.now)
+    db[:reviews].where(id: review_id).update(state: 'reviewer_review')
+    reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(review_id: review_id)
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: reviewer_work_cycle_id,
+      work_cycle_result: review_result(
+        reviewer_work_cycle_id,
+        role: 'reviewer',
+        reported_issues: ['Reviewer-reported issue.']
+      )
     )
     db[:reported_issues].where(source: 'reviewer').update(decision: 'skipped')
 
     expect(described_class.call(project_path: project_path, branch_name: 'feature')).
       to eq('No unresolved issues.')
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_review')
+    expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(1)
   end
 
   it 'starts another implementation for an approved review-reported issue' do
@@ -199,6 +309,19 @@ RSpec.describe ResumeReview do
     )
 
     [review_id, reviewer_work_cycle_id]
+  end
+
+  def review_result(work_cycle_id, role:, reported_issues:)
+    {
+      'work_cycle_id' => work_cycle_id,
+      'role' => role,
+      'action' => 'review',
+      'status' => 'completed',
+      'provider' => nil,
+      'model' => nil,
+      'reasoning_level' => nil,
+      'reported_issues' => reported_issues
+    }
   end
 
   def store_review(issue_bodies)

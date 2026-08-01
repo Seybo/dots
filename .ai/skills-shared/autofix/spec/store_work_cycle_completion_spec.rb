@@ -56,23 +56,44 @@ RSpec.describe StoreWorkCycleCompletion do
     )
   end
 
-  it 'keeps passing review transitions unchanged' do
-    reviewer_review_id = insert_review(number: 1, state: 'reviewer_review')
-    reviewer_work_cycle_id = insert_work_cycle(review_id: reviewer_review_id, role: 'reviewer')
-    worker_review_id = insert_review(number: 2, state: 'worker_review')
-    worker_work_cycle_id = insert_work_cycle(review_id: worker_review_id, role: 'worker')
+  it 'moves a passing Reviewer to Worker review before Worker runs' do
+    review_id = insert_review(state: 'reviewer_review')
+    reviewer_work_cycle_id = insert_work_cycle(review_id: review_id, role: 'reviewer')
 
     described_class.call(
       work_cycle_id: reviewer_work_cycle_id,
       work_cycle_result: review_result(reviewer_work_cycle_id, role: 'reviewer', reported_issues: [])
     )
+
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('worker_review')
+    expect(db[:reported_issues].count).to eq(0)
+  end
+
+  it 'moves a passing Reviewer directly to Manager review after Worker ran' do
+    review_id = insert_review(state: 'reviewer_review')
+    worker_work_cycle_id = insert_work_cycle(review_id: review_id, role: 'worker')
+    db[:work_cycles].where(id: worker_work_cycle_id).update(completed_at: Time.now)
+    reviewer_work_cycle_id = insert_work_cycle(review_id: review_id, role: 'reviewer')
+
+    described_class.call(
+      work_cycle_id: reviewer_work_cycle_id,
+      work_cycle_result: review_result(reviewer_work_cycle_id, role: 'reviewer', reported_issues: [])
+    )
+
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_review')
+    expect(db[:reported_issues].count).to eq(0)
+  end
+
+  it 'moves a passing Worker review to Manager review' do
+    review_id = insert_review(state: 'worker_review')
+    worker_work_cycle_id = insert_work_cycle(review_id: review_id, role: 'worker')
+
     described_class.call(
       work_cycle_id: worker_work_cycle_id,
       work_cycle_result: review_result(worker_work_cycle_id, role: 'worker', reported_issues: [])
     )
 
-    expect(db[:reviews].where(id: reviewer_review_id).get(:state)).to eq('worker_review')
-    expect(db[:reviews].where(id: worker_review_id).get(:state)).to eq('manager_review')
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_review')
     expect(db[:reported_issues].count).to eq(0)
   end
 

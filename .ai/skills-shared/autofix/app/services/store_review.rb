@@ -6,13 +6,12 @@ class StoreReview
   arguments :project_path, :source, :branch_name, :base_ref, :base_commit_sha, :issue_data
 
   def call
-    review_id = nil
     Database.connection.transaction(savepoint: true) do
       issue_ids = store_issues
       review_id = create_review
       link_issues(review_id, issue_ids)
+      review_id
     end
-    review_id
   end
 
   private

@@ -54,7 +54,7 @@ RSpec.describe WaitWorkCycle do
     expect(File.exist?(result_path(work_cycle_id))).to be(false)
   end
 
-  it 'commits a later implementation and stops before creating another review Work Cycle' do
+  it 'commits a later implementation and creates its Reviewer review Work Cycle' do
     review_id, _first_implementation_id, reviewer_work_cycle_id = start_reviewer_review
     StoreWorkCycleCompletion.call(
       work_cycle_id: reviewer_work_cycle_id,
@@ -75,8 +75,13 @@ RSpec.describe WaitWorkCycle do
     write_result(later_work_cycle.fetch(:id), completed_result(later_work_cycle.fetch(:id)))
 
     output = described_class.call(work_cycle_id: later_work_cycle.fetch(:id))
+    next_reviewer_work_cycle = db[:work_cycles].order(:id).last
 
-    expect(output).to eq("Worker implementation completed (Cycle #{later_work_cycle.fetch(:id)}).")
+    expect(output).to eq(
+      "Worker implementation completed (Cycle #{later_work_cycle.fetch(:id)}).\n" \
+      "AutoFixCycle #{next_reviewer_work_cycle.fetch(:id)}\n" \
+      'AutoFixRole reviewer'
+    )
     expect(context.fetch('inputs')).to eq(
       [
         {
@@ -86,8 +91,10 @@ RSpec.describe WaitWorkCycle do
         },
       ]
     )
-    expect(db[:work_cycles].count).to eq(work_cycle_count)
-    expect(db[:work_cycles].where(role: 'reviewer', action: 'review').count).to eq(1)
+    expect(db[:work_cycles].count).to eq(work_cycle_count + 1)
+    expect(db[:work_cycles].where(role: 'reviewer', action: 'review').count).to eq(2)
+    expect(db[:work_cycle_inputs].where(work_cycle_id: next_reviewer_work_cycle.fetch(:id)).
+      select_map(:reported_issue_id)).to eq([reported_issue.fetch(:id)])
     expect(db[:work_cycles].where(id: later_work_cycle.fetch(:id)).first).to include(
       completed_at: be_a(Time),
       provider: 'openai-codex',
@@ -118,6 +125,13 @@ RSpec.describe WaitWorkCycle do
     expect(db[:reviews].where(id: review_id).get(:state)).to eq('reviewer_review')
     expect(db[:work_cycles].count).to eq(1)
     expect(File.exist?(result_path(work_cycle_id))).to be(false)
+
+    git!('restore', 'tracked.txt')
+    output = ResumeReview.call(project_path: project_path, branch_name: 'feature')
+    reviewer_work_cycle = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("AutoFixCycle #{reviewer_work_cycle.fetch(:id)}\nAutoFixRole reviewer")
+    expect(db[:work_cycles].count).to eq(2)
   end
 
   it 'stores null provenance without inference' do
@@ -264,6 +278,81 @@ RSpec.describe WaitWorkCycle do
     )
     expect(db[:reviews].where(id: review_id).get(:state)).to eq('worker_review')
     expect(File.exist?(result_path(reviewer_work_cycle_id))).to be(false)
+  end
+
+  it 'repeats implementation and Reviewer loops after Worker review without another Worker review' do
+    review_id, first_implementation_id, first_reviewer_work_cycle_id = start_reviewer_review
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: first_reviewer_work_cycle_id,
+      work_cycle_result: review_result(
+        first_reviewer_work_cycle_id,
+        role: 'reviewer',
+        reported_issues: []
+      )
+    )
+    worker_work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review_id)
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: worker_work_cycle_id,
+      work_cycle_result: review_result(
+        worker_work_cycle_id,
+        role: 'worker',
+        reported_issues: ['Worker-reported issue.']
+      )
+    )
+    worker_issue_id = db[:reported_issues].where(source: 'worker').get(:id)
+    db[:reported_issues].where(id: worker_issue_id).update(decision: 'approved')
+    second_implementation_id = StartImplementationWorkCycle.call(review_id: review_id)
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: second_implementation_id,
+      work_cycle_result: completed_result(second_implementation_id)
+    )
+    second_reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(review_id: review_id)
+    write_result(
+      second_reviewer_work_cycle_id,
+      review_result(
+        second_reviewer_work_cycle_id,
+        role: 'reviewer',
+        reported_issues: ['Reviewer-reported issue.']
+      )
+    )
+
+    described_class.call(work_cycle_id: second_reviewer_work_cycle_id)
+    reviewer_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
+    HandleDecision.call(issue_id: reviewer_issue_id, decision: 'approved')
+    third_implementation_id = db[:work_cycles].where(action: 'implementation').order(:id).last.fetch(:id)
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: third_implementation_id,
+      work_cycle_result: completed_result(third_implementation_id)
+    )
+    third_reviewer_work_cycle_id = StartReviewerReviewWorkCycle.call(review_id: review_id)
+    write_result(
+      third_reviewer_work_cycle_id,
+      review_result(third_reviewer_work_cycle_id, role: 'reviewer', reported_issues: [])
+    )
+
+    output = described_class.call(work_cycle_id: third_reviewer_work_cycle_id)
+
+    expect(output).to eq(
+      "Reviewer review completed (Cycle #{third_reviewer_work_cycle_id}). Reported issues:\n- None"
+    )
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_review')
+    expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(1)
+    expect(db[:work_cycle_inputs].where(work_cycle_id: second_implementation_id).
+      select_map(:reported_issue_id)).to eq([worker_issue_id])
+    expect(db[:work_cycle_inputs].where(work_cycle_id: third_implementation_id).
+      select_map(:reported_issue_id)).to eq([reviewer_issue_id])
+    expect(
+      [
+        first_implementation_id,
+        first_reviewer_work_cycle_id,
+        worker_work_cycle_id,
+        second_implementation_id,
+        second_reviewer_work_cycle_id,
+        third_implementation_id,
+        third_reviewer_work_cycle_id,
+      ]
+    ).to eq(db[:work_cycles].order(:id).select_map(:id))
+    expect(File.exist?(result_path(third_reviewer_work_cycle_id))).to be(false)
   end
 
   it 'stores final Worker-reported issues without creating a commit' do

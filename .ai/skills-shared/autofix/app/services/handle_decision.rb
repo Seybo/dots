@@ -12,10 +12,8 @@ class HandleDecision
 
     work_cycle_id = StartImplementationWorkCycle.call(review_id: review.fetch(:id))
     return render(RenderWorkCycleHandoff.call(work_cycle_id: work_cycle_id)) unless work_cycle_id.nil?
-    return 'No unresolved issues.' if implementation_work_cycle?
 
-    complete_review
-    render(RenderIssue.call(issue: nil))
+    settle_assessment
   end
 
   private
@@ -30,10 +28,34 @@ class HandleDecision
               first
   end
 
-  def implementation_work_cycle?
+  def settle_assessment
+    if latest_completed_work_cycle.nil?
+      complete_review
+      return render(RenderIssue.call(issue: nil))
+    end
+
+    if worker_review?
+      move_to_manager_review
+      return RenderIssue.call(issue: nil)
+    end
+
+    work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review.fetch(:id))
+    render(RenderWorkCycleHandoff.call(work_cycle_id: work_cycle_id))
+  end
+
+  def latest_completed_work_cycle
+    @latest_completed_work_cycle ||= Database.connection[:work_cycles].
+                                     where(review_id: review.fetch(:id)).
+                                     exclude(completed_at: nil).
+                                     order(:id).
+                                     last
+  end
+
+  def worker_review?
     Database.connection[:work_cycles].where(
       review_id: review.fetch(:id),
-      action: 'implementation'
+      role: 'worker',
+      action: 'review'
     ).any?
   end
 
@@ -42,6 +64,10 @@ class HandleDecision
       state: 'completed',
       completed_at: Time.now
     )
+  end
+
+  def move_to_manager_review
+    Database.connection[:reviews].where(id: review.fetch(:id)).update(state: 'manager_review')
   end
 
   def render(next_action)

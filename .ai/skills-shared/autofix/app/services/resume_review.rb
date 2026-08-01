@@ -33,16 +33,30 @@ class ResumeReview
 
     work_cycle_id = StartImplementationWorkCycle.call(review_id: review.fetch(:id))
     return RenderWorkCycleHandoff.call(work_cycle_id: work_cycle_id) unless work_cycle_id.nil?
-    return 'No unresolved issues.' if implementation_work_cycle?
 
-    complete_review
-    RenderIssue.call(issue: nil)
+    settle_assessment
   end
 
-  def implementation_work_cycle?
+  def settle_assessment
+    if latest_completed_work_cycle.nil?
+      complete_review
+      return RenderIssue.call(issue: nil)
+    end
+
+    if worker_review?
+      move_to_manager_review
+      return RenderIssue.call(issue: nil)
+    end
+
+    work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review.fetch(:id))
+    RenderWorkCycleHandoff.call(work_cycle_id: work_cycle_id)
+  end
+
+  def worker_review?
     Database.connection[:work_cycles].where(
       review_id: review.fetch(:id),
-      action: 'implementation'
+      role: 'worker',
+      action: 'review'
     ).any?
   end
 
@@ -51,6 +65,10 @@ class ResumeReview
       state: 'completed',
       completed_at: Time.now
     )
+  end
+
+  def move_to_manager_review
+    Database.connection[:reviews].where(id: review.fetch(:id)).update(state: 'manager_review')
   end
 
   def resume_implementation
@@ -80,19 +98,24 @@ class ResumeReview
                  last
     return "WaitWorkCycle #{work_cycle.fetch(:id)}" unless work_cycle.nil?
 
-    completed_work_cycle = Database.connection[:work_cycles].
-                           where(
-                             review_id: review.fetch(:id),
-                             role: 'reviewer',
-                             action: 'review'
-                           ).
-                           exclude(completed_at: nil).
-                           order(:id).
-                           last
-    return render_completed_review(completed_work_cycle) unless completed_work_cycle.nil?
-
+    ensure_latest_implementation
     work_cycle_id = StartReviewerReviewWorkCycle.call(review_id: review.fetch(:id))
     RenderWorkCycleHandoff.call(work_cycle_id: work_cycle_id)
+  end
+
+  def ensure_latest_implementation
+    return if [latest_completed_work_cycle.fetch(:role), latest_completed_work_cycle.fetch(:action)] ==
+              %w[worker implementation]
+
+    raise "Review #{review.fetch(:number)} latest completed Work Cycle is not a Worker implementation"
+  end
+
+  def latest_completed_work_cycle
+    @latest_completed_work_cycle ||= Database.connection[:work_cycles].
+                                     where(review_id: review.fetch(:id)).
+                                     exclude(completed_at: nil).
+                                     order(:id).
+                                     last
   end
 
   def resume_worker_review
@@ -107,46 +130,15 @@ class ResumeReview
                  last
     return "WaitWorkCycle #{work_cycle.fetch(:id)}" unless work_cycle.nil?
 
-    reviewer_work_cycle = Database.connection[:work_cycles].
-                          where(
-                            review_id: review.fetch(:id),
-                            role: 'reviewer',
-                            action: 'review'
-                          ).
-                          exclude(completed_at: nil).
-                          order(:id).
-                          last
-    if reviewer_work_cycle.nil?
-      raise "Review #{review.fetch(:number)} has no completed Reviewer review Work Cycle"
-    end
-
-    unless reported_issue_bodies(reviewer_work_cycle).empty?
-      raise "Review #{review.fetch(:number)} has no passing Reviewer review Work Cycle"
-    end
-
+    ensure_latest_reviewer_review
     work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review.fetch(:id))
     RenderWorkCycleHandoff.call(work_cycle_id: work_cycle_id)
   end
 
-  def render_completed_review(work_cycle)
-    reported_issues = reported_issue_bodies(work_cycle)
-    if reported_issues.empty?
-      raise "Review #{review.fetch(:number)} has a passing Reviewer result in reviewer_review state"
-    end
+  def ensure_latest_reviewer_review
+    return if [latest_completed_work_cycle.fetch(:role), latest_completed_work_cycle.fetch(:action)] ==
+              %w[reviewer review]
 
-    RenderWorkCycleResult.call(
-      work_cycle_id: work_cycle.fetch(:id),
-      role: work_cycle.fetch(:role),
-      action: work_cycle.fetch(:action),
-      reported_issues: reported_issues
-    )
-  end
-
-  def reported_issue_bodies(work_cycle)
-    Database.connection[:reported_issues].
-      join(:work_cycle_reported_issues, reported_issue_id: :id).
-      where(Sequel[:work_cycle_reported_issues][:work_cycle_id] => work_cycle.fetch(:id)).
-      order(Sequel[:reported_issues][:id]).
-      select_map(Sequel[:reported_issues][:body])
+    raise "Review #{review.fetch(:number)} latest completed Work Cycle is not a Reviewer review"
   end
 end
