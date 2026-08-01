@@ -157,11 +157,15 @@ Real QA: complete repeated implementation and Reviewer loops before and after th
 
 ### Task 12: Rebase an active Review
 
-- Add explicit `/skill:autofix --rebase-base [<base-ref>]` using frozen original and mutable active base metadata.
-- Rebase the stored Review branch onto the current or supplied base without switching branches, pushing, or automatically continuing orchestration.
-- Update active base metadata and the rebased Review starting commit while preserving original base metadata.
+- Add explicit `/skill:autofix --rebase-base [<base-ref>]` for the current project's incomplete, implemented Review. Reject a missing starting commit, no completed Worker implementation, an incomplete Work Cycle, a different current branch, or a dirty tree before fetching.
+- Fetch origin, preserve the supplied ref exactly or select the stored active ref, and resolve it once to a full immutable commit SHA.
+- Rebase the current branch with normal Git behavior onto the resolved SHA. Do not switch branches, push, persist pending-rebase state, persist interim Work Cycle SHAs, or automatically continue Review orchestration.
+- On conflict, leave the native rebase in progress and keep Review metadata unchanged. Manager resolves unambiguous conflicts directly, asks one precise operator question before resolving an ambiguous conflict, and lets Ruby stage and continue each conflict round.
+- If conflict resolution is interrupted, require the operator to run `git rebase --abort` and restart the operation. Do not support manual continuation outside Autofix.
+- After full success, atomically update the active base ref/SHA and rebased Review starting commit. Preserve original base metadata and Review workflow state.
+- Show the Review number, old/new active refs with full SHAs, old/new starting full SHAs, and every conflict resolution or `Resolved conflicts: none.` Stop without invoking normal Autofix resume.
 
-Real QA: rebase one active Review onto an advanced or different base and then continue it through normal Autofix invocation.
+Real QA: rebase one active Review onto an advanced version of the same base, one onto a different explicit base, and one through clear and ambiguous conflicts. Verify metadata, branch/remote safety, conflict reporting, and later normal Review resume.
 
 ### Task 13: Support repeated external Reviews
 

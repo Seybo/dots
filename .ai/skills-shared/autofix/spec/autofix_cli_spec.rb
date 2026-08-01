@@ -77,6 +77,35 @@ RSpec.describe AutofixCli do
     end.to output("No incomplete Review.\n").to_stdout
   end
 
+  it 'starts a Review rebase with an optional exact base ref' do
+    allow(RebaseReview).to receive(:call).and_return('Review 1 rebased.')
+
+    expect do
+      described_class.call(cli_args: %w[rebase-review feature origin/release])
+    end.to output("Review 1 rebased.\n").to_stdout
+    expect(RebaseReview).to have_received(:call).with(
+      project_path: project_path,
+      branch_name: 'feature',
+      base_ref: 'origin/release'
+    )
+  end
+
+  it 'continues a Review rebase with retained target metadata' do
+    allow(ContinueReviewRebase).to receive(:call).and_return('Review 1 rebased.')
+
+    expect do
+      described_class.call(
+        cli_args: %w[continue-review-rebase feature origin/main target-sha]
+      )
+    end.to output("Review 1 rebased.\n").to_stdout
+    expect(ContinueReviewRebase).to have_received(:call).with(
+      project_path: project_path,
+      branch_name: 'feature',
+      target_base_ref: 'origin/main',
+      target_base_commit_sha: 'target-sha'
+    )
+  end
+
   it 'shows participant-facing Work Cycle JSON' do
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first

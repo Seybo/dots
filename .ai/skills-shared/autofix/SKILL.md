@@ -2,7 +2,8 @@
 name: autofix
 description: >-
   Import and decide reported issues from the current GitHub pull request or a
-  local review copied to the clipboard. Command-only skill.
+  local review copied to the clipboard, or explicitly rebase an active Review.
+  Command-only skill.
 disable-model-invocation: true
 ---
 
@@ -21,7 +22,89 @@ Supported invocations:
 /skill:autofix --base <ref>
 /skill:autofix --local
 /skill:autofix --local --base <ref>
+/skill:autofix --rebase-base
+/skill:autofix --rebase-base <base-ref>
 ```
+
+## Rebase active Review
+
+Treat `--rebase-base` as a separate explicit operation. Accept either no value
+or one exact base ref after it. Reject combinations with `--local`, `--base`, or
+any other argument. Do not enter **Resume**, collect a source, or continue normal
+Review orchestration during this operation.
+
+1. Run `git branch --show-current` and retain the exact branch name.
+2. With no supplied base ref, run:
+
+   ```text
+   /Volumes/dev/bin/skills/autofix rebase-review <branch>
+   ```
+
+   With a supplied base ref, preserve it exactly and run:
+
+   ```text
+   /Volumes/dev/bin/skills/autofix rebase-review <branch> <base-ref>
+   ```
+
+3. If the helper returns successful Review rebase output without conflict
+   control lines, append one blank line and this exact final line, then return
+   the combined output and stop:
+
+   ```text
+   Resolved conflicts: none.
+   ```
+
+4. A conflict handoff contains exactly these Manager control lines:
+
+   ```text
+   RebaseConflict <review-id>
+   RebaseTargetRef <target-ref>
+   RebaseTargetCommit <full-target-sha>
+   ```
+
+   Retain the branch, Review ID, exact target ref, and full target SHA for this
+   invocation. Do not display the control lines and do not persist them.
+5. For every currently unmerged file in the authoritative checkout:
+   - inspect its unmerged diff, base/ours/theirs stages, relevant surrounding
+     code, and affected behavior
+   - treat each conflict occurrence as a separate resolution, including when
+     the same path conflicts again while replaying a later commit
+   - when the intended result is unambiguous, edit the file directly and retain
+     the path, a short description of the conflict, and a short description of
+     the applied resolution
+   - when the intended result is ambiguous, show the conflicting code and
+     relevant context, recommend one resolution, and ask the operator one
+     precise question before editing that conflict; after the answer, apply it
+     and retain the same short conflict and resolution descriptions
+6. After every current conflict is resolved, run only:
+
+   ```text
+   /Volumes/dev/bin/skills/autofix continue-review-rebase <branch> <target-ref> <full-target-sha>
+   ```
+
+   Ruby stages the resolutions and continues the native rebase. Manager must
+   not run `git add`, `git rebase`, or write Review metadata directly.
+7. If continuation returns another conflict handoff, repeat steps 4-6 and keep
+   all prior resolution descriptions in chronological order.
+8. After continuation returns successful Review rebase output, append one blank
+   line followed by this section and return the combined output:
+
+   ```text
+   Resolved conflicts:
+   - `<path>`: <short conflict description>; <short applied resolution>
+   ```
+
+   Include one list item for every resolved conflict occurrence, whether
+   Manager resolved it directly or the operator decided it.
+
+Surface any non-conflict helper failure unchanged and stop. Preserve an
+in-progress rebase on conflict or failure. Do not switch branches, push, start a
+Work Cycle, invoke normal `resume`, or expose interim Work Cycle commit SHAs.
+
+There is no persisted continuation or recovery state. If conflict resolution is
+interrupted, tell the operator to run `git rebase --abort` manually and invoke
+`--rebase-base` again from the beginning. Do not continue an interrupted rebase
+outside this invocation; manual `git rebase --continue` is unsupported.
 
 ## Resume
 
@@ -209,4 +292,5 @@ creating another Work Cycle. Run one decision command per reply; do not process
 the queue automatically. Do not refetch or re-import source data between
 decisions.
 
-Reject any other skill arguments.
+Reject any other skill arguments, including unsupported combinations with
+`--rebase-base`.
