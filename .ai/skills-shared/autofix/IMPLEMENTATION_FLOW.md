@@ -169,11 +169,14 @@ Real QA: rebase one active Review onto an advanced version of the same base, one
 
 ### Task 13: Support repeated external Reviews
 
-- Remember addressed and skipped GitHub, local, and Work Cycle reported issues.
-- Select only new or explicitly reopened external feedback during later GitHub fetches or local imports.
-- Start the next project-scoped Review for that later feedback without changing earlier Reviews.
+- Keep at most one active Review per project. Resume it before source collection; start later feedback only after it is completed.
+- Group all eligible issues from one external invocation into one new Review. Create no Review when no eligible issues remain.
+- Treat a GitHub comment as new only when its comment ID has never been linked to an earlier Review in the project. Ignore edits to processed IDs.
+- Keep local imports source-ID-free and non-deduplicated. Every imported concern is a fresh Reported Issue, including repeated text.
+- Add no reopening operation or state. The operator resubmits a concern through a new local import or a new GitHub comment.
+- Continue project-scoped Review numbering across GitHub and local sources. Keep every new Work Cycle and reported issue in its Review without changing earlier history.
 
-Real QA: process two external Reviews without reselecting terminal issues.
+Real QA: complete one local Review, import another local feedback set, verify fresh issues and Review numbering, start the new Review's Work Cycle from only its inputs, and confirm another invocation resumes it without reading the source again.
 
 ### Task 14: Run Manager review and finalize
 

@@ -114,8 +114,28 @@ RSpec.describe 'database schema' do
     end
     expect { db[:reviews].insert(review_attributes(number: 2, state: 'running')) }.
       to raise_error(Sequel::CheckConstraintViolation)
-    expect { db[:reviews].insert(review_attributes(number: 2, state: 'manager_issues_assessment')) }.
-      not_to raise_error
+    expect do
+      db[:reviews].insert(review_attributes(project_path: '/other-project'))
+    end.not_to raise_error
+  end
+
+  it 'allows only one active Review per project' do
+    review_id = db[:reviews].insert(review_attributes)
+
+    expect { db[:reviews].insert(review_attributes(number: 2)) }.
+      to raise_error(Sequel::UniqueConstraintViolation)
+
+    db[:reviews].where(id: review_id).update(state: 'completed', completed_at: timestamp)
+
+    expect { db[:reviews].insert(review_attributes(number: 2)) }.not_to raise_error
+    expect do
+      db[:reviews].insert(review_attributes(project_path: '/other-project'))
+    end.not_to raise_error
+
+    index_sql = db[:sqlite_master].
+                where(type: 'index', name: 'reviews_one_active_per_project_index').
+                get(:sql)
+    expect(index_sql).to match(/CREATE UNIQUE INDEX.*project_path.*WHERE.*state.*completed/i)
   end
 
   it 'creates Review issue relationships with foreign keys and unique pairs' do

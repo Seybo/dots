@@ -47,14 +47,25 @@ RSpec.describe HandleLocalReview do
       to eq(issues.map { |issue| issue.fetch(:id) })
   end
 
-  it 'creates new issues and the next numbered Review when imported again' do
+  it 'creates fresh issues and the next numbered Review after the first Review completes' do
     write_json(review_input(issues: ['First issue.', 'Second issue.']))
 
-    2.times { described_class.call(json_path: json_path, project_path: '/project') }
+    described_class.call(json_path: json_path, project_path: '/project')
+    first_review = reviews.first
+    first_issue_ids = review_issues.where(review_id: first_review.fetch(:id)).order(:id).
+                      select_map(:reported_issue_id)
+    first_issues = reported_issues.where(id: first_issue_ids).order(:id).all
+    complete_review(first_review)
+    described_class.call(json_path: json_path, project_path: '/project')
 
+    second_review = reviews.order(:id).last
+    second_issue_ids = review_issues.where(review_id: second_review.fetch(:id)).order(:id).
+                       select_map(:reported_issue_id)
     expect(reported_issues.order(:id).select_map(:body)).to eq(
       ['First issue.', 'Second issue.', 'First issue.', 'Second issue.']
     )
+    expect(second_issue_ids).not_to include(*first_issue_ids)
+    expect(reported_issues.where(id: first_issue_ids).order(:id).all).to eq(first_issues)
     expect(reviews.order(:id).select_map(:number)).to eq([1, 2])
     expect(review_issues.count).to eq(4)
   end
@@ -62,11 +73,47 @@ RSpec.describe HandleLocalReview do
   it 'numbers Reviews independently for each project' do
     write_json(review_input(issues: ['Issue.']))
 
-    2.times { described_class.call(json_path: json_path, project_path: '/project') }
+    described_class.call(json_path: json_path, project_path: '/project')
+    complete_review(reviews.first)
+    described_class.call(json_path: json_path, project_path: '/project')
     described_class.call(json_path: json_path, project_path: '/other-project')
 
     expect(reviews.where(project_path: '/project').order(:id).select_map(:number)).to eq([1, 2])
     expect(reviews.where(project_path: '/other-project').select_map(:number)).to eq([1])
+  end
+
+  it 'continues project numbering when the external source changes' do
+    first_review_id = StoreReview.call(
+      project_path: '/project',
+      source: 'github',
+      branch_name: 'feature',
+      base_ref: 'origin/main',
+      base_commit_sha: 'base-sha',
+      issue_data: [{ source_id: '101', body: 'GitHub issue.' }]
+    )
+    complete_review(reviews.where(id: first_review_id).first)
+    write_json(review_input(issues: ['Local issue.']))
+
+    described_class.call(json_path: json_path, project_path: '/project')
+
+    expect(reviews.order(:id).select_map(%i[number source])).to eq([[1, 'github'], [2, 'local']])
+  end
+
+  it 'rolls back new local issues when the project already has an active Review' do
+    write_json(review_input(issues: ['First issue.']))
+    described_class.call(json_path: json_path, project_path: '/project')
+    original_review = reviews.first
+    original_issue = reported_issues.first
+    write_json(review_input(issues: ['New issue.']))
+
+    expect { described_class.call(json_path: json_path, project_path: '/project') }.
+      to raise_error(Sequel::UniqueConstraintViolation)
+
+    expect(reviews.all).to eq([original_review])
+    expect(reported_issues.all).to eq([original_issue])
+    expect(review_issues.all).to contain_exactly(
+      include(review_id: original_review.fetch(:id), reported_issue_id: original_issue.fetch(:id))
+    )
   end
 
   it 'reports no issues without creating a Review or selecting older issues' do
@@ -117,6 +164,10 @@ RSpec.describe HandleLocalReview do
       'base_commit_sha' => 'base-sha',
       'issues' => issues
     }
+  end
+
+  def complete_review(review)
+    reviews.where(id: review.fetch(:id)).update(state: 'completed', completed_at: Time.now)
   end
 
   def write_json(value)

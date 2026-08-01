@@ -157,7 +157,10 @@ RSpec.describe AutofixCli do
   end
 
   it 'stores a decision and displays the next issue from the same Review' do
-    store_review(['Unrelated issue.'])
+    unrelated_review_id = store_review(['Unrelated issue.'])
+    unrelated_issue_id = review_issue_ids(unrelated_review_id).first
+    reported_issues.where(id: unrelated_issue_id).update(decision: 'skipped')
+    reviews.where(id: unrelated_review_id).update(state: 'completed', completed_at: Time.now)
     review_id = store_review(['First issue.', 'Second issue.'])
     issue_ids = review_issue_ids(review_id)
 

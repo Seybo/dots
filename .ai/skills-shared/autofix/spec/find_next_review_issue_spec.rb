@@ -7,10 +7,10 @@ RSpec.describe FindNextReviewIssue do
 
   it 'selects the oldest unresolved issue linked to the Review' do
     review_id = insert_review(number: 1)
-    other_review_id = insert_review(number: 2)
+    other_review_id = insert_review(number: 1, project_path: '/other-project')
     first_id = insert_issue(source_id: 1)
     second_id = insert_issue(source_id: 2)
-    other_id = insert_issue(source_id: 3)
+    other_id = insert_issue(source_id: 3, project_path: '/other-project')
     link_review_issue(review_id, first_id)
     link_review_issue(review_id, second_id)
     link_review_issue(other_review_id, other_id)
@@ -40,11 +40,11 @@ RSpec.describe FindNextReviewIssue do
     expect(described_class.call(review_id: review_id)).to be_nil
   end
 
-  def insert_review(number: 1)
+  def insert_review(number: 1, project_path: '/project')
     db[:reviews].insert(
       created_at: Time.now,
       completed_at: nil,
-      project_path: '/project',
+      project_path: project_path,
       number: number,
       source: 'github',
       branch_name: 'feature',
@@ -58,10 +58,10 @@ RSpec.describe FindNextReviewIssue do
     )
   end
 
-  def insert_issue(source_id:, decision: nil)
+  def insert_issue(source_id:, decision: nil, project_path: '/project')
     db[:reported_issues].insert(
       created_at: Time.now,
-      project_path: '/project',
+      project_path: project_path,
       source: 'github',
       source_id: source_id.to_s,
       body: "Issue #{source_id}.",

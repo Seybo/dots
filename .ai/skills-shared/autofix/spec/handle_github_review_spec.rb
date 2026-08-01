@@ -58,16 +58,66 @@ RSpec.describe HandleGithubReview do
     expect(review_issues.get(:reported_issue_id)).to eq(issue_id)
   end
 
-  it 'does not create another Review for issues already assigned to one' do
+  it 'does not create another Review for a processed comment ID after completion' do
     write_json(review_input(issues: [github_issue_data(101, 'First issue.')]))
     described_class.call(json_path: json_path, project_path: '/project')
+    original_review = reviews.first
+    original_issue = reported_issues.first
+    reported_issues.where(id: original_issue.fetch(:id)).update(decision: 'skipped')
+    complete_review(original_review)
+    write_json(review_input(issues: [github_issue_data(101, 'Edited issue.')]))
 
     output = described_class.call(json_path: json_path, project_path: '/project')
 
     expect(output).to eq('No issues found.')
-    expect(reported_issues.count).to eq(1)
+    expect(reported_issues.all).to eq([original_issue.merge(decision: 'skipped')])
     expect(reviews.count).to eq(1)
+    expect(reviews.where(id: original_review.fetch(:id)).first).
+      to include(state: 'completed', completed_at: be_a(Time))
     expect(review_issues.count).to eq(1)
+  end
+
+  it 'creates the next Review from only new comment IDs' do
+    write_json(review_input(issues: [github_issue_data(101, 'First issue.')]))
+    described_class.call(json_path: json_path, project_path: '/project')
+    first_review = reviews.first
+    first_issue = reported_issues.first
+    reported_issues.where(id: first_issue.fetch(:id)).update(decision: 'skipped')
+    complete_review(first_review)
+    write_json(
+      review_input(
+        issues: [github_issue_data(101, 'Edited issue.'), github_issue_data(102, 'New issue.')]
+      )
+    )
+
+    output = described_class.call(json_path: json_path, project_path: '/project')
+
+    second_review = reviews.order(:id).last
+    second_issue = reported_issues.order(:id).last
+    expect(output).to eq("Issue: #{second_issue.fetch(:id)}\n\n> New issue.")
+    expect(reviews.order(:id).select_map(:number)).to eq([1, 2])
+    expect(reported_issues.where(id: first_issue.fetch(:id)).first).
+      to eq(first_issue.merge(decision: 'skipped'))
+    expect(second_issue).to include(source_id: '102', body: 'New issue.', decision: nil)
+    expect(review_issues.where(review_id: second_review.fetch(:id)).select_map(:reported_issue_id)).
+      to eq([second_issue.fetch(:id)])
+  end
+
+  it 'rolls back a new issue when the project already has an active Review' do
+    write_json(review_input(issues: [github_issue_data(101, 'First issue.')]))
+    described_class.call(json_path: json_path, project_path: '/project')
+    original_review = reviews.first
+    original_issue = reported_issues.first
+    write_json(review_input(issues: [github_issue_data(102, 'New issue.')]))
+
+    expect { described_class.call(json_path: json_path, project_path: '/project') }.
+      to raise_error(Sequel::UniqueConstraintViolation)
+
+    expect(reviews.all).to eq([original_review])
+    expect(reported_issues.all).to eq([original_issue])
+    expect(review_issues.all).to contain_exactly(
+      include(review_id: original_review.fetch(:id), reported_issue_id: original_issue.fetch(:id))
+    )
   end
 
   it 'reports no issues without creating a Review' do
@@ -103,6 +153,10 @@ RSpec.describe HandleGithubReview do
     end
     expect(reported_issues.count).to eq(0)
     expect(reviews.count).to eq(0)
+  end
+
+  def complete_review(review)
+    reviews.where(id: review.fetch(:id)).update(state: 'completed', completed_at: Time.now)
   end
 
   def review_input(issues:)

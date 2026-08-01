@@ -67,6 +67,10 @@ Sequel.migration do
       index %i[project_path number],
             unique: true,
             name: :reviews_project_number_index
+      index :project_path,
+            unique: true,
+            where: Sequel.~(state: 'completed'),
+            name: :reviews_one_active_per_project_index
     end
 
     create_table(:review_issues) do
