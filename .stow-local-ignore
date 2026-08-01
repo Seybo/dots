@@ -9,5 +9,5 @@ themes
 .ai/skills/
 .ai/external-skills/
 .pi/agent/external_extensions
-AGENTS.md
+^/AGENTS\.md$
 refs

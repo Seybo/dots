@@ -12,8 +12,9 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `/skill:super-review` — default deep code-review workflow for PRs, branches, diffs, and uncommitted changes.
 - `/skill:claude-super-fix` — verify and apply real, in-scope fixes from a saved super-review report.
 - `/skill:addressit` — interactively fetch and address GitHub PR review comments one at a time.
+- `/skill:autofix` — import, decide, implement, and repeatedly review GitHub or local Reported Issues.
 - `/skill:delete-merged-branches` — delete local git branches that were merged and removed from remote.
-- GitHub PR review fetch rule — source: `/Users/inseybo/.pi/agent/AGENTS.md` and project `AGENTS.md` files.
+- GitHub PR review fetch rule — source: `.ai/rules/pi-global.md`, loaded through every Pi profile's `AGENTS.md` symlink, and project `AGENTS.md` files.
 
 ## Shortcut / task workflow
 
@@ -34,7 +35,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `/skill:skills-manager` — audit and manage external Claude and Pi skills through the controlled installer.
 - `/skill:misc-helper` / `/misc-helper` — run small personal helper utilities, currently DaVinci Resolve process cleanup.
 - Dev-env refs — source: `/Users/inseybo/.dots/refs/dev-env`.
-- Dots repo rules — source: `/Users/inseybo/.dots/AGENTS.md` and `/Users/inseybo/.pi/agent/AGENTS.md`.
+- Dots repo rules — source: `/Users/inseybo/.dots/AGENTS.md` and `.ai/rules/pi-global.md`, loaded through every Pi profile's `AGENTS.md` symlink.
 
 ## Themes / UI environment
 

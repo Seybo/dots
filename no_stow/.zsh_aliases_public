@@ -139,12 +139,25 @@ claude() {
   _run_with_agent_attention claude "$@"
 }
 
+_pi_require_shared_agents() {
+  local profile_dir="$1"
+  local agents_path="$profile_dir/AGENTS.md"
+  local shared_path="$HOME/.ai/rules/pi-global.md"
+
+  if [ ! -L "$agents_path" ] || [ "$(realpath "$agents_path" 2>/dev/null)" != "$(realpath "$shared_path" 2>/dev/null)" ]; then
+    print -u2 -- "Refusing to start Pi: $agents_path is not linked to $shared_path."
+    return 1
+  fi
+}
+
 pi-p() {
+  _pi_require_shared_agents "$HOME/.pi/personal" || return
   PI_CODING_AGENT_DIR="$HOME/.pi/personal" \
   PI_CODING_AGENT_SESSION_DIR="$HOME/.pi/personal/agent/sessions" \
   _run_with_agent_attention pi "$@"
 }
 pi-w() {
+  _pi_require_shared_agents "$HOME/.pi/work" || return
   PI_CODING_AGENT_DIR="$HOME/.pi/work" \
   PI_CODING_AGENT_SESSION_DIR="$HOME/.pi/work/agent/sessions" \
   _run_with_agent_attention pi "$@"

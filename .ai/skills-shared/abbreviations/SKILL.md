@@ -39,8 +39,8 @@ Canonical source:
 Runtime/generated consumers:
 
 - `~/.claude/rules/abbreviations.md` is a symlink to the canonical file.
-- `~/.pi/agent/AGENTS.md` is a symlink to `.ai/rules/pi-global.md`.
-- `.ai/rules/pi-global.md` is generated from the shared rule files by `.ai/bin/generate-pi-global`; never edit it by hand.
+- `~/.pi/{agent,personal,work}/AGENTS.md` are Stow-managed symlinks to `.ai/rules/pi-global.md`.
+- `.ai/rules/pi-global.md` is generated from the shared rule files by `.ai/bin/generate-pi-global`; never edit it by hand or copy it into a profile.
 
 Navigator discoverability files, when the abbreviation should be searchable there:
 

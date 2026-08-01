@@ -1,0 +1,1 @@
+../../.ai/rules/pi-global.md

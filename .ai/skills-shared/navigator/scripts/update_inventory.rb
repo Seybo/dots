@@ -181,7 +181,7 @@ end
 
 def abbreviation_sources
   unique_existing([
-    File.join(HOME_DIR, '.pi/agent/AGENTS.md'),
+    File.join(REPO_ROOT, '.ai/rules/pi-global.md'),
     File.join(REPO_ROOT, 'AGENTS.md'),
     File.join(REPO_ROOT, '.ai/rules/abbreviations.md'),
     File.join(HOME_DIR, '.ai/rules/abbreviations.md')
@@ -327,7 +327,7 @@ def build_uncategorized(skills, prompts, abbreviations)
     end
   end
 
-  lines.join
+  "#{lines.join.rstrip}\n"
 end
 
 def write_if_changed(path, content)
