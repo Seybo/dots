@@ -34,7 +34,7 @@ One bounded implementation or review action performed by one workflow participan
 
 ## Manager
 
-The participant that settles reported issues, coordinates Work Cycles, creates commits, and performs the final review. Manager is deliberately critical: it actively looks for missing requirements, contradictions, gotchas, incomplete work, and regressions instead of acting as a passive router. The operator still makes reported-issue decisions.
+The participant that assesses and settles reported issues, coordinates Work Cycles, creates commits, and performs the final review. Before each operator decision, Manager presents the complete original issue in a quote block, explains it simply in a second TLDR quote block, and recommends Fix, Skip, or Unclear from current code and Review context. Manager prefers yes-or-no clarification questions. The assessment is advisory, read-only, regenerated when shown, and never persisted. `yes` or `go` accepts a Fix or Skip recommendation. Manager is deliberately critical: it actively looks for missing requirements, contradictions, gotchas, incomplete work, and regressions instead of acting as a passive router. The operator still makes reported-issue decisions.
 
 ## Worker
 

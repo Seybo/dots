@@ -62,14 +62,18 @@ Real QA: import a real multi-issue review through Pi and verify extracted and re
 
 ## Phase 2: Decide and implement one batch
 
-### Task 5: Record decisions
+### Task 5: Assess issues and record decisions
 
-- Display every issue with its generated database ID.
-- Present one unresolved issue at a time.
-- Record `approved` or `skipped` on the exact displayed issue.
-- Show the stored decision and then the next issue.
+- Present one unresolved issue at a time with its generated database ID.
+- Before the operator decides, Manager inspects relevant current code and Review context without editing or running checks. Present the complete original issue body first in a Markdown quote block, then a one- or two-sentence `TLDR:` in a second quote block, then a Fix, Skip, or Unclear recommendation with a brief reason.
+- A request for more code or Review context records no decision.
+- Treat the assessment as advisory and regenerate it whenever the same undecided issue is shown. Persist no explanation, recommendation, question, or assessment state.
+- For Unclear, name the missing fact, prefer one precise yes-or-no question when possible, and persist nothing while clarifying. A clarification answer is not an implicit decision.
+- Treat `fix`, `approve`, and `approved` as `approved`; treat `skip`, `ignore`, `reject`, and `invalid` as `skipped`. Treat `yes` and `go` as accepting Manager's current recommendation: Fix becomes `approved`, Skip becomes `skipped`, and Unclear remains clarification without a decision.
+- Record `approved` or `skipped` on the exact assessed issue only after the operator decides.
+- Show the stored decision and then assess the next issue through the same source-neutral flow. GitHub, local, Worker, Reviewer, and Manager issues use identical presentation and decision behavior.
 
-Real QA: approve and skip real GitHub and local issues through natural Pi replies.
+Real QA: assess, reveal details, clarify, approve, and skip imported and review-reported issues through natural Pi replies.
 
 ### Task 6: Run one implementation Work Cycle
 

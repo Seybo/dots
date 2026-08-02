@@ -122,7 +122,8 @@ Before collecting a GitHub or local source:
 4. If stdout contains an `AutoFixCycle <id>` or `WaitWorkCycle <id>` line, follow
    **Work Cycle handoff** below without reading the source or repeating base
    selection.
-5. Otherwise return stdout unchanged and stop.
+5. Otherwise follow **Issue assessment** when stdout contains an `Issue: <id>`
+   block. Return any other stdout unchanged and stop.
 
 ## GitHub
 
@@ -166,7 +167,9 @@ With no source argument:
 
 11. Delete `/tmp/autofix-github-review.json` after the helper returns, including
     when it fails.
-12. Return helper stdout unchanged. Surface failures after deleting the file.
+12. Follow **Issue assessment** when helper stdout contains an `Issue: <id>`
+    block. Return any other stdout unchanged. Surface failures after deleting
+    the file.
 
 Do not write raw GitHub responses to temporary files or SQLite. Do not decide a
 concrete concern's validity during normalization. Do not refetch GitHub while
@@ -205,7 +208,9 @@ With `--local`:
 
 10. Delete `/tmp/autofix-local-review.json` after the helper returns, including
     when it fails.
-11. Return helper stdout unchanged. Surface failures after deleting the file.
+11. Follow **Issue assessment** when helper stdout contains an `Issue: <id>`
+    block. Return any other stdout unchanged. Surface failures after deleting
+    the file.
 
 Do not add special handling for empty clipboard text. Do not store the original
 clipboard review.
@@ -274,31 +279,64 @@ When helper stdout contains that pair:
 
 7. If wait-command stdout contains another paired handoff, retain its completed
    block and repeat the handoff in this invocation.
-8. Otherwise append its complete final workflow output to the retained blocks,
-   including any `Issue: <id>` or `No unresolved issues.` block after the
-   completed-step block. Return all retained output in Work Cycle order and
-   separate completed review blocks with one blank line. Surface failures
-   unchanged and do not expose Manager control lines.
+8. Otherwise retain its final workflow output in Work Cycle order. Follow
+   **Issue assessment** instead of retaining or displaying any `Issue: <id>`
+   block. Retain `No unresolved issues.` unchanged. Separate completed review
+   blocks with one blank line. Surface failures unchanged and do not expose
+   Manager control lines.
 
 When helper stdout contains a line exactly `WaitWorkCycle <id>`, do not send
 another tmux message. Run the same blocking `wait-work-cycle` command without a
 tool timeout. If its stdout contains a paired handoff, follow the role routing
-above in the same invocation. Otherwise return its complete workflow output or
-failure unchanged, including any issues-assessment block.
+above in the same invocation. Otherwise follow **Issue assessment** when its
+stdout contains an `Issue: <id>` block, or return its complete workflow output
+or failure unchanged.
+
+## Issue assessment
+
+Whenever helper stdout contains an `Issue: <id>` block, treat the ID and quoted
+stored body as Manager handoff data. Render the complete original body first in
+the operator assessment, followed by TLDR and Recommendation. This boundary
+applies uniformly after resume, GitHub or local import,
+Worker/Reviewer/Manager result import, and a decision that selects the next
+issue.
+
+1. Retain the ID and complete stored body.
+2. Read `app/prompts/assess_issue.md` from this skill directory.
+3. Inspect only relevant current project code and existing Review/conversation
+   context. Do not edit files or run tests, linters, or formatters.
+4. Follow the prompt and present its concise assessment. If completed-step
+   output preceded the issue block, present that output first, followed by one
+   blank line and the assessment.
+5. Treat the recommendation as advisory. Do not run `store-decision`, create a
+   Work Cycle, contact a participant, or persist assessment state until the
+   operator clearly decides.
+
+If the operator asks for more details, show useful code and Review context
+without recording a decision. When resume returns the same undecided issue,
+regenerate its assessment from current code and context.
+
+For an `Unclear` recommendation, ask the prompt's one precise question,
+preferring a yes-or-no question when possible, and persist nothing. Treat the
+operator's next reply as clarification, including `yes` or `go`; use it to
+reassess the same issue and request a separate clear decision. Only an explicit
+`fix` or `skip` in that clarification reply is also a decision.
 
 ## Decisions
 
-When either flow displays `Issue: <id>`, use that ID for the operator's next
-clear decision about the issue:
+Use the currently assessed issue ID for the operator's next clear decision:
 
-- Treat affirmative continuation such as `go`, `yes`, or `approved` as
-  `approved`.
-- Treat a clear request to skip, ignore, reject, or mark the issue invalid as
-  `skipped`.
-- A question or unrelated message is not a decision.
-- For genuine ambiguity, name the affected Reported Issue IDs and ask one precise
-  question. Do not run `store-decision`, persist escalation state, or create a
-  Work Cycle until the operator gives a clear decision.
+- Treat `fix`, `approve`, and `approved` as `approved`.
+- Treat `skip`, `ignore`, `reject`, and `invalid` as `skipped`.
+- Treat `yes` or `go` as accepting Manager's current recommendation: `Fix`
+  becomes `approved`, and `Skip` becomes `skipped`.
+- An `Unclear` recommendation has no decision to accept. Treat `yes` or `go` as
+  an answer to its clarification question and persist nothing.
+- A question, details request, clarification, or unrelated message is not a
+  decision.
+- For genuine decision ambiguity, name the affected Reported Issue ID and ask
+  one precise question. Do not run `store-decision`, persist escalation state,
+  or create a Work Cycle until the operator gives a clear decision.
 
 For a decision, run:
 
@@ -307,13 +345,12 @@ For a decision, run:
 ```
 
 When stdout contains an `AutoFixCycle <id>` line, follow **Work Cycle handoff**.
-Otherwise return stdout unchanged. When the output displays another issue, apply
-the same behavior to the operator's next reply. An all-skipped Reviewer batch
-may return the Review's one final Worker handoff; follow it normally. When
-stdout is exactly `No unresolved issues.`, return it and stop without
-creating another Work Cycle. Run one decision command per reply; do not process
-the queue automatically. Do not refetch or re-import source data between
-decisions.
+Otherwise follow **Issue assessment** when stdout contains another issue, or
+return stdout unchanged. An all-skipped Reviewer batch may return the Review's
+one final Worker handoff; follow it normally. When stdout is exactly
+`No unresolved issues.`, return it and stop without creating another Work
+Cycle. Run one decision command per reply; do not process the queue
+automatically. Do not refetch or re-import source data between decisions.
 
 Reject any other skill arguments, including unsupported combinations with
 `--rebase-base`.
