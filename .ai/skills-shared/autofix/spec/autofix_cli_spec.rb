@@ -271,7 +271,7 @@ RSpec.describe AutofixCli do
 
     expect do
       described_class.call(cli_args: ['store-decision', reported_issue_id.to_s, 'skipped'])
-    end.to output("No unresolved issues.\n").to_stdout
+    end.to output("Decision: skipped\n\nNo unresolved issues.\n").to_stdout
 
     expect(reviews.where(id: review_id).first).to include(
       state: 'manager_review',

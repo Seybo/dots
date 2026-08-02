@@ -39,7 +39,7 @@ class StoreWorkCycleCompletion
   end
 
   def stores_reported_issues?
-    work_cycle.fetch(:action) == 'review' && %w[worker reviewer].include?(work_cycle.fetch(:role))
+    work_cycle.fetch(:action) == 'review' && %w[manager worker reviewer].include?(work_cycle.fetch(:role))
   end
 
   def link_reported_issue(issue_id, created_at)
@@ -72,7 +72,7 @@ class StoreWorkCycleCompletion
     when %w[worker implementation] then 'reviewer_review'
     when %w[reviewer review] then reviewer_review_state
     when %w[worker review] then reported_issues.empty? ? 'manager_review' : 'manager_issues_assessment'
-    when %w[manager review] then 'manager_finalizing'
+    when %w[manager review] then reported_issues.empty? ? 'manager_finalizing' : 'manager_issues_assessment'
     else
       raise "Unsupported Work Cycle completion: #{work_cycle.fetch(:role)}/#{work_cycle.fetch(:action)}"
     end

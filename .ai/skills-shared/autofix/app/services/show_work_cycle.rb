@@ -41,6 +41,6 @@ class ShowWorkCycle
       select_all(:reported_issues).
       order(Sequel[:reported_issues][:id]).
       all.
-      map { |issue| issue.slice(:id, :source, :body) }
+      map { |issue| issue.slice(:id, :source, :body, :decision) }
   end
 end

@@ -73,19 +73,21 @@ state.
   collect import context, then gives their structured results to Ruby. Ruby does
   not invoke external commands during import.
 - After an approved issue authorizes Git mutation, Ruby owns deterministic Git
-  staging, commit creation, SHA lookup, final squash, and normal push.
+  staging, commit creation, SHA lookup, and final squash. Autofix does not push.
 - One `/skill:autofix` invocation continues through the entire normal Review workflow. A later invocation is only for resuming after an error, interruption, or another stop condition.
-- Manager blocks in Ruby while waiting for a Work Cycle result and performs no
-  other Autofix work. Interruption preserves the incomplete Work Cycle; resume
-  waits for the same result without redispatch.
+- Manager blocks in Ruby while waiting for a Worker or Reviewer Work Cycle
+  result and performs no other Autofix work. Interruption preserves that
+  incomplete Work Cycle; resume waits for the same result without redispatch.
+  An interrupted inline Manager review reuses and performs the same incomplete
+  Manager Work Cycle again.
 - Agent prompts own judgment such as normalizing feedback, choosing an
   implementation, and reviewing a result.
 - Manager uses a critical approach throughout the Review. It actively looks for missing requirements, contradictions, gotchas, incomplete work, and regressions while preserving operator ownership of reported-issue decisions.
 - `SKILL.md` owns Manager's external-command and agent orchestration. Delegate
   deterministic workflow behavior to the Ruby CLI instead of duplicating it.
 - Manager and Ruby own every Work Cycle lifecycle and all Autofix database
-  writes. Worker and Reviewer report completion through structured result files;
-  those files are transport, not authoritative state.
+  writes. Every role reports completion through the same structured result
+  transport; those files are not authoritative state.
 
 ## Language and naming
 
@@ -196,18 +198,18 @@ protocol are intentionally deferred to implementation-task grilling.
 - Invoking Autofix does not authorize Git mutation by itself.
 - The first approved issue in a Review authorizes Autofix's deterministic
   Ruby workflow to stage that Review's changes, create local `Work cycle <id>`
-  commits, squash them into one `Review N` commit, and normally push that
-  final commit.
+  commits, and squash them into one local `Review N` commit. The operator pushes
+  separately when ready.
 - Require a clean working tree immediately before every Work Cycle so
   participants act on a stable committed state and Manager cannot commit
   unrelated existing changes. Preserve the Review for resume when this
   check fails.
 - Worker implementation temporarily creates unstaged changes. Ruby stages and creates one new `Work cycle <id>` commit when implementation completes, returning the tree to clean before the next Work Cycle.
 - Review Work Cycles do not modify the checkout. Every implementation Work Cycle creates another new interim commit; Autofix never amends an interim Work Cycle commit.
-- Finalization replaces the Review's interim implementation commits with one squashed `Review N` commit before the normal push. This is the only planned replacement of those commits.
+- Finalization replaces the Review's interim implementation commits with one local squashed `Review N` commit. This is the only planned replacement of those commits.
 - A Review with no approved issues authorizes no Git mutation and does not
   require a clean working tree.
-- Force-push, branch changes, and unrelated Git operations remain unauthorized.
+- Push, force-push, branch changes, and unrelated Git operations remain unauthorized.
   Rebase is authorized only by the explicit `/skill:autofix --rebase-base`
   operation.
 

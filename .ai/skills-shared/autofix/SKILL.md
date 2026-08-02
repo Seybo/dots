@@ -216,42 +216,65 @@ A new Work Cycle handoff contains these paired Manager control lines:
 
 ```text
 AutoFixCycle <id>
-AutoFixRole <worker|reviewer>
+AutoFixRole <manager|worker|reviewer>
 ```
 
 When helper stdout contains that pair:
 
 1. Retain any completed-step block before the control lines. A completed-step
    block begins with `Worker implementation completed`, `Reviewer review
-   completed`, or `Worker review completed`. Do not retain or display the
-   `AutoFixCycle` or `AutoFixRole` control lines.
-2. Map the role to the fixed pane title:
+   completed`, `Worker review completed`, or `Manager review completed`. Do not
+   retain or display the `AutoFixCycle` or `AutoFixRole` control lines.
+2. For role `manager`, perform the review inline in this conversation:
+   - run `/Volumes/dev/bin/skills/autofix show-work-cycle <id>` and treat its
+     JSON as authoritative
+   - review the complete committed diff from `starting_commit_sha` through
+     current `HEAD`, every input and decision, relevant surrounding code, and
+     the full conversation and workflow context
+   - primarily look for missing requirements, contradictions, integration
+     gotchas, incomplete work, regressions, and concrete security, data-loss,
+     performance, or operational risks; report anything else worth mentioning
+     when encountered
+   - do not edit, stage, commit, or run checks
+   - write `/tmp/autofix-work-cycle-<id>.json` with the common completed review
+     fields and one self-contained actionable body per `reported_issues`
+     element; use an empty array when no issues are reported
+   - copy `PI_PROVIDER`, `PI_MODEL`, and `PI_REASONING_LEVEL` when present and
+     otherwise use JSON `null`; add no verdict, summary, severity, or other
+     fields
+   - if the review cannot complete, write the common failed result with a
+     concise sanitized `error`
+   - run `/Volumes/dev/bin/skills/autofix wait-work-cycle <id>` after writing
+     the result
+3. For role `worker` or `reviewer`, map the role to the fixed pane title:
    - `worker` → `agent-worker`
    - `reviewer` → `agent-reviewer`
-3. Require the dynamic `$TMUX_PANE` value for Manager's pane. Resolve its window
-   with `tmux display-message -p -t "$TMUX_PANE" '#{window_id}'`, then run
+4. For role `worker` or `reviewer`, require the dynamic `$TMUX_PANE` value for
+   Manager's pane. Resolve its window with
+   `tmux display-message -p -t "$TMUX_PANE" '#{window_id}'`, then run
    `tmux list-panes -t <resolved-window-id> -F '#{pane_id}\t#{pane_title}'`.
    Select the only pane with the mapped title and fail if there is not exactly
    one in that window. Never use `tmux list-panes -a`, search another window or
    session, hardcode a tmux ID, or fall back outside Manager's resolved window.
    Do not add pane-root checks or other preflight behavior.
-4. Send only the literal participant message without the role line:
+5. For role `worker` or `reviewer`, send only the literal participant message
+   without the role line:
 
    ```text
    tmux send-keys -t <pane-id> -l 'AutoFixCycle <id>'
    tmux send-keys -t <pane-id> Enter
    ```
 
-5. Immediately run the following command without a tool timeout and perform no
-   other Autofix work while it blocks:
+6. For role `worker` or `reviewer`, immediately run the following command
+   without a tool timeout and perform no other Autofix work while it blocks:
 
    ```text
    /Volumes/dev/bin/skills/autofix wait-work-cycle <id>
    ```
 
-6. If wait-command stdout contains another paired handoff, retain its completed
+7. If wait-command stdout contains another paired handoff, retain its completed
    block and repeat the handoff in this invocation.
-7. Otherwise append its complete final workflow output to the retained blocks,
+8. Otherwise append its complete final workflow output to the retained blocks,
    including any `Issue: <id>` or `No unresolved issues.` block after the
    completed-step block. Return all retained output in Work Cycle order and
    separate completed review blocks with one blank line. Surface failures

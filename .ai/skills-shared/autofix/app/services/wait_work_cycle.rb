@@ -91,8 +91,7 @@ class WaitWorkCycle
 
     case review.fetch(:state)
     when 'manager_issues_assessment' then "#{output}\n\n#{resume_review}"
-    when 'worker_review' then "#{output}\n#{resume_review}"
-    when 'manager_review' then output
+    when 'worker_review', 'manager_review', 'manager_finalizing' then "#{output}\n#{resume_review}"
     else
       raise "Cannot continue Review #{review.fetch(:number)} from state #{review.fetch(:state)}"
     end

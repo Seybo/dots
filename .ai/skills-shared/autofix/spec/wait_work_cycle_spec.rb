@@ -87,7 +87,8 @@ RSpec.describe WaitWorkCycle do
         {
           'id' => reported_issue.fetch(:id),
           'source' => 'reviewer',
-          'body' => 'Reviewer-reported issue.'
+          'body' => 'Reviewer-reported issue.',
+          'decision' => 'approved'
         },
       ]
     )
@@ -331,9 +332,11 @@ RSpec.describe WaitWorkCycle do
     )
 
     output = described_class.call(work_cycle_id: third_reviewer_work_cycle_id)
+    manager_work_cycle_id = db[:work_cycles].order(:id).last.fetch(:id)
 
     expect(output).to eq(
-      "Reviewer review completed (Cycle #{third_reviewer_work_cycle_id}). Reported issues:\n- None"
+      "Reviewer review completed (Cycle #{third_reviewer_work_cycle_id}). Reported issues:\n- None\n" \
+      "AutoFixCycle #{manager_work_cycle_id}\nAutoFixRole manager"
     )
     expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_review')
     expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(1)
@@ -350,6 +353,7 @@ RSpec.describe WaitWorkCycle do
         second_reviewer_work_cycle_id,
         third_implementation_id,
         third_reviewer_work_cycle_id,
+        manager_work_cycle_id,
       ]
     ).to eq(db[:work_cycles].order(:id).select_map(:id))
     expect(File.exist?(result_path(third_reviewer_work_cycle_id))).to be(false)
@@ -401,6 +405,51 @@ RSpec.describe WaitWorkCycle do
     expect(File.exist?(result_path(reviewer_work_cycle_id))).to be(true)
   end
 
+  it 'runs Manager review inline and completes a passing Review locally' do
+    review_id, _implementation_work_cycle_id, reviewer_work_cycle_id = start_reviewer_review
+    StoreWorkCycleCompletion.call(
+      work_cycle_id: reviewer_work_cycle_id,
+      work_cycle_result: review_result(
+        reviewer_work_cycle_id,
+        role: 'reviewer',
+        reported_issues: []
+      )
+    )
+    worker_work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review_id)
+    write_result(
+      worker_work_cycle_id,
+      review_result(worker_work_cycle_id, role: 'worker', reported_issues: [])
+    )
+
+    worker_output = described_class.call(work_cycle_id: worker_work_cycle_id)
+    manager_work_cycle = db[:work_cycles].order(:id).last
+
+    expect(worker_output).to include(
+      "Worker review completed (Cycle #{worker_work_cycle_id}). Reported issues:\n- None",
+      "AutoFixCycle #{manager_work_cycle.fetch(:id)}\nAutoFixRole manager"
+    )
+    expect(manager_work_cycle).to include(role: 'manager', action: 'review', completed_at: nil)
+
+    write_result(
+      manager_work_cycle.fetch(:id),
+      review_result(manager_work_cycle.fetch(:id), role: 'manager', reported_issues: [])
+    )
+    manager_output = described_class.call(work_cycle_id: manager_work_cycle.fetch(:id))
+    review = db[:reviews].where(id: review_id).first
+
+    expect(manager_output).to include(
+      "Manager review completed (Cycle #{manager_work_cycle.fetch(:id)}). Reported issues:\n- None",
+      'Final checks:',
+      'Skipped: no Gemfile.',
+      'Review 1 completed locally.',
+      "Final commit: #{review.fetch(:final_commit_sha)} Review 1",
+      'Push: not performed.'
+    )
+    expect(review).to include(state: 'completed', completed_at: be_a(Time))
+    expect(git!('log', '-1', '--format=%s').strip).to eq('Review 1')
+    expect(File.exist?(result_path(manager_work_cycle.fetch(:id)))).to be(false)
+  end
+
   def start_implementation
     review_id = store_review
     issue_id = db[:review_issues].where(review_id: review_id).get(:reported_issue_id)
@@ -412,7 +461,7 @@ RSpec.describe WaitWorkCycle do
     review_id, implementation_work_cycle_id = start_implementation
     File.write(File.join(project_path, 'tracked.txt'), "implemented\n")
     git!('add', 'tracked.txt')
-    git!('commit', '-q', '-m', 'Implementation')
+    git!('commit', '-q', '-m', "Work cycle #{implementation_work_cycle_id}")
     db[:work_cycles].where(id: implementation_work_cycle_id).update(
       completed_at: Time.now
     )

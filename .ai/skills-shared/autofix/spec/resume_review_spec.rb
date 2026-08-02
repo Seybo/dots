@@ -278,6 +278,26 @@ RSpec.describe ResumeReview do
     expect(db[:work_cycles].count).to eq(3)
   end
 
+  it 'creates and re-exposes the same incomplete Manager review Work Cycle' do
+    review_id = store_review(['Approved issue.'])
+    issue_id = review_issue_ids(review_id).first
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reviews].where(id: review_id).update(
+      state: 'manager_review',
+      starting_commit_sha: git!('rev-parse', 'HEAD').strip
+    )
+
+    first_output = described_class.call(project_path: project_path, branch_name: 'feature')
+    work_cycle = db[:work_cycles].first
+    second_output = described_class.call(project_path: project_path, branch_name: 'feature')
+
+    expected_output = "AutoFixCycle #{work_cycle.fetch(:id)}\nAutoFixRole manager"
+    expect(first_output).to eq(expected_output)
+    expect(second_output).to eq(expected_output)
+    expect(work_cycle).to include(review_id: review_id, role: 'manager', action: 'review')
+    expect(db[:work_cycles].count).to eq(1)
+  end
+
   def complete_implementation(review_state:)
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first

@@ -97,6 +97,52 @@ RSpec.describe StoreWorkCycleCompletion do
     expect(db[:reported_issues].count).to eq(0)
   end
 
+  it 'atomically stores Manager-reported issues and their relationships' do
+    review_id = insert_review(state: 'manager_review')
+    work_cycle_id = insert_work_cycle(review_id: review_id, role: 'manager')
+
+    described_class.call(
+      work_cycle_id: work_cycle_id,
+      work_cycle_result: review_result(
+        work_cycle_id,
+        role: 'manager',
+        reported_issues: ['First Manager issue.', 'Second Manager issue.']
+      )
+    )
+
+    issues = db[:reported_issues].order(:id).all
+    expect(issues).to match(
+      [
+        include(source: 'manager', body: 'First Manager issue.', decision: nil),
+        include(source: 'manager', body: 'Second Manager issue.', decision: nil),
+      ]
+    )
+    expect(db[:review_issues].order(:id).select_map(%i[review_id reported_issue_id])).to eq(
+      issues.map { |issue| [review_id, issue.fetch(:id)] }
+    )
+    expect(db[:work_cycle_reported_issues].order(:id).select_map(%i[work_cycle_id reported_issue_id])).
+      to eq(issues.map { |issue| [work_cycle_id, issue.fetch(:id)] })
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_issues_assessment')
+  end
+
+  it 'stores a passing Manager review and enters finalization' do
+    review_id = insert_review(state: 'manager_review')
+    work_cycle_id = insert_work_cycle(review_id: review_id, role: 'manager')
+
+    described_class.call(
+      work_cycle_id: work_cycle_id,
+      work_cycle_result: review_result(work_cycle_id, role: 'manager', reported_issues: [])
+    )
+
+    expect(db[:work_cycles].where(id: work_cycle_id).first).to include(
+      completed_at: be_a(Time),
+      provider: 'openai-codex',
+      model: 'gpt-5.6-sol',
+      reasoning_level: 'high'
+    )
+    expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_finalizing')
+  end
+
   it 'rolls back completion, reported issues, relationships, and state when persistence fails' do
     review_id = insert_review(state: 'reviewer_review')
     work_cycle_id = insert_work_cycle(review_id: review_id, role: 'reviewer')

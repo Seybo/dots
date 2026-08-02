@@ -180,15 +180,17 @@ Real QA: complete one local Review, import another local feedback set, verify fr
 
 ### Task 14: Run Manager review and finalize
 
-- Record the final Manager review as a Manager review Work Cycle after Reviewer has passed and the Review's one final Worker review has completed.
-- Manager critically reviews the complete result for missing requirements, contradictions, integration gotchas, incomplete work, and regressions instead of treating prior reviews as sufficient.
-- Store Manager-reported issues and route approved issues through implementation and Reviewer review. Do not rerun the already completed Worker review.
-- After Manager review passes, enter `manager_finalizing` and run configured final checks.
-- Stop and report failing checks before squash or push. Interrupted checks may run again on resume.
-- After checks pass, squash the Review's implementation commits into one `Review N` commit and push it.
-- Complete the Review only after that push.
+- Record Manager review as a `manager/review` Work Cycle after Reviewer has passed and the Review's one final Worker review has completed. Manager performs it inline using the complete issue history, cumulative committed diff, and Manager conversation context.
+- Reuse the existing review result contract and persist Manager completion time and actual provider, model, and reasoning level when known. Resume an interrupted Manager review by performing the same incomplete Work Cycle again.
+- Manager critically reviews the updates for missing requirements, contradictions, integration gotchas, incomplete work, and regressions, and may report anything else worth mentioning.
+- Store Manager-reported issues with exact Work Cycle provenance. Route approved issues through Worker implementation and fresh Reviewer and Manager review without rerunning Worker review. If every Manager issue is skipped, proceed directly to finalization.
+- After Manager review passes, enter `manager_finalizing`. For a project with `Gemfile`, run `bundle exec rubocop` and `bundle exec rspec` through separate non-login `bash -c` processes from the project path. Run both even when one fails. For other projects, report checks as skipped.
+- A failed or interrupted check leaves the Review in `manager_finalizing` with Git and final metadata unchanged. Report both results on failure and rerun both on a later resume; do not create an issue or automatic fix.
+- After checks pass, require a clean tree and require `starting_commit_sha..HEAD` to contain exactly the Review's chronological `Work cycle <id>` implementation commits.
+- Squash the verified commits onto `starting_commit_sha` as local `Review N`, store `final_commit_sha` and `completed_at`, and complete the Review.
+- Do not push or mutate a remote. The operator pushes separately.
 
-Real QA: complete one real run with passing Manager review and final checks, and separately verify one failing-check stop before squash or push.
+Real QA: complete one real Manager pass with both checks passing and a local `Review N` squash; exercise one Manager correction loop without a second Worker review; verify all-skipped Manager issues proceed directly; and separately verify failed checks, interrupted Manager review, and an unexpected commit all preserve safe state without a push.
 
 ### Task 15: Assess Addressit replacement
 

@@ -7,15 +7,22 @@ class ResumeReview
 
   def call
     return 'No incomplete Review.' if review.nil?
+    return resume_active_work if review.fetch(:state) != 'manager_finalizing'
+
+    FinalizeReview.call(review_id: review.fetch(:id))
+  end
+
+  private
+
+  def resume_active_work
     return resume_issues_assessment if review.fetch(:state) == 'manager_issues_assessment'
     return resume_implementation if review.fetch(:state) == 'worker_implementation'
     return resume_reviewer_review if review.fetch(:state) == 'reviewer_review'
     return resume_worker_review if review.fetch(:state) == 'worker_review'
+    return resume_manager_review if review.fetch(:state) == 'manager_review'
 
     raise "Cannot resume Review #{review.fetch(:number)} from state #{review.fetch(:state)}"
   end
-
-  private
 
   def review
     return @review if defined?(@review)
@@ -43,6 +50,11 @@ class ResumeReview
       return RenderIssue.call(issue: nil)
     end
 
+    if manager_review?
+      move_to_manager_finalizing
+      return FinalizeReview.call(review_id: review.fetch(:id))
+    end
+
     if worker_review?
       move_to_manager_review
       return RenderIssue.call(issue: nil)
@@ -50,6 +62,11 @@ class ResumeReview
 
     work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review.fetch(:id))
     RenderWorkCycleHandoff.call(work_cycle_id: work_cycle_id)
+  end
+
+  def manager_review?
+    [latest_completed_work_cycle.fetch(:role), latest_completed_work_cycle.fetch(:action)] ==
+      %w[manager review]
   end
 
   def worker_review?
@@ -69,6 +86,10 @@ class ResumeReview
 
   def move_to_manager_review
     Database.connection[:reviews].where(id: review.fetch(:id)).update(state: 'manager_review')
+  end
+
+  def move_to_manager_finalizing
+    Database.connection[:reviews].where(id: review.fetch(:id)).update(state: 'manager_finalizing')
   end
 
   def resume_implementation
@@ -140,5 +161,19 @@ class ResumeReview
               %w[reviewer review]
 
     raise "Review #{review.fetch(:number)} latest completed Work Cycle is not a Reviewer review"
+  end
+
+  def resume_manager_review
+    work_cycle = Database.connection[:work_cycles].
+                 where(
+                   review_id: review.fetch(:id),
+                   role: 'manager',
+                   action: 'review',
+                   completed_at: nil
+                 ).
+                 order(:id).
+                 last
+    work_cycle_id = work_cycle&.fetch(:id) || StartManagerReviewWorkCycle.call(review_id: review.fetch(:id))
+    RenderWorkCycleHandoff.call(work_cycle_id: work_cycle_id)
   end
 end
