@@ -1,9 +1,9 @@
 ---
 name: draftit
 description: >-
-  Create the next draftNN folder under /Volumes/dev/_tasks/<project> from a
-  required task slug and conversation context. Local-only drafts are the
-  default; epic: makes a registered Shortcut project Shortcut-ready.
+  Create the next draftNN folder under /Volumes/dev/_tasks/<project> from
+  conversation context, deriving a short task slug automatically. Local-only
+  drafts are the default; epic: makes a registered Shortcut project Shortcut-ready.
   Command-only skill. In Pi, invoke via /skill:draftit; /draftit is also
   accepted where that alias is exposed.
 disable-model-invocation: true
@@ -18,22 +18,22 @@ This is a command-only skill.
 ```text
 /skill:draftit help
 /draftit help
-/draftit <project> <task-slug> [epic: <id>] [context-reference-or-text]
-/draftit <task-slug> [epic: <id>] [context-reference-or-text]
+/draftit <context-reference-or-text>
+/draftit <project> <context-reference-or-text> [epic: <id>]
 ```
 
 Examples:
 
 ```text
-/draftit add-csv-export
-/draftit add-csv-export the above plan
-/draftit shaka_gtm add-csv-export epic: 33001
+/draftit the above plan
+/draftit add CSV export for the current report
+/draftit shaka_gtm the above plan epic: 33001
 ```
 
 The first token is a project only when it matches a registered project key in
 `~/.ai/skills-shared/components/projects.yml`. Otherwise infer the project from
-the current checkout. The next or first token respectively is the required task
-slug.
+the current checkout. All remaining text is context. Draftit always derives the
+task slug; it accepts no explicit name or slug override.
 
 Do not auto-use this skill from a general drafting request. Wait for the explicit slash command.
 
@@ -56,12 +56,11 @@ Then write `task.md` from the requested context. Use it later with:
 1. **Parse and validate arguments:**
    - if the only argument is `help`, show this help text and stop
    - resolve `<project>` from an explicit registered key or the current checkout using [`task-resolution.md`](../components/task-resolution.md)
-   - require `<task-slug>` after an explicit project, or as the first token when the project is inferred
-   - require the slug to match `^[a-z][a-z0-9-]*$`
-   - extract optional `epic: <id>` from the remaining request text
-   - all remaining text is optional draft context; if it is absent, use an empty context body
+   - extract optional `epic: <id>` from the request text
+   - treat all remaining text after the optional project and `epic:` pair as draft context
+   - require non-empty context; if none remains, show the invocation forms and ask for context
+   - reject `name:`, `slug:`, and other explicit naming options; Draftit always derives the slug
    - do not inspect Pi session logs, prompt templates, other task directories, Git history, or unrelated repository files to infer missing context
-   - do not accept `name:`; the positional slug is the task name
 
 2. **Resolve the project:**
    - read `task_provider` from `~/.ai/skills-shared/components/projects.yml`
@@ -69,14 +68,16 @@ Then write `task.md` from the requested context. Use it later with:
    - if its task root does not exist, create `/Volumes/dev/_tasks/<project>/`
    - `epic:` is valid only for `task_provider: shortcut`; reject it for local projects
 
-3. **Resolve context:**
+3. **Resolve context and derive the slug:**
    - for references such as `the above plan`, use the relevant conversation content
    - for literal text, use that text
    - for commits, PRs, review comments, or external threads, inspect the source and rewrite it as self-contained context
-   - if no context was supplied, leave the context body empty; do not ask a question
+   - derive a short, simple slug that names the user-visible task outcome, normally using two to six words
+   - lowercase the derived name, replace separators and spaces with `-`, remove characters except letters, numbers, and `-`, collapse repeated `-`, and trim leading/trailing `-`
+   - require the result to match `^[a-z][a-z0-9-]*$`; if useful context cannot produce a valid slug, ask for clearer context rather than accepting a name
 
 4. **Write useful task content:**
-   - use the task slug unchanged as the concise task title
+   - use the derived task slug unchanged as the concise task title
    - lead `# Context` with the user/product problem, not implementation details
    - include expected behavior and acceptance criteria when context supports them
    - do not add implementation planning; `/workit` creates `steps.md` later
@@ -120,6 +121,7 @@ Then write `task.md` from the requested context. Use it later with:
 ## Important Notes
 
 - Local-only drafts are the default.
+- Draftit always derives the slug from context. Rename a draft ad hoc later if its generated name needs correction.
 - `epic:` is the only Shortcut-ready trigger.
 - Do not register projects automatically.
 - Do not add extra files.
