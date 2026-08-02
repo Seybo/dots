@@ -122,7 +122,9 @@ Before collecting a GitHub or local source:
 4. If stdout contains an `AutoFixCycle <id>` or `WaitWorkCycle <id>` line, follow
    **Work Cycle handoff** below without reading the source or repeating base
    selection.
-5. Otherwise follow **Issue assessment** when stdout contains an `Issue: <id>`
+5. If stdout contains an `AutoFixSquash <review-id>` line, follow **Optional
+   squash** below.
+6. Otherwise follow **Issue assessment** when stdout contains an `Issue: <id>`
    block. Return any other stdout unchanged and stop.
 
 ## GitHub
@@ -280,17 +282,52 @@ When helper stdout contains that pair:
 7. If wait-command stdout contains another paired handoff, retain its completed
    block and repeat the handoff in this invocation.
 8. Otherwise retain its final workflow output in Work Cycle order. Follow
-   **Issue assessment** instead of retaining or displaying any `Issue: <id>`
-   block. Retain `No unresolved issues.` unchanged. Separate completed review
-   blocks with one blank line. Surface failures unchanged and do not expose
-   Manager control lines.
+   **Optional squash** when it contains an `AutoFixSquash <review-id>` line, or
+   follow **Issue assessment** instead of retaining or displaying any
+   `Issue: <id>` block. Retain `No unresolved issues.` unchanged. Separate
+   completed review blocks with one blank line. Surface failures unchanged and
+   do not expose Manager control lines.
 
 When helper stdout contains a line exactly `WaitWorkCycle <id>`, do not send
 another tmux message. Run the same blocking `wait-work-cycle` command without a
 tool timeout. If its stdout contains a paired handoff, follow the role routing
-above in the same invocation. Otherwise follow **Issue assessment** when its
-stdout contains an `Issue: <id>` block, or return its complete workflow output
+above in the same invocation. Otherwise follow **Optional squash** when its
+stdout contains an `AutoFixSquash <review-id>` line, follow **Issue assessment**
+when it contains an `Issue: <id>` block, or return its complete workflow output
 or failure unchanged.
+
+## Optional squash
+
+Whenever helper stdout contains an exact `AutoFixSquash <review-id>` line, the
+Review is already completed and all durable workflow state is final.
+
+1. Retain all other completed workflow output, remove the control line, and
+   present the retained output.
+2. Ask exactly:
+
+   ```text
+   Should i squash?
+   ```
+
+3. Retain the Review ID only in the current conversation. Do not persist the
+   question, answer, pending state, or squash result.
+
+For the operator's next reply while this question is active:
+
+- Treat `yes`, `go`, `squash`, `approve`, or `approved` as approval and run:
+
+  ```text
+  /Volumes/dev/bin/skills/autofix squash-review <review-id>
+  ```
+
+- Treat `no`, `skip`, or `leave` as declining. Run no helper and report that the
+  Work Cycle commits remain unchanged.
+- A question or unrelated message is not an answer. Answer it without running a
+  helper, then ask `Should i squash?` again.
+
+Return squash success or failure unchanged. Never run `resume`, alter Review
+state, persist squash metadata, push, automatically retry, or make the answer or
+result affect the completed Review.
 
 ## Issue assessment
 
@@ -345,6 +382,7 @@ For a decision, run:
 ```
 
 When stdout contains an `AutoFixCycle <id>` line, follow **Work Cycle handoff**.
+When it contains an `AutoFixSquash <review-id>` line, follow **Optional squash**.
 Otherwise follow **Issue assessment** when stdout contains another issue, or
 return stdout unchanged. An all-skipped Reviewer batch may return the Review's
 one final Worker handoff; follow it normally. When stdout is exactly

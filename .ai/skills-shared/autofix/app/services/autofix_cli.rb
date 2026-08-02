@@ -14,7 +14,7 @@ class AutofixCli
 
   def handle_command
     return handle_import_command if %w[import-github-review import-local-review].include?(cli_args.first)
-    if %w[store-decision resume rebase-review continue-review-rebase].include?(cli_args.first)
+    if %w[store-decision resume rebase-review continue-review-rebase squash-review].include?(cli_args.first)
       return handle_review_command
     end
     return handle_work_cycle_command if %w[show-work-cycle wait-work-cycle].include?(cli_args.first)
@@ -32,6 +32,7 @@ class AutofixCli
     return handle_decision if cli_args.first == 'store-decision'
     return handle_resume if cli_args.first == 'resume'
     return handle_rebase_review if cli_args.first == 'rebase-review'
+    return handle_squash_review if cli_args.first == 'squash-review'
 
     handle_continue_review_rebase
   end
@@ -75,6 +76,10 @@ class AutofixCli
     )
   end
 
+  def handle_squash_review
+    SquashReview.call(review_id: cli_args.fetch(1), project_path: project_path)
+  end
+
   def show_work_cycle
     ShowWorkCycle.call(work_cycle_id: cli_args.fetch(1))
   end
@@ -90,7 +95,7 @@ class AutofixCli
   def usage
     'Usage: autofix [import-github-review <json-path> | import-local-review <json-path> | ' \
       'store-decision <issue-id> <decision> | resume <branch> | rebase-review <branch> [<base-ref>] | ' \
-      'continue-review-rebase <branch> <target-ref> <target-sha> | show-work-cycle <id> | ' \
-      'wait-work-cycle <id>]'
+      'continue-review-rebase <branch> <target-ref> <target-sha> | squash-review <review-id> | ' \
+      'show-work-cycle <id> | wait-work-cycle <id>]'
   end
 end

@@ -88,7 +88,7 @@ RSpec.describe 'database schema' do
     expect(columns(:reviews)).to eq(
       %i[
         id created_at completed_at project_path number source branch_name starting_commit_sha original_base_ref
-        original_base_commit_sha active_base_ref active_base_commit_sha state final_commit_sha
+        original_base_commit_sha active_base_ref active_base_commit_sha state
       ]
     )
     expect_generated_id_and_created_at(:reviews)
@@ -98,7 +98,7 @@ RSpec.describe 'database schema' do
       active_base_commit_sha state
     ]
     required.each { |name| expect(column(:reviews, name)).to include(allow_null: false) }
-    %i[completed_at starting_commit_sha final_commit_sha].each do |name|
+    %i[completed_at starting_commit_sha].each do |name|
       expect(column(:reviews, name)).to include(allow_null: true)
     end
   end
@@ -287,8 +287,7 @@ RSpec.describe 'database schema' do
       original_base_commit_sha: 'base-sha',
       active_base_ref: 'origin/main',
       active_base_commit_sha: 'base-sha',
-      state: 'manager_issues_assessment',
-      final_commit_sha: nil
+      state: 'manager_issues_assessment'
     }.merge(overrides)
   end
 

@@ -30,27 +30,26 @@ RSpec.describe FinalizeReview do
     FileUtils.remove_entry(tool_path)
   end
 
-  it 'runs final checks, creates Review N, and completes without pushing' do
-    review_id, implementation_work_cycle_id, starting_commit_sha = create_implemented_review
+  it 'runs final checks, completes without squashing, and offers the optional squash' do
+    review_id, implementation_work_cycle_id, _starting_commit_sha = create_implemented_review
+    implementation_commit_sha = git!('rev-parse', 'HEAD').strip
 
     output = described_class.call(review_id: review_id)
-    final_commit_sha = git!('rev-parse', 'HEAD').strip
 
     expect(output).to include(
       'Final checks:',
       '- bundle exec rubocop: passed (exit 0)',
       '- bundle exec rspec: passed (exit 0)',
       'Review 1 completed locally.',
-      "Final commit: #{final_commit_sha} Review 1",
-      'Push: not performed.'
+      'Push: not performed.',
+      "AutoFixSquash #{review_id}"
     )
     expect(File.readlines(command_log_path, chomp: true)).to eq(%w[rubocop rspec])
-    expect(git!('log', '-1', '--format=%s').strip).to eq('Review 1')
-    expect(git!('rev-parse', 'HEAD^').strip).to eq(starting_commit_sha)
+    expect(git!('rev-parse', 'HEAD').strip).to eq(implementation_commit_sha)
+    expect(git!('log', '-1', '--format=%s').strip).to eq("Work cycle #{implementation_work_cycle_id}")
     expect(git!('status', '--porcelain')).to eq('')
     expect(db[:reviews].where(id: review_id).first).to include(
       state: 'completed',
-      final_commit_sha: final_commit_sha,
       completed_at: be_a(Time)
     )
     expect(db[:work_cycles].where(id: implementation_work_cycle_id).get(:completed_at)).not_to be_nil
@@ -99,7 +98,7 @@ RSpec.describe FinalizeReview do
     expect(File.readlines(command_log_path, chomp: true)).to eq(%w[rubocop rspec])
   end
 
-  it 'fails before squash when a passing check dirties the tree' do
+  it 'fails before completion when a passing check dirties the tree' do
     review_id, _implementation_work_cycle_id, _starting_commit_sha = create_implemented_review
     original_head = git!('rev-parse', 'HEAD').strip
     File.write(dirty_check_path, '')
@@ -110,7 +109,7 @@ RSpec.describe FinalizeReview do
     expect_unfinalized(review_id, original_head)
   end
 
-  it 'fails before squash when Git history does not match the implementation Work Cycles' do
+  it 'fails before completion when Git history does not match the implementation Work Cycles' do
     review_id, _implementation_work_cycle_id, _starting_commit_sha = create_implemented_review
     File.write(File.join(project_path, 'unrelated.txt'), "unrelated\n")
     git!('add', 'unrelated.txt')
@@ -159,7 +158,6 @@ RSpec.describe FinalizeReview do
   def expect_unfinalized(review_id, head_sha)
     expect(db[:reviews].where(id: review_id).first).to include(
       state: 'manager_finalizing',
-      final_commit_sha: nil,
       completed_at: nil
     )
     expect(git!('rev-parse', 'HEAD').strip).to eq(head_sha)

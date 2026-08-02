@@ -53,8 +53,7 @@ RSpec.describe FindNextReviewIssue do
       original_base_commit_sha: 'base-sha',
       active_base_ref: 'origin/main',
       active_base_commit_sha: 'base-sha',
-      state: 'manager_issues_assessment',
-      final_commit_sha: nil
+      state: 'manager_issues_assessment'
     )
   end
 

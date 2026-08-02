@@ -220,8 +220,7 @@ RSpec.describe PrepareReviewRebase do
       original_base_commit_sha: base_sha,
       active_base_ref: 'origin/main',
       active_base_commit_sha: base_sha,
-      state: 'reviewer_review',
-      final_commit_sha: nil
+      state: 'reviewer_review'
     )
   end
 

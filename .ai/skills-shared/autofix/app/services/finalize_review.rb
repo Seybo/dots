@@ -16,12 +16,11 @@ class FinalizeReview
     return output unless results.all? { |result| PASSING_CHECK_STATUSES.include?(result.fetch(:status)) }
 
     ValidateWorkCycleGitState.call(project_path: project_path)
-    validate_commit_sequence
-    final_commit_sha = squash
-    complete_review(final_commit_sha)
+    ValidateReviewCommitSequence.call(review_id: review_id)
+    complete_review
     "#{output}\nReview #{review.fetch(:number)} completed locally.\n" \
-      "Final commit: #{final_commit_sha} Review #{review.fetch(:number)}\n" \
-      'Push: not performed.'
+      "Push: not performed.\n" \
+      "AutoFixSquash #{review_id}"
   end
 
   private
@@ -68,43 +67,10 @@ class FinalizeReview
     lines.join("\n")
   end
 
-  def validate_commit_sequence
-    actual_subjects = capture!(
-      'git', '-C', project_path, 'log', '--reverse', '--format=%s',
-      "#{review.fetch(:starting_commit_sha)}..HEAD"
-    ).lines(chomp: true)
-    return if actual_subjects == expected_subjects
-
-    raise "Review #{review.fetch(:number)} commit sequence does not match its implementation Work Cycles"
-  end
-
-  def expected_subjects
-    Database.connection[:work_cycles].
-      where(review_id: review_id, role: 'worker', action: 'implementation').
-      exclude(completed_at: nil).
-      order(:id).
-      select_map(:id).
-      map { |work_cycle_id| "Work cycle #{work_cycle_id}" }
-  end
-
-  def squash
-    capture!('git', '-C', project_path, 'reset', '--soft', review.fetch(:starting_commit_sha))
-    capture!('git', '-C', project_path, 'commit', '-m', "Review #{review.fetch(:number)}")
-    capture!('git', '-C', project_path, 'rev-parse', 'HEAD').strip
-  end
-
-  def complete_review(final_commit_sha)
+  def complete_review
     Database.connection[:reviews].where(id: review_id).update(
       state: 'completed',
-      final_commit_sha: final_commit_sha,
       completed_at: Time.now
     )
-  end
-
-  def capture!(*command)
-    stdout, stderr, status = Open3.capture3(*command)
-    return stdout if status.success?
-
-    raise "#{command.join(' ')} failed with exit #{status.exitstatus}: #{stderr.strip}"
   end
 end

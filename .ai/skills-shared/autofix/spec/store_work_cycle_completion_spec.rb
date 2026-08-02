@@ -181,8 +181,7 @@ RSpec.describe StoreWorkCycleCompletion do
       original_base_commit_sha: 'base-sha',
       active_base_ref: 'origin/main',
       active_base_commit_sha: 'base-sha',
-      state: state,
-      final_commit_sha: nil
+      state: state
     )
   end
 

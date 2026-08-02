@@ -106,6 +106,15 @@ RSpec.describe AutofixCli do
     )
   end
 
+  it 'squashes a completed Review without changing workflow state' do
+    allow(SquashReview).to receive(:call).and_return('Review 1 squashed locally.')
+
+    expect do
+      described_class.call(cli_args: %w[squash-review 1])
+    end.to output("Review 1 squashed locally.\n").to_stdout
+    expect(SquashReview).to have_received(:call).with(review_id: '1', project_path: project_path)
+  end
+
   it 'shows participant-facing Work Cycle JSON' do
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first

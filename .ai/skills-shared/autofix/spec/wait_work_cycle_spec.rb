@@ -406,7 +406,7 @@ RSpec.describe WaitWorkCycle do
   end
 
   it 'runs Manager review inline and completes a passing Review locally' do
-    review_id, _implementation_work_cycle_id, reviewer_work_cycle_id = start_reviewer_review
+    review_id, implementation_work_cycle_id, reviewer_work_cycle_id = start_reviewer_review
     StoreWorkCycleCompletion.call(
       work_cycle_id: reviewer_work_cycle_id,
       work_cycle_result: review_result(
@@ -442,11 +442,11 @@ RSpec.describe WaitWorkCycle do
       'Final checks:',
       'Skipped: no Gemfile.',
       'Review 1 completed locally.',
-      "Final commit: #{review.fetch(:final_commit_sha)} Review 1",
-      'Push: not performed.'
+      'Push: not performed.',
+      "AutoFixSquash #{review_id}"
     )
     expect(review).to include(state: 'completed', completed_at: be_a(Time))
-    expect(git!('log', '-1', '--format=%s').strip).to eq('Review 1')
+    expect(git!('log', '-1', '--format=%s').strip).to eq("Work cycle #{implementation_work_cycle_id}")
     expect(File.exist?(result_path(manager_work_cycle.fetch(:id)))).to be(false)
   end
 

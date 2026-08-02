@@ -40,8 +40,7 @@ class StoreReview
       original_base_commit_sha: base_commit_sha,
       active_base_ref: base_ref,
       active_base_commit_sha: base_commit_sha,
-      state: 'manager_issues_assessment',
-      final_commit_sha: nil
+      state: 'manager_issues_assessment'
     )
   end
 

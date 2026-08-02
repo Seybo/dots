@@ -26,7 +26,7 @@ A reported issue produced by a Manager review Work Cycle and linked to that exac
 
 ## Review
 
-One complete cycle for a non-empty set of new GitHub or local feedback in one project. It contains the feedback's decisions and all Work Cycles needed to address it. It ends when Autofix creates one local squashed commit, or when every issue is skipped and no change is needed. Autofix does not push. Empty feedback creates no Review. Later feedback starts the next Review.
+One complete cycle for a non-empty set of new GitHub or local feedback in one project. It contains the feedback's decisions and all Work Cycles needed to address it. It ends after final checks and commit validation pass, or when every issue is skipped and no change is needed. After completion, Manager asks whether to squash the local Work Cycle commits into `Review N`; the answer and squash result are not workflow state. Autofix does not push. Empty feedback creates no Review. Later feedback starts the next Review.
 
 ## Work Cycle
 

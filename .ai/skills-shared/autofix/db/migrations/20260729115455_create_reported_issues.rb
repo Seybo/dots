@@ -48,7 +48,6 @@ Sequel.migration do
       String :active_base_ref, text: true, null: false
       String :active_base_commit_sha, text: true, null: false
       String :state, null: false
-      String :final_commit_sha, text: true
 
       constraint(:reviews_source_allowed, source: %w[github local])
       constraint(

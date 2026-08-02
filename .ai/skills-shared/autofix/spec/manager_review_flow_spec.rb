@@ -32,12 +32,15 @@ RSpec.describe 'Manager review flow' do
       'Final checks:',
       'Skipped: no Gemfile.',
       'Review 1 completed locally.',
-      'Push: not performed.'
+      'Push: not performed.',
+      "AutoFixSquash #{review_id}"
     )
     expect(review).to include(state: 'completed', completed_at: be_a(Time))
     expect(db[:work_cycles].where(role: 'manager', action: 'review').select_map(:id)).
       to eq([manager_work_cycle_id])
-    expect(git!('log', '-1', '--format=%s').strip).to eq('Review 1')
+    implementation_work_cycle_id = db[:work_cycles].
+                                   where(role: 'worker', action: 'implementation').get(:id)
+    expect(git!('log', '-1', '--format=%s').strip).to eq("Work cycle #{implementation_work_cycle_id}")
   end
 
   it 'implements an approved Manager issue and returns through fresh Reviewer and Manager review' do

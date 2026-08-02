@@ -191,10 +191,11 @@ Real QA: complete one local Review, import another local feedback set, verify fr
 - After Manager review passes, enter `manager_finalizing`. For a project with `Gemfile`, run `bundle exec rubocop` and `bundle exec rspec` through separate non-login `bash -c` processes from the project path. Run both even when one fails. For other projects, report checks as skipped.
 - A failed or interrupted check leaves the Review in `manager_finalizing` with Git and final metadata unchanged. Report both results on failure and rerun both on a later resume; do not create an issue or automatic fix.
 - After checks pass, require a clean tree and require `starting_commit_sha..HEAD` to contain exactly the Review's chronological `Work cycle <id>` implementation commits.
-- Squash the verified commits onto `starting_commit_sha` as local `Review N`, store `final_commit_sha` and `completed_at`, and complete the Review.
+- Store `completed_at` and complete the Review without changing its Work Cycle commits. Remove `final_commit_sha`; squash output is not workflow state.
+- After completion, ask `Should i squash?`. Persist neither the question nor answer. On approval only, recheck the clean tree and exact commit sequence, then squash onto `starting_commit_sha` as local `Review N` without writing the database. Decline, failure, or success leaves the Review completed.
 - Do not push or mutate a remote. The operator pushes separately.
 
-Real QA: complete one real Manager pass with both checks passing and a local `Review N` squash; exercise one Manager correction loop without a second Worker review; verify all-skipped Manager issues proceed directly; and separately verify failed checks, interrupted Manager review, and an unexpected commit all preserve safe state without a push.
+Real QA: complete one real Manager pass and verify the Review is completed before `Should i squash?`; verify decline leaves Work Cycle commits unchanged and approval creates local `Review N` without changing the completed Review record. Exercise one Manager correction loop without a second Worker review; verify all-skipped Manager issues proceed directly; and separately verify failed checks, interrupted Manager review, an unexpected commit, and a failed optional squash all preserve completed workflow state without a push.
 
 ### Task 15: Assess Addressit replacement
 

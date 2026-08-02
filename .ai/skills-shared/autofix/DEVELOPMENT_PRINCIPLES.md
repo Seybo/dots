@@ -73,7 +73,9 @@ state.
   collect import context, then gives their structured results to Ruby. Ruby does
   not invoke external commands during import.
 - After an approved issue authorizes Git mutation, Ruby owns deterministic Git
-  staging, commit creation, SHA lookup, and final squash. Autofix does not push.
+  staging and Work Cycle commit creation. After the Review is completed, Ruby
+  owns an optional local squash only when the operator approves it. Autofix does
+  not push.
 - One `/skill:autofix` invocation continues through the entire normal Review workflow. A later invocation is only for resuming after an error, interruption, or another stop condition.
 - Manager blocks in Ruby while waiting for a Worker or Reviewer Work Cycle
   result and performs no other Autofix work. Interruption preserves that
@@ -197,16 +199,18 @@ protocol are intentionally deferred to implementation-task grilling.
 
 - Invoking Autofix does not authorize Git mutation by itself.
 - The first approved issue in a Review authorizes Autofix's deterministic
-  Ruby workflow to stage that Review's changes, create local `Work cycle <id>`
-  commits, and squash them into one local `Review N` commit. The operator pushes
-  separately when ready.
+  Ruby workflow to stage that Review's changes and create local `Work cycle
+  <id>` commits. It does not authorize squashing them. After the Review is
+  completed, the operator may separately approve one local `Review N` squash
+  and pushes separately when ready.
 - Require a clean working tree immediately before every Work Cycle so
   participants act on a stable committed state and Manager cannot commit
   unrelated existing changes. Preserve the Review for resume when this
   check fails.
 - Worker implementation temporarily creates unstaged changes. Ruby stages and creates one new `Work cycle <id>` commit when implementation completes, returning the tree to clean before the next Work Cycle.
 - Review Work Cycles do not modify the checkout. Every implementation Work Cycle creates another new interim commit; Autofix never amends an interim Work Cycle commit.
-- Finalization replaces the Review's interim implementation commits with one local squashed `Review N` commit. This is the only planned replacement of those commits.
+- Finalization runs checks, validates the exact Work Cycle commit sequence, and completes the Review without changing commit history. Manager then asks `Should i squash?`.
+- An approved squash replaces the Review's implementation commits with one local `Review N` commit. Declining, failure, or success does not change the already-completed Review or persist squash state.
 - A Review with no approved issues authorizes no Git mutation and does not
   require a clean working tree.
 - Push, force-push, branch changes, and unrelated Git operations remain unauthorized.
