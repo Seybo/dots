@@ -2,6 +2,12 @@
 
 Language- and project-neutral rules for all agents unless a project's local instructions override them.
 
+## State-change safety
+
+- Perform state-changing work only when the current explicit request or invoked skill authorizes it. Planning, grilling, review, and explanation workflows are read-only unless they explicitly say otherwise.
+- Before moving, replacing, or deleting anything, identify state that version control cannot restore. If any exists, stop until it has a verified backup outside the affected paths.
+- Inspection must not create or mutate the thing being inspected. Verify existence first and use read-only modes.
+
 ## Git safety
 
 - Never mutate git history, branches, tags, stashes, remotes, or commit state without explicit user approval for that exact action. This includes `commit`, `commit --amend`, `reset`, `rebase`, `merge`, `cherry-pick`, `revert`, `switch`/`checkout` that changes branches, branch create/delete/rename, tag create/delete, stash create/apply/pop/drop, force-push, and remote changes.
