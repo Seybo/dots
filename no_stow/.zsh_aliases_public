@@ -139,6 +139,14 @@ claude() {
   _run_with_agent_attention claude "$@"
 }
 
+hermes() {
+  _run_with_agent_attention hermes "$@"
+}
+
+gtm() {
+  _run_with_agent_attention gtm "$@"
+}
+
 _pi_require_shared_agents() {
   local profile_dir="$1"
   local agents_path="$profile_dir/AGENTS.md"

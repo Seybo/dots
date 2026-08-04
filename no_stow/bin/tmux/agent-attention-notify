@@ -8,6 +8,7 @@ require 'shellwords'
 require 'tmpdir'
 
 PATTERNS = [
+  /Dangerous Command/,
   /Agent wants to run shell command\./,
   /Agent wants to (?:write|edit|create|update|read) [^.]{1,200}\./,
   /Proposed (?:content|edits):/,
