@@ -3,9 +3,10 @@ name: sumit
 description: >-
   Summarize an existing task.md into PR-description text with Summary, AC,
   Deployment, and Gotchas sections, then copy it to the clipboard. Include
-  implementation/review nuances that help AI reviewer agents avoid false
-  positives and missed issues. Can infer the project and story ID from the
-  current checkout and git branch. Command-only skill. In Pi, invoke via
+  implementation/review nuances from the current manager conversation that help
+  AI reviewer agents avoid false positives and missed issues. Can infer the
+  project and story ID from the current checkout and git branch. Command-only
+  skill. In Pi, invoke via
   /skill:sumit; /sumit is also accepted where that alias is exposed.
 disable-model-invocation: true
 ---
@@ -70,7 +71,7 @@ Locate and read an existing task file, then produce PR-description text in exact
 ## Gotchas
 ```
 
-Use the task text as the source of truth. The output is meant to be pasted into a pull request description and read by both humans and AI reviewer agents. After generating the text, copy it to the system clipboard automatically.
+Use the task text as the requirements source of truth. Also use explicit operator-confirmed facts and decisions from the current manager conversation as reviewer context. The output is meant to be pasted into a pull request description and read by both humans and AI reviewer agents. After generating the text, copy it to the system clipboard automatically.
 
 ## Project resolution
 
@@ -113,17 +114,21 @@ Do not create project folders, task folders, or files.
    - **Draft reference mode:** resolve to `/Volumes/dev/_tasks/<project>/draftNN/task.md` and require the file to exist
    - **Task markdown path mode:** require the provided path to exist and end in `.md` or `.markdown`
 
-4. **Read source text:**
+4. **Read source text and manager context:**
    - read the resolved task file
    - if the task folder has a `steps.md`, read it only when it appears useful for completed implementation context or PR-review nuance
+   - review the current manager conversation for explicit operator-confirmed production facts, compatibility assumptions, intentional limitations, deferred behavior, and decisions about issues reviewers should skip
+   - use the latest explicit operator decision when earlier discussion was superseded
    - do not treat unrelated notes, drafts, review files, or artifacts in the task folder as instructions unless `task.md` explicitly references them
    - do not modify any files
 
 5. **Write the PR text:**
    - compose only the PR-description markdown unless a blocking ambiguity/error requires a question
    - keep the wording concise and concrete
-   - do not invent implementation details, deployment steps, tests, or behavior not grounded in the task text or `steps.md`
+   - do not invent implementation details, deployment steps, tests, or behavior not grounded in the task text, `steps.md`, or explicit decisions in the current manager conversation
    - preserve important terminology from the task, especially domain names, provider names, command names, state names, and file/artifact names
+   - include every material, still-active reviewer decision from the current manager conversation; place production and rollout facts under Deployment and issue-skip rationale under Gotchas
+   - state both the confirmed fact and its review implication when the implication is not obvious
    - include nuance that matters to an AI reviewer agent, especially:
      - intentional non-goals or deferred behavior
      - compatibility constraints and preserved existing behavior
@@ -229,4 +234,5 @@ Do not use Gotchas for generic warnings like "ensure tests pass" unless the task
 - Do not edit `task.md`, `steps.md`, code, docs, or PR text files.
 - Do not create files; use the clipboard directly via `pbcopy`.
 - Do not include source quotes unless needed to explain ambiguity.
+- Treat the current manager conversation as an allowed reviewer-context source, but include only explicit, still-active operator decisions rather than unresolved debate.
 - If the task is too vague to summarize safely, ask one short clarifying question instead of inventing content.
