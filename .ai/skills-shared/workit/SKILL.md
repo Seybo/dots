@@ -162,7 +162,7 @@ and select the matching ordinal workspace. Applied to `/workit`:
      ```bash
      git -C <code-working-directory> branch --show-current
      ```
-   - **Never work on `main` or `master` except for the `env` project (`/Users/inseybo/.dots`).** If the current branch is protected and the resolved project is not `env`, stop before editing and switch to a task branch.
+   - **Treat `main` and `master` as protected except for the `env` project (`/Users/inseybo/.dots`) and registered projects whose project key starts with `my_`.** If the current branch is protected, stop before editing and switch to a task branch.
    - For registered workspace tasks whose registry entry has `task_provider: shortcut`, follow the branch setup rules from [`taskit` step 8: Set up the development branch](../taskit/SKILL.md#set-up-the-development-branch-task_provider-shortcut-projects-shortcut-mode-only): fetch the Shortcut story, generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from the returned story `name`, verify whether it already exists, and create it when safe. Do not use the task folder suffix as the branch slug; existing task folders can have local/draft slugs that differ from Shortcut's Git Helper slug.
    - For `task_provider: local` projects, never fetch Shortcut stories or create/switch Shortcut branches.
    - If `base_ref` is present for a registered workspace Shortcut task:

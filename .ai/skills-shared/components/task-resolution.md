@@ -113,6 +113,7 @@ They do not infer, create, rename, or switch branches. Refuse `main` and
 `master` for local/ad-hoc work, except:
 
 - `env` may use either branch.
+- Any registered project whose project key starts with `my_` may use either branch.
 
 `/autowork` records the branch, its initial `HEAD` SHA, and the review-base ref
 and SHA at run initialization.
