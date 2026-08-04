@@ -18,7 +18,7 @@ module Shortcut
   class Client
     API_BASE_URL = "https://api.app.shortcut.com/api/v3"
     DEFAULT_GROUP_ID = "69d7e322-a521-4100-a632-a952962ce509"
-    DEFAULT_WORKFLOW_STATE_ID = 500027065
+    DEFAULT_WORKFLOW_STATE_ID = 500022447
 
     def initialize(api_key: ENV.fetch("SHORTCUT_KEY", nil))
       @api_key = api_key
