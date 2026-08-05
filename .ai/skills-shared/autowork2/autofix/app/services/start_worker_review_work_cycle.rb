@@ -7,7 +7,7 @@ class StartWorkerReviewWorkCycle
 
   def call
     ensure_no_worker_review
-    ValidateWorkCycleGitState.call(project_path: review.fetch(:project_path))
+    ValidateCleanGitState.call(project_path: review.fetch(:project_path))
     Database.connection.transaction(savepoint: true) do
       update_review
       work_cycle_id = create_work_cycle

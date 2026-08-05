@@ -9,7 +9,7 @@ class SquashReview
 
   def call
     validate_review
-    ValidateWorkCycleGitState.call(project_path: project_path)
+    ValidateCleanGitState.call(project_path: project_path)
     ValidateReviewCommitSequence.call(review_id: review_id)
     final_commit_sha = squash
     "Review #{review.fetch(:number)} squashed locally.\n" \

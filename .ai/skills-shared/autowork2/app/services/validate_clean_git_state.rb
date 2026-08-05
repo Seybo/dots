@@ -2,7 +2,7 @@
 
 require 'open3'
 
-class ValidateWorkCycleGitState
+class ValidateCleanGitState
   include ServiceObject
 
   arguments :project_path

@@ -168,14 +168,52 @@ RSpec.describe 'database schema' do
       to raise_error(Sequel::ForeignKeyConstraintViolation)
   end
 
-  it 'creates Tasks with generated IDs and creation times' do
-    expect(columns(:tasks)).to eq(%i[id created_at])
+  it 'creates Tasks with required identity and Git metadata' do
+    expect(columns(:tasks)).to eq(
+      %i[id created_at task_path project_path branch_name starting_commit_sha state]
+    )
     expect_generated_id_and_created_at(:tasks)
+    %i[task_path project_path branch_name starting_commit_sha state].each do |name|
+      expect(column(:tasks, name)).to include(allow_null: false)
+    end
 
     task_id = db[:tasks].insert(task_attributes)
 
     expect(task_id).to be_a(Integer)
-    expect { db[:tasks].insert({}) }.to raise_error(Sequel::NotNullConstraintViolation)
+    expect { db[:tasks].insert(task_attributes.except(:created_at)) }.
+      to raise_error(Sequel::NotNullConstraintViolation)
+  end
+
+  it 'keeps Task paths unique and allows only initialized state' do
+    db[:tasks].insert(task_attributes)
+
+    expect do
+      db[:tasks].insert(task_attributes(project_path: '/other-project'))
+    end.to raise_error(Sequel::UniqueConstraintViolation)
+    expect do
+      db[:tasks].insert(task_attributes(task_path: '/tasks/2', state: 'running'))
+    end.to raise_error(Sequel::CheckConstraintViolation)
+
+    expect(db.indexes(:tasks).fetch(:tasks_task_path_index)).to include(
+      unique: true,
+      columns: [:task_path]
+    )
+  end
+
+  it 'allows only one initialized Task per project' do
+    db[:tasks].insert(task_attributes)
+
+    expect do
+      db[:tasks].insert(task_attributes(task_path: '/tasks/2'))
+    end.to raise_error(Sequel::UniqueConstraintViolation)
+    expect do
+      db[:tasks].insert(task_attributes(task_path: '/tasks/3', project_path: '/other-project'))
+    end.not_to raise_error
+
+    expect(db.indexes(:tasks).fetch(:tasks_one_active_per_project_index)).to include(
+      unique: true,
+      columns: [:project_path]
+    )
   end
 
   it 'creates Work Cycles with exactly one nullable owner and nullable provenance' do
@@ -337,7 +375,14 @@ RSpec.describe 'database schema' do
   end
 
   def task_attributes(overrides = {})
-    { created_at: timestamp }.merge(overrides)
+    {
+      created_at: timestamp,
+      task_path: '/tasks/1',
+      project_path: '/project',
+      branch_name: 'feature',
+      starting_commit_sha: 'starting-sha',
+      state: 'initialized'
+    }.merge(overrides)
   end
 
   def work_cycle_attributes(overrides = {})

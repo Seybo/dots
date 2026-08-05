@@ -75,6 +75,20 @@ Sequel.migration do
     create_table(:tasks) do
       primary_key :id
       DateTime :created_at, null: false
+      String :task_path, text: true, null: false
+      String :project_path, text: true, null: false
+      String :branch_name, text: true, null: false
+      String :starting_commit_sha, text: true, null: false
+      String :state, null: false
+
+      constraint(:tasks_state_allowed, state: %w[initialized])
+
+      index :task_path,
+            unique: true,
+            name: :tasks_task_path_index
+      index :project_path,
+            unique: true,
+            name: :tasks_one_active_per_project_index
     end
 
     create_table(:review_issues) do

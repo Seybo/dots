@@ -6,7 +6,7 @@ class StartReviewerReviewWorkCycle
   arguments :review_id
 
   def call
-    ValidateWorkCycleGitState.call(project_path: review.fetch(:project_path))
+    ValidateCleanGitState.call(project_path: review.fetch(:project_path))
     Database.connection.transaction(savepoint: true) do
       work_cycle_id = create_work_cycle
       link_inputs(work_cycle_id)

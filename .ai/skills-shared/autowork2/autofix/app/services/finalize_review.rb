@@ -15,7 +15,7 @@ class FinalizeReview
     output = render_results(results)
     return output unless results.all? { |result| PASSING_CHECK_STATUSES.include?(result.fetch(:status)) }
 
-    ValidateWorkCycleGitState.call(project_path: project_path)
+    ValidateCleanGitState.call(project_path: project_path)
     ValidateReviewCommitSequence.call(review_id: review_id)
     complete_review
     "#{output}\nReview #{review.fetch(:number)} completed locally.\n" \
