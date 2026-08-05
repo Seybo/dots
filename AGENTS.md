@@ -16,6 +16,7 @@
 
 ## Working style
 
+- For Ruby packages in this dots repo, run Bundler commands from the directory containing the intended `Gemfile`; prefer the relevant package's `bin/check` when it exists.
 - When a request refers to "dev-env refs" without a path, treat it as referring to `refs/dev-env`.
 - Be explicit about file paths when reading or editing files there.
 - Summarize which files were read or changed.
