@@ -26,6 +26,33 @@ Supported invocations:
 /skill:autofix --rebase-base <base-ref>
 ```
 
+## Operator attention notifications
+
+At the final Manager presentation boundary, begin the complete operator-facing
+turn with the exact prefix `[MM_NTF]` whenever Autofix cannot continue without
+operator input or action. This includes:
+
+- every Fix, Skip, or Unclear Reported Issue assessment
+- clarification questions and genuine decision ambiguity
+- optional squash approval
+- ambiguous rebase-conflict resolution questions
+- participant, Work Cycle, import, rebase, squash, or helper failures that
+  require operator direction
+- interrupted-rebase recovery instructions
+
+When retained progress and a blocking request share one turn, put `[MM_NTF]`
+before the retained progress so it is the first text in the complete turn.
+Instructions below to return or surface helper output unchanged mean preserve
+the helper content after this presentation prefix when operator direction is
+required; never alter the helper output before parsing it.
+
+Do not prefix normal progress, successful completion, no-issue or
+no-unresolved-issue results, participant messages, or Manager machine-control
+lines such as `Issue: <id>`, `AutoFixCycle <id>`, `AutoFixRole <role>`,
+`WaitWorkCycle <id>`, `AutoFixSquash <id>`, `RebaseConflict <id>`,
+`RebaseTargetRef <ref>`, and `RebaseTargetCommit <sha>`. Continue to retain,
+parse, remove, or route those control lines exactly as specified below.
+
 ## Rebase active Review
 
 Treat `--rebase-base` as a separate explicit operation. Accept either no value
@@ -72,9 +99,10 @@ Review orchestration during this operation.
    - when the intended result is unambiguous, edit the file directly and retain
      the path, a short description of the conflict, and a short description of
      the applied resolution
-   - when the intended result is ambiguous, show the conflicting code and
-     relevant context, recommend one resolution, and ask the operator one
-     precise question before editing that conflict; after the answer, apply it
+   - when the intended result is ambiguous, begin the complete Manager turn
+     with `[MM_NTF]`, show the conflicting code and relevant context, recommend
+     one resolution, and ask the operator one precise question before editing
+     that conflict; after the answer, apply it
      and retain the same short conflict and resolution descriptions
 6. After every current conflict is resolved, run only:
 
@@ -97,14 +125,17 @@ Review orchestration during this operation.
    Include one list item for every resolved conflict occurrence, whether
    Manager resolved it directly or the operator decided it.
 
-Surface any non-conflict helper failure unchanged and stop. Preserve an
-in-progress rebase on conflict or failure. Do not switch branches, push, start a
-Work Cycle, invoke normal `resume`, or expose interim Work Cycle commit SHAs.
+Surface any non-conflict helper failure content unchanged and stop, adding the
+Manager notification prefix first when the failure requires operator direction.
+Preserve an in-progress rebase on conflict or failure. Do not switch branches,
+push, start a Work Cycle, invoke normal `resume`, or expose interim Work Cycle
+commit SHAs.
 
 There is no persisted continuation or recovery state. If conflict resolution is
-interrupted, tell the operator to run `git rebase --abort` manually and invoke
-`--rebase-base` again from the beginning. Do not continue an interrupted rebase
-outside this invocation; manual `git rebase --continue` is unsupported.
+interrupted, begin the recovery turn with `[MM_NTF]`, tell the operator to run
+`git rebase --abort` manually, and invoke `--rebase-base` again from the
+beginning. Do not continue an interrupted rebase outside this invocation; manual
+`git rebase --continue` is unsupported.
 
 ## Resume
 
@@ -306,7 +337,7 @@ Review is already completed and all durable workflow state is final.
 2. Ask exactly:
 
    ```text
-   Should i squash?
+   [MM_NTF] Should i squash?
    ```
 
 3. Retain the Review ID only in the current conversation. Do not persist the
@@ -323,7 +354,8 @@ For the operator's next reply while this question is active:
 - Treat `no`, `skip`, or `leave` as declining. Run no helper and report that the
   Work Cycle commits remain unchanged.
 - A question or unrelated message is not an answer. Answer it without running a
-  helper, then ask `Should i squash?` again.
+  helper, then ask `[MM_NTF] Should i squash?` again, with `[MM_NTF]` as the
+  first text in that complete Manager turn.
 
 Return squash success or failure unchanged. Never run `resume`, alter Review
 state, persist squash metadata, push, automatically retry, or make the answer or
@@ -342,22 +374,26 @@ issue.
 2. Read `app/prompts/assess_issue.md` from this skill directory.
 3. Inspect only relevant current project code and existing Review/conversation
    context. Do not edit files or run tests, linters, or formatters.
-4. Follow the prompt and present its concise assessment. If completed-step
-   output preceded the issue block, present that output first, followed by one
-   blank line and the assessment.
+4. Follow the prompt and present its concise assessment. With no completed-step
+   output, use the prompt's prefixed presentation. If completed-step output
+   preceded the issue block, put `[MM_NTF]` first, then the completed-step
+   output, one blank line, and the assessment beginning at `Issue <id>` without
+   repeating the prefix.
 5. Treat the recommendation as advisory. Do not run `store-decision`, create a
    Work Cycle, contact a participant, or persist assessment state until the
    operator clearly decides.
 
-If the operator asks for more details, show useful code and Review context
-without recording a decision. When resume returns the same undecided issue,
-regenerate its assessment from current code and context.
+If the operator asks for more details, begin the response with `[MM_NTF]`, show
+useful code and Review context without recording a decision, and request the
+still-needed decision. When resume returns the same undecided issue, regenerate
+its assessment from current code and context.
 
 For an `Unclear` recommendation, ask the prompt's one precise question,
 preferring a yes-or-no question when possible, and persist nothing. Treat the
 operator's next reply as clarification, including `yes` or `go`; use it to
-reassess the same issue and request a separate clear decision. Only an explicit
-`fix` or `skip` in that clarification reply is also a decision.
+reassess the same issue and request a separate clear decision, again beginning
+the complete Manager turn with `[MM_NTF]`. Only an explicit `fix` or `skip` in
+that clarification reply is also a decision.
 
 ## Decisions
 
@@ -371,8 +407,9 @@ Use the currently assessed issue ID for the operator's next clear decision:
   an answer to its clarification question and persist nothing.
 - A question, details request, clarification, or unrelated message is not a
   decision.
-- For genuine decision ambiguity, name the affected Reported Issue ID and ask
-  one precise question. Do not run `store-decision`, persist escalation state,
+- For genuine decision ambiguity, begin the complete Manager turn with
+  `[MM_NTF]`, name the affected Reported Issue ID, and ask one precise question.
+  Do not run `store-decision`, persist escalation state,
   or create a Work Cycle until the operator gives a clear decision.
 
 For a decision, run:

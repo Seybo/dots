@@ -15,7 +15,7 @@ Use the supplied:
 Return only this operator-facing presentation:
 
 ```text
-Issue <id>
+[MM_NTF] Issue <id>
 
 > <complete original stored issue body>
 
@@ -31,7 +31,7 @@ Use `Recommendation: Skip — <brief reason>` when appropriate.
 When one missing fact prevents a responsible recommendation, return:
 
 ```text
-Issue <id>
+[MM_NTF] Issue <id>
 
 > <complete original stored issue body>
 
@@ -45,6 +45,7 @@ Question: <one precise question, preferably answerable with yes or no>
 
 ## Rules
 
+- Begin every assessment with the exact prefix `[MM_NTF]` as shown above.
 - Inspect only relevant code and context. Do not edit files or run tests, linters, or formatters.
 - Verify the stored issue's claims against current code instead of paraphrasing them. When code contradicts a claim, explain the mismatch and recommend from the verified behavior.
 - Recommend `Fix` when the concern is concrete, relevant, and unresolved in current code.
