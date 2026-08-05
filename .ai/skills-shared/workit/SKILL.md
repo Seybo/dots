@@ -231,6 +231,9 @@ and select the matching ordinal workspace. Applied to `/workit`:
 
 8. **Proceed with the task:**
    - work in the resolved code working directory
+   - at a step boundary, treat staged changes as the user's tracking checkpoint; leave them untouched and do not ask who owns them or whether Workit may continue merely because they are staged
+   - keep new Workit changes unstaged so they remain distinguishable from the user's staged checkpoint
+   - these checkpoint rules do not override the clean-worktree requirements for branch creation or switching in step 6
    - work on what `task.md` describes, following `steps.md` incrementally
    - in `create_steps_only_mode`, do not enter this implementation step; the command is complete after branch setup/verification and `steps.md` creation/update
    - in `step_mode`, locate the exact requested section from `## Step N` up to before the next `## Step <number>` heading; read full `steps.md` for context but implement only that section
