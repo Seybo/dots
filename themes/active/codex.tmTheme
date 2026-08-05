@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ==============================================================================
+THIS FILE IS GENERATED AUTOMATICALLY
+IT IS COMMITED ONLY ONCE FOR DEMONSTRATION PURPOSES
+============================================================================== -->
+<!--
+Codex syntax theme: everforest-hard-light.
+Converted from the canonical Everforest palette via this community TextMate port:
+https://github.com/ivuorinen/everforest-resources/blob/main/cli/bat/everforest-light-hard.tmTheme
+Local Ghostty/Pi palette adjustments are the source of truth for colors in this file.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>name</key>
+	<string>Everforest Hard Light</string>
+	<key>settings</key>
+	<array>
+		<dict>
+			<key>settings</key>
+			<dict>
+				<key>background</key>
+				<string>#FFFDF6</string>
+				<key>foreground</key>
+				<string>#3D484D</string>
+				<key>caret</key>
+				<string>#3D484D</string>
+				<key>selection</key>
+				<string>#F0F2D4</string>
+				<key>selectionForeground</key>
+				<string>#3D484D</string>
+				<key>lineHighlight</key>
+				<string>#F8F5E4</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Comment</string>
+			<key>scope</key>
+			<string>comment</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#939F91</string>
+				<key>fontStyle</key>
+				<string>italic</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>String</string>
+			<key>scope</key>
+			<string>string</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#697801</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Number</string>
+			<key>scope</key>
+			<string>constant.numeric</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#DF69BA</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Keyword</string>
+			<key>scope</key>
+			<string>keyword</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#F85552</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Function</string>
+			<key>scope</key>
+			<string>entity.name.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#3A94C5</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Type</string>
+			<key>scope</key>
+			<string>entity.name.type</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#DFA000</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Variable</string>
+			<key>scope</key>
+			<string>variable</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#267B5F</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Operator</string>
+			<key>scope</key>
+			<string>keyword.operator</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#F57D26</string>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>

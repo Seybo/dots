@@ -1,6 +1,6 @@
 ---
 name: theme
-description: Create, update, and debug this dotfiles repo's environment themes across Ghostty, Neovim, Starship, fzf, tmux, Pi, Claude Code, Hermes, and Lazygit. Use when the user asks to add a theme, modify theme colors, switch/theme behavior, or investigate theme rendering issues.
+description: Create, update, and debug this dotfiles repo's environment themes across Ghostty, Neovim, Starship, fzf, tmux, Pi, Claude Code, Hermes, Lazygit, and Codex. Use when the user asks to add a theme, modify theme colors, switch/theme behavior, or investigate theme rendering issues.
 ---
 
 # Theme Skill
@@ -22,6 +22,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
    - `~/.claude/themes/theme.json` symlink when Claude Code theming is involved
    - `~/Library/Application Support/lazygit/config.yml` symlink when Lazygit theming is involved
    - `~/.hermes/config.yaml` and `~/.hermes/skins/env-active.yaml` symlink when Hermes theming is involved
+   - `~/.codex/config.toml` and `~/.codex/themes/env-active.tmTheme` symlink when Codex theming is involved
 3. Inspect at least one nearby existing theme under `themes/<name>/`; prefer `themes/dayfox/` for a simple complete modern theme and `themes/everforest-hard-light/` or `themes/nordfox/` for Pi-aware examples.
 4. For upstream colors, use official source files whenever possible. Do not invent colors from screenshots or memory.
 5. Check the existing local theme files for intentional palette adjustments. If a theme has local adjusted colors, those adjusted colors are the source of truth for every app integration, including newly added apps.
@@ -44,6 +45,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 - Claude Code should not get switcher-specific copy/settings logic. Claude only reads custom themes from `~/.claude/themes/`, so bridge it with a symlink: `~/.claude/themes/theme.json -> ~/.dots/themes/active/claude.json`. The user selects that custom theme with `/theme`; future `theme <name>` runs update the symlink target through the existing active-theme copy flow.
 - Lazygit should not get switcher-specific copy/settings logic. Bridge it with a symlink: `~/Library/Application Support/lazygit/config.yml -> ~/.dots/themes/active/lazygit.yml`.
 - Hermes Agent should not get switcher-specific copy/settings logic. Hermes calls themes "skins" and reads user skins from `~/.hermes/skins/`, so bridge it with a symlink: `~/.hermes/skins/env-active.yaml -> ~/.dots/themes/active/hermes.yaml`, then set `display.skin: env-active` once in `~/.hermes/config.yaml`.
+- Codex should not get switcher-specific logic. Bridge it through the Stow-managed `.codex/themes/env-active.tmTheme` symlink to `themes/active/codex.tmTheme`, then set `[tui] theme = "env-active"` once in `~/.codex/config.toml`.
 
 ## App integration map
 
@@ -56,6 +58,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 - Claude Code: custom theme file `~/.claude/themes/theme.json` is a symlink to `~/.dots/themes/active/claude.json`; select it in Claude with `/theme`. Claude Code watches `~/.claude/themes/` and reloads custom theme files automatically.
 - Lazygit: `~/Library/Application Support/lazygit/config.yml` is a symlink to `~/.dots/themes/active/lazygit.yml`; Lazygit reads it on launch.
 - Hermes Agent: `~/.hermes/skins/env-active.yaml` is a symlink to `~/.dots/themes/active/hermes.yaml`; `~/.hermes/config.yaml` sets `display.skin: env-active`.
+- Codex: `.codex/themes/env-active.tmTheme` is Stow-managed into `~/.codex/themes/` and points to `~/.dots/themes/active/codex.tmTheme`; `~/.codex/config.toml` selects `[tui] theme = "env-active"`. Codex does not watch file changes, so restart it or open `/theme` and confirm `env-active` after switching.
 - tmux is supported for tmux-aware themes. `.tmux.conf` quiet-sources `themes/active/tmux.conf` when present, so themes without tmux files remain safe. Add `tmux.conf` only when tmux styling is in scope for that theme.
 - Alacritty is retired. Do not add Alacritty theme files.
 - Zellij integration is frozen. Preserve the existing `.config/zellij/`, `themes/*/zellij.kdl`, `themes/active/zellij.kdl`, and legacy theme-switcher touch behavior, but do not add or update Zellij integrations; use tmux for current workspace work.
@@ -87,8 +90,9 @@ A standard modern theme should have a file for each current app integration:
 - `claude.json`
 - `lazygit.yml`
 - `hermes.yaml`
+- `codex.tmTheme`
 
-Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, or `hermes.yaml` until they are modernized. Themes may also omit `tmux.conf`; tmux falls back to base styling when the active theme has no tmux file.
+Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, `hermes.yaml`, or `codex.tmTheme` until they are modernized. Codex currently supports only `nordfox` and `everforest-hard-light`. Themes may also omit `tmux.conf`; tmux falls back to base styling when the active theme has no tmux file.
 
 ## Creating a new theme
 
@@ -122,6 +126,7 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, or `hermes.yaml` 
    - Neovim usually needs restart/re-source because `active/nvim.lua` runs during plugin config.
    - Starship updates on a new prompt render after active file changes.
    - tmux reloads the active theme with `tmux source-file ~/.tmux.conf`.
+   - Codex requires a restart or reopening `/theme` and confirming `env-active`; it does not watch `.tmTheme` file changes.
 4. If editing a non-active theme, ask the user to switch to it for validation.
 
 ## File-specific rules
@@ -181,6 +186,15 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, or `hermes.yaml` 
 - The YAML `name` should be `env-active` for this unified active-theme flow.
 - Use Hermes' skin YAML shape: `name`, `description`, `colors`, optional `branding`, spinner settings, and `tool_prefix`.
 
+### `codex.tmTheme`
+
+- Codex discovers custom syntax themes only under `~/.codex/themes/` and selects them by filename stem.
+- Use XML TextMate `.tmTheme` format and prefer official upstream TextMate files. If no official file exists, convert only from the canonical palette, name the exact source URL in an XML comment, and preserve local palette adjustments.
+- Use the stable Stow-managed link `.codex/themes/env-active.tmTheme -> ../../themes/active/codex.tmTheme`; do not modify `themes/theme_switcher.rb` for Codex.
+- Set `[tui] theme = "env-active"` once in `~/.codex/config.toml`.
+- Codex does not watch custom theme changes. Restart it or open `/theme` and confirm `env-active` after switching.
+- Codex currently supports only `nordfox` and `everforest-hard-light`; another active theme leaves the symlink target missing.
+
 ### `pi.json`
 
 - Pi loads `~/.dots/themes/active/pi.json` and selects theme name `env-active`.
@@ -223,6 +237,7 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, or `hermes.yaml` 
 - Claude Code unchanged: verify `~/.claude/themes/theme.json` is a symlink to `~/.dots/themes/active/claude.json`, active `claude.json` exists and is valid JSON, and Claude has selected the custom `theme` theme via `/theme`.
 - Lazygit unchanged: verify `~/Library/Application Support/lazygit/config.yml` is a symlink to `~/.dots/themes/active/lazygit.yml`, active `lazygit.yml` exists and is valid YAML, then restart Lazygit.
 - Hermes unchanged: verify `~/.hermes/skins/env-active.yaml` is a symlink to `~/.dots/themes/active/hermes.yaml`, `~/.hermes/config.yaml` has `display.skin: env-active`, active `hermes.yaml` exists and is valid YAML, then restart Hermes or run `/skin env-active`.
+- Codex unchanged: verify `~/.codex/themes/env-active.tmTheme` resolves to `~/.dots/themes/active/codex.tmTheme`, `~/.codex/config.toml` has `[tui] theme = "env-active"`, and the active XML passes `plutil -lint`; then restart Codex or reopen `/theme` and confirm `env-active`.
 
 ## Validation commands
 
@@ -235,6 +250,7 @@ ruby -rjson -e 'JSON.parse(File.read(ARGV[0])); puts "ok"' themes/<name>/pi.json
 ruby -rjson -e 'JSON.parse(File.read(ARGV[0])); puts "ok"' themes/<name>/claude.json
 ruby -ryaml -e 'YAML.load_file(ARGV[0]); puts "ok"' themes/<name>/lazygit.yml
 ruby -ryaml -e 'YAML.load_file(ARGV[0]); puts "ok"' themes/<name>/hermes.yaml
+plutil -lint themes/<name>/codex.tmTheme
 rg -n 'themes/active/tmux.conf|source-file' .tmux.conf
 rg -n 'themes/active|active-theme|colorscheme' .config/nvim/lua/plugins/theme.lua themes/<name>/nvim.lua
 ```
