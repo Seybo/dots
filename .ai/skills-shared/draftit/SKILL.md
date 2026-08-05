@@ -35,7 +35,7 @@ The first token is a project only when it matches a registered project key in
 the current checkout. All remaining text is context. Draftit always derives the
 task slug; it accepts no explicit name or slug override.
 
-Do not auto-use this skill from a general drafting request. Wait for the explicit slash command.
+Do not auto-use this skill from a general drafting request. Wait for the explicit slash command. An exact bare `draftit` reply to Grillme's active continuation offer is equivalent to an explicit invocation.
 
 ## What it does
 
@@ -45,11 +45,7 @@ Create the next available `draftNN` folder under:
 /Volumes/dev/_tasks/<project>/
 ```
 
-Then write `task.md` from the requested context. Use it later with:
-
-```text
-/taskit <project> draftNN
-```
+Then write `task.md` from the requested context. After creation, let the user choose whether to grill or convert that draft without copying another slash command.
 
 ## Instructions
 
@@ -114,9 +110,16 @@ Then write `task.md` from the requested context. Use it later with:
    - create `task.md` only; never modify an existing draft
    - add exactly one trailing newline
 
-8. **Report:**
+8. **Report and offer continuation:**
    - show the draft name, draft folder, and `task.md` path
-   - remind the user to run `/taskit <project> draftNN`
+   - preserve the resolved project, `draftNN`, and full `task.md` path for the next turn
+   - offer both next steps and tell the user to reply with exactly one bare keyword:
+     - `grillme` to grill the new `task.md`
+     - `taskit` to convert `<project> draftNN`
+   - if the next user message is exactly `grillme`, treat it as an explicit Grillme invocation; read and follow `../grillme/SKILL.md` immediately with the full `task.md` path as its authoritative source
+   - if the next user message is exactly `taskit`, treat it as an explicit Taskit invocation; read and follow `../taskit/SKILL.md` immediately as `/taskit <project> draftNN`
+   - do not invoke another skill for any other reply, after failed or incomplete draft creation, or before the user chooses
+   - continuation replies must contain only the exact bare keyword; optional arguments are not supported
 
 ## Important Notes
 
@@ -125,4 +128,4 @@ Then write `task.md` from the requested context. Use it later with:
 - `epic:` is the only Shortcut-ready trigger.
 - Do not register projects automatically.
 - Do not add extra files.
-- Do not auto-use this skill without the explicit `/draftit` command.
+- Do not auto-use this skill without an explicit `/draftit` command or an exact bare `draftit` reply to Grillme's active continuation offer.

@@ -57,7 +57,7 @@ Examples:
 /taskit Switch to tmuxinator    # project inferred from cwd when possible
 ```
 
-Do not auto-use this skill from a general task-management request. Wait for the explicit slash command.
+Do not auto-use this skill from a general task-management request. Wait for the explicit slash command. An exact bare `taskit` reply to an active Grillme or Draftit continuation offer is equivalent to an explicit invocation for the preserved draft.
 
 ## What it does
 
@@ -240,6 +240,15 @@ creates project roots or code checkouts.
      Use the first form when `base_ref` is present; use the second form only when `base_ref` is absent. `--no-track` is required for explicit bases because when `<base_ref>` is a remote branch, Git may otherwise set the new task branch's upstream to the parent branch. The parent/base must stay in task/autowork config, not Git upstream.
    - Report the selected checkout, branch name, and base ref (when present) alongside the created paths from step 7.
 
+9. **Offer Workit continuation:**
+   - run this step only after all applicable Taskit work completes successfully
+   - derive the numeric task ID from the final task folder prefix
+   - preserve the normalized project and task ID; when an ordinal workspace was selected, preserve its session alias (for example, project `shaka_gtm` with workspace `1st` becomes `shaka_gtm1`)
+   - tell the user to reply with the exact bare keyword `workit`; do not require them to copy or retype a slash command
+   - if the next user message is exactly `workit`, treat it as an explicit Workit invocation; read and follow `../workit/SKILL.md` immediately as `/workit <resolved-project-or-session> <task_id>`
+   - do not invoke Workit for any other reply, after failed or incomplete Taskit work, or before the user chooses
+   - the continuation reply must contain only `workit`; optional arguments are not supported
+
 ## Task markdown path mode
 
 This mode converts an existing task file according to both the selected project's `task_provider` and the file contents. The provider is checked first; file contents can enable Shortcut conversion only for `task_provider: shortcut` projects.
@@ -380,5 +389,5 @@ Do not update `task.md` contents in this mode unless the user explicitly asks fo
 - Do not add extra files
 - Do not add extra sections to `task.md`
 - For implementation-oriented tasks, later planning should use TDD where it makes sense, with specs focused on edge cases, boundaries, regressions, and acceptance criteria rather than only happy paths
-- Do not auto-use this skill without the explicit `/taskit` command
+- Do not auto-use this skill without an explicit `/taskit` command or an exact bare `taskit` reply to an active Grillme or Draftit continuation offer
 - Step 8 branch setup applies only to registered ordinal-workspace projects with `task_provider: shortcut` in Shortcut mode. `task_provider: local` projects and Manual tasks do not touch git automatically.
