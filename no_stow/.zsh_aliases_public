@@ -139,6 +139,10 @@ claude() {
   _run_with_agent_attention claude "$@"
 }
 
+codex() {
+  _run_with_agent_attention codex "$@"
+}
+
 hermes() {
   _run_with_agent_attention hermes "$@"
 }
