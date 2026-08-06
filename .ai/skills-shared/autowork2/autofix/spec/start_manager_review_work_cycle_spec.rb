@@ -45,6 +45,7 @@ RSpec.describe StartManagerReviewWorkCycle do
       review_id: review_id,
       role: 'manager',
       action: 'review',
+      step_number: nil,
       completed_at: nil
     )
     expect(db[:work_cycle_inputs].where(work_cycle_id: work_cycle_id).order(:id).

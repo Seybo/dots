@@ -219,7 +219,7 @@ RSpec.describe 'database schema' do
   it 'creates Work Cycles with exactly one nullable owner and nullable provenance' do
     expect(columns(:work_cycles)).to eq(
       %i[
-        id created_at completed_at review_id task_id role action provider model reasoning_level
+        id created_at completed_at review_id task_id step_number role action provider model reasoning_level
       ]
     )
     expect_generated_id_and_created_at(:work_cycles)
@@ -227,7 +227,7 @@ RSpec.describe 'database schema' do
     %i[role action].each do |name|
       expect(column(:work_cycles, name)).to include(allow_null: false)
     end
-    %i[completed_at review_id task_id provider model reasoning_level].each do |name|
+    %i[completed_at review_id task_id step_number provider model reasoning_level].each do |name|
       expect(column(:work_cycles, name)).to include(allow_null: true)
     end
   end
@@ -236,7 +236,9 @@ RSpec.describe 'database schema' do
     review_id = db[:reviews].insert(review_attributes)
     task_id = db[:tasks].insert(task_attributes)
     review_work_cycle_id = db[:work_cycles].insert(work_cycle_attributes(review_id: review_id))
-    task_work_cycle_id = db[:work_cycles].insert(work_cycle_attributes(task_id: task_id))
+    task_work_cycle_id = db[:work_cycles].insert(
+      work_cycle_attributes(task_id: task_id, step_number: 1)
+    )
 
     expect(review_work_cycle_id).to be_a(Integer)
     expect(task_work_cycle_id).to be_a(Integer)
@@ -256,8 +258,34 @@ RSpec.describe 'database schema' do
       db[:work_cycles].insert(work_cycle_attributes(review_id: review_id + 1))
     end.to raise_error(Sequel::ForeignKeyConstraintViolation)
     expect do
-      db[:work_cycles].insert(work_cycle_attributes(task_id: task_id + 1))
+      db[:work_cycles].insert(work_cycle_attributes(task_id: task_id + 1, step_number: 1))
     end.to raise_error(Sequel::ForeignKeyConstraintViolation)
+  end
+
+  it 'allows step numbers only for Task-owned Worker implementation Work Cycles' do
+    review_id = db[:reviews].insert(review_attributes)
+    task_id = db[:tasks].insert(task_attributes)
+
+    expect do
+      db[:work_cycles].insert(work_cycle_attributes(task_id: task_id, step_number: 1))
+    end.not_to raise_error
+    expect do
+      db[:work_cycles].insert(work_cycle_attributes(task_id: task_id))
+    end.to raise_error(Sequel::CheckConstraintViolation)
+    expect do
+      db[:work_cycles].insert(work_cycle_attributes(task_id: task_id, step_number: 0))
+    end.to raise_error(Sequel::CheckConstraintViolation)
+    expect do
+      db[:work_cycles].insert(work_cycle_attributes(review_id: review_id, step_number: 1))
+    end.to raise_error(Sequel::CheckConstraintViolation)
+    expect do
+      db[:work_cycles].insert(
+        work_cycle_attributes(task_id: task_id, step_number: 1, action: 'review')
+      )
+    end.to raise_error(Sequel::CheckConstraintViolation)
+    expect do
+      db[:work_cycles].insert(work_cycle_attributes(task_id: task_id, action: 'review'))
+    end.not_to raise_error
   end
 
   it 'creates Work Cycle input and reported-issue relationships with foreign keys and unique pairs' do
@@ -267,7 +295,9 @@ RSpec.describe 'database schema' do
     end
 
     task_id = db[:tasks].insert(task_attributes)
-    work_cycle_id = db[:work_cycles].insert(work_cycle_attributes(task_id: task_id))
+    work_cycle_id = db[:work_cycles].insert(
+      work_cycle_attributes(task_id: task_id, step_number: 1)
+    )
     input_issue_id = db[:reported_issues].insert(issue_attributes)
     reported_issue_id = db[:reported_issues].insert(
       issue_attributes(source: 'reviewer', source_id: nil, body: 'Reviewer issue.')
@@ -391,6 +421,7 @@ RSpec.describe 'database schema' do
       completed_at: nil,
       review_id: nil,
       task_id: nil,
+      step_number: nil,
       role: 'worker',
       action: 'implementation',
       provider: nil,

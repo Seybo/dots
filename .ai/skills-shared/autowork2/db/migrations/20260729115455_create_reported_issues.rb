@@ -108,6 +108,7 @@ Sequel.migration do
       DateTime :completed_at
       foreign_key :review_id, :reviews
       foreign_key :task_id, :tasks
+      Integer :step_number
       String :role, null: false
       String :action, null: false
       String :provider, text: true
@@ -119,6 +120,15 @@ Sequel.migration do
         Sequel.|(
           Sequel.&(Sequel.~(review_id: nil), { task_id: nil }),
           Sequel.&({ review_id: nil }, Sequel.~(task_id: nil))
+        )
+      )
+      constraint(
+        :work_cycles_step_number_matches_task_implementation,
+        Sequel.lit(
+          "(task_id IS NOT NULL AND role = 'worker' AND action = 'implementation' " \
+          'AND step_number IS NOT NULL AND step_number > 0) OR ' \
+          "(NOT (task_id IS NOT NULL AND role = 'worker' AND action = 'implementation') " \
+          'AND step_number IS NULL)'
         )
       )
       constraint(:work_cycles_role_allowed, role: %w[manager worker reviewer])

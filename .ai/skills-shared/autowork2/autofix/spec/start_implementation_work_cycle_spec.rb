@@ -35,6 +35,7 @@ RSpec.describe StartImplementationWorkCycle do
       review_id: review_id,
       role: 'worker',
       action: 'implementation',
+      step_number: nil,
       completed_at: nil
     )
     expect(db[:work_cycle_inputs].where(work_cycle_id: work_cycle_id).select_map(:reported_issue_id)).

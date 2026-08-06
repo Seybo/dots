@@ -24,6 +24,9 @@ RSpec.describe 'AutoimplementCli' do
     allow(MigrateDatabase).to receive(:call)
     allow(InitializeTask).to receive(:call).and_return(task)
     allow(RenderTask).to receive(:call).and_return('Task: 7')
+    allow(ResumeTask).to receive(:call).and_return('AutoImplementCycle 12')
+    allow(ShowTaskWorkCycle).to receive(:call).and_return('{"work_cycle_id":12}')
+    allow(WaitTaskWorkCycle).to receive(:call).and_return('Worker implementation completed.')
   end
 
   it 'initializes or resumes the selected Task and renders it' do
@@ -36,15 +39,50 @@ RSpec.describe 'AutoimplementCli' do
     expect(RenderTask).to have_received(:call).with(task: task)
   end
 
+  it 'resumes one persisted Task' do
+    expect do
+      service_class.call(cli_args: %w[resume-task 7])
+    end.to output("AutoImplementCycle 12\n").to_stdout
+
+    expect(MigrateDatabase).to have_received(:call)
+    expect(ResumeTask).to have_received(:call).with(task_id: '7')
+  end
+
+  it 'shows one Work Cycle without running migrations' do
+    expect do
+      service_class.call(cli_args: %w[show-work-cycle 12])
+    end.to output("{\"work_cycle_id\":12}\n").to_stdout
+
+    expect(MigrateDatabase).not_to have_received(:call)
+    expect(ShowTaskWorkCycle).to have_received(:call).with(work_cycle_id: '12')
+  end
+
+  it 'waits for one Work Cycle result' do
+    expect do
+      service_class.call(cli_args: %w[wait-work-cycle 12])
+    end.to output("Worker implementation completed.\n").to_stdout
+
+    expect(MigrateDatabase).to have_received(:call)
+    expect(WaitTaskWorkCycle).to have_received(:call).with(work_cycle_id: '12')
+  end
+
   it 'rejects unsupported or malformed commands' do
     [
       [],
       ['initialize-task'],
       ['initialize-task', task_path, 'extra'],
-      ['resume-task', task_path],
+      ['resume-task'],
+      %w[resume-task 7 extra],
+      ['show-work-cycle'],
+      ['wait-work-cycle'],
+      %w[other 12],
     ].each do |cli_args|
       expect { service_class.call(cli_args: cli_args) }.
-        to raise_error(ArgumentError, 'Usage: autoimplement initialize-task <canonical-task-path>')
+        to raise_error(
+          ArgumentError,
+          'Usage: autoimplement [initialize-task <canonical-task-path> | resume-task <task-id> | ' \
+          'show-work-cycle <id> | wait-work-cycle <id>]'
+        )
     end
   end
 end

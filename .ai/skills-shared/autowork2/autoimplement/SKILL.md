@@ -1,8 +1,8 @@
 ---
 name: autoimplement
 description: >-
-  Create or resume one database-backed Autoimplement Task from existing authored
-  task.md and steps.md inputs. Command-only skill.
+  Create or resume one database-backed Autoimplement Task and run one Worker
+  implementation Work Cycle for its next authored step. Command-only skill.
 disable-model-invocation: true
 ---
 
@@ -101,12 +101,57 @@ cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement initialize-task
 Pass only the canonical Task path. Do not pass a project key, expected checkout,
 branch, Task contents, hashes, step details, prompts, or runtime controls.
 
-Return the helper output unchanged. A first invocation creates one initialized
-Task only when Git is clean. Reinvoking the same path resumes it and may report
-status from a dirty tree. Surface missing files, active-Task conflicts, checkout
-mismatches, branch mismatches, detached checkout errors, database errors, and
-Git errors unchanged and stop.
+Retain the helper output and require its exact `Task: <id>` line. A first
+invocation creates one initialized Task only when Git is clean. Reinvoking the
+same path resumes it and may report status from a dirty tree. Surface missing
+files, active-Task conflicts, checkout mismatches, branch mismatches, detached
+checkout errors, database errors, and Git errors unchanged and stop.
+
+Run:
+
+```text
+cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement resume-task <id>
+```
+
+Do not add arguments derived from the skill. Follow **Work Cycle handoff** when
+stdout is `AutoImplementCycle <id>` or `WaitWorkCycle <id>`. Return
+`No unimplemented Task step.` unchanged.
+
+## Work Cycle handoff
+
+When stdout is exactly `AutoImplementCycle <id>`:
+
+1. Require the dynamic `$TMUX_PANE` value for Manager's pane. Resolve its window
+   with `tmux display-message -p -t "$TMUX_PANE" '#{window_id}'`, then run
+   `tmux list-panes -t <resolved-window-id> -F '#{pane_id}\t#{pane_title}'`.
+2. Select the only pane titled `agent-worker` in that window. Fail unless there
+   is exactly one. Never search another window or session, hardcode a pane ID,
+   use `tmux list-panes -a`, or add pane-root checks.
+3. Send only the literal participant message:
+
+   ```text
+   tmux send-keys -t <pane-id> -l 'AutoImplementCycle <id>'
+   tmux send-keys -t <pane-id> Enter
+   ```
+
+4. Immediately run the following command without a tool timeout and perform no
+   other Autoimplement work while it blocks:
+
+   ```text
+   /Volumes/dev/bin/skills/autoimplement wait-work-cycle <id>
+   ```
+
+5. Return the retained Task output followed by the wait-command output. Do not
+   display the `AutoImplementCycle` control line.
+
+When stdout is exactly `WaitWorkCycle <id>`, do not send another tmux message.
+Run the same blocking `wait-work-cycle` command without a tool timeout and
+return its output with the retained Task output.
+
+Surface participant, result, commit, database, Git, and tmux failures unchanged
+and stop. Do not retry or redispatch. This checkpoint stops after one completed
+Worker implementation Work Cycle; it does not start review or another step.
 
 SQLite is authoritative for generated workflow state. Do not create Task logs,
-reports, result files, or other durable artifacts. Do not start a Work Cycle in
-this checkpoint. Autoimplement never pushes.
+reports, or other durable artifacts. Structured result files are temporary
+transport owned by the Work Cycle protocol. Autoimplement never pushes.
