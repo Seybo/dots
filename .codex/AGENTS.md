@@ -1,0 +1,1 @@
+../.ai/rules/response-style.md
