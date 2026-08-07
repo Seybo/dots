@@ -17,6 +17,7 @@ class AutoimplementCli
     case cli_args.first
     when 'initialize-task' then initialize_task
     when 'resume-task' then ResumeTask.call(task_id: cli_args.fetch(1))
+    when 'retry-task' then RetryTaskWorkCycle.call(task_id: cli_args.fetch(1))
     when 'store-decision' then store_decision
     when 'show-work-cycle' then ShowTaskWorkCycle.call(work_cycle_id: cli_args.fetch(1))
     when 'wait-work-cycle' then WaitTaskWorkCycle.call(work_cycle_id: cli_args.fetch(1))
@@ -40,6 +41,7 @@ class AutoimplementCli
 
   def usage
     'Usage: autoimplement [initialize-task <canonical-task-path> | resume-task <task-id> | ' \
-      'store-decision <issue-id> <decision> | show-work-cycle <id> | wait-work-cycle <id>]'
+      'retry-task <task-id> | store-decision <issue-id> <decision> | show-work-cycle <id> | ' \
+      'wait-work-cycle <id>]'
   end
 end

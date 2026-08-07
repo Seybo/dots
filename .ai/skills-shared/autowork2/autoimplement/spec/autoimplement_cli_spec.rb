@@ -25,6 +25,7 @@ RSpec.describe 'AutoimplementCli' do
     allow(InitializeTask).to receive(:call).and_return(task)
     allow(RenderTask).to receive(:call).and_return('Task: 7')
     allow(ResumeTask).to receive(:call).and_return('AutoImplementCycle 12')
+    allow(RetryTaskWorkCycle).to receive(:call).and_return('AutoImplementCycle 12')
     allow(ShowTaskWorkCycle).to receive(:call).and_return('{"work_cycle_id":12}')
     allow(WaitTaskWorkCycle).to receive(:call).and_return('Worker implementation completed.')
     allow(HandleTaskDecision).to receive(:call).and_return('Decision: approved')
@@ -47,6 +48,15 @@ RSpec.describe 'AutoimplementCli' do
 
     expect(MigrateDatabase).to have_received(:call)
     expect(ResumeTask).to have_received(:call).with(task_id: '7')
+  end
+
+  it 'retries one persisted Task Work Cycle' do
+    expect do
+      service_class.call(cli_args: %w[retry-task 7])
+    end.to output("AutoImplementCycle 12\n").to_stdout
+
+    expect(MigrateDatabase).to have_received(:call)
+    expect(RetryTaskWorkCycle).to have_received(:call).with(task_id: '7')
   end
 
   it 'stores one Task Reported Issue decision' do
@@ -83,6 +93,8 @@ RSpec.describe 'AutoimplementCli' do
       ['initialize-task', task_path, 'extra'],
       ['resume-task'],
       %w[resume-task 7 extra],
+      ['retry-task'],
+      %w[retry-task 7 extra],
       ['show-work-cycle'],
       ['wait-work-cycle'],
       ['store-decision'],
@@ -94,7 +106,8 @@ RSpec.describe 'AutoimplementCli' do
         to raise_error(
           ArgumentError,
           'Usage: autoimplement [initialize-task <canonical-task-path> | resume-task <task-id> | ' \
-          'store-decision <issue-id> <decision> | show-work-cycle <id> | wait-work-cycle <id>]'
+          'retry-task <task-id> | store-decision <issue-id> <decision> | show-work-cycle <id> | ' \
+          'wait-work-cycle <id>]'
         )
     end
   end

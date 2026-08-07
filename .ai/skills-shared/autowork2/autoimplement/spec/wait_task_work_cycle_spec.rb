@@ -127,6 +127,24 @@ RSpec.describe WaitTaskWorkCycle do
     )
   end
 
+  it 'reports a Reviewer result missing its required issue list as a participant-result failure' do
+    insert_implementation(step_number: 1, completed_at: Time.now)
+    reviewer_work_cycle_id = insert_review
+    write_result(
+      reviewer_work_cycle_id,
+      completed_result(reviewer_work_cycle_id).merge('role' => 'reviewer', 'action' => 'review')
+    )
+
+    expect { described_class.call(work_cycle_id: reviewer_work_cycle_id) }.
+      to raise_error(
+        RuntimeError,
+        /Task #{task_id} Work Cycle #{reviewer_work_cycle_id} participant result failed at .*--retry/
+      )
+
+    expect(db[:work_cycles].where(id: reviewer_work_cycle_id).get(:completed_at)).to be_nil
+    expect(File.exist?(result_path(reviewer_work_cycle_id))).to be(true)
+  end
+
   it 'stores Reviewer issues without committing and displays the first issue' do
     insert_implementation(step_number: 1, completed_at: Time.now)
     reviewer_work_cycle_id = insert_review
@@ -214,7 +232,10 @@ RSpec.describe WaitTaskWorkCycle do
     )
 
     expect { described_class.call(work_cycle_id: work_cycle_id) }.
-      to raise_error(RuntimeError, "Work Cycle #{work_cycle_id} failed: Could not implement.")
+      to raise_error(
+        RuntimeError,
+        /Task #{task_id} Work Cycle #{work_cycle_id} participant result failed at .*#{work_cycle_id}\.json.*--retry/
+      )
 
     expect(CommitWorkCycle).not_to have_received(:call)
     expect(db[:work_cycles].where(id: work_cycle_id).get(:completed_at)).to be_nil
@@ -227,7 +248,11 @@ RSpec.describe WaitTaskWorkCycle do
     created_result_paths << path
     File.write(path, '{')
 
-    expect { described_class.call(work_cycle_id: work_cycle_id) }.to raise_error(JSON::ParserError)
+    expect { described_class.call(work_cycle_id: work_cycle_id) }.
+      to raise_error(
+        RuntimeError,
+        /Task #{task_id} Work Cycle #{work_cycle_id} participant result failed at .*#{work_cycle_id}\.json.*--retry/
+      )
     expect(File.exist?(result_path(work_cycle_id))).to be(true)
 
     write_result(
@@ -235,7 +260,10 @@ RSpec.describe WaitTaskWorkCycle do
       implementation_result(work_cycle_id).merge('work_cycle_id' => work_cycle_id + 1)
     )
     expect { described_class.call(work_cycle_id: work_cycle_id) }.
-      to raise_error(RuntimeError, /does not match Work Cycle #{work_cycle_id}/)
+      to raise_error(
+        RuntimeError,
+        /Task #{task_id} Work Cycle #{work_cycle_id} participant result failed at .*#{work_cycle_id}\.json.*--retry/
+      )
     expect(db[:work_cycles].where(id: work_cycle_id).get(:completed_at)).to be_nil
     expect(File.exist?(result_path(work_cycle_id))).to be(true)
   end
@@ -246,7 +274,10 @@ RSpec.describe WaitTaskWorkCycle do
     allow(CommitWorkCycle).to receive(:call).and_raise('git commit failed')
 
     expect { described_class.call(work_cycle_id: work_cycle_id) }.
-      to raise_error(RuntimeError, 'git commit failed')
+      to raise_error(
+        RuntimeError,
+        /Task #{task_id} Work Cycle #{work_cycle_id} Git commit failed.*normal resume.*ad-hoc Manager handling/
+      )
 
     expect(db[:work_cycles].where(id: work_cycle_id).get(:completed_at)).to be_nil
     expect(File.exist?(result_path(work_cycle_id))).to be(true)
@@ -258,10 +289,29 @@ RSpec.describe WaitTaskWorkCycle do
     allow(StoreTaskWorkCycleCompletion).to receive(:call).and_raise('database failed')
 
     expect { described_class.call(work_cycle_id: work_cycle_id) }.
-      to raise_error(RuntimeError, 'database failed')
+      to raise_error(
+        RuntimeError,
+        /Task #{task_id} Work Cycle #{work_cycle_id} database completion failed.*ad-hoc Manager handling.*not retry/
+      )
 
     expect(CommitWorkCycle).to have_received(:call)
     expect(db[:work_cycles].where(id: work_cycle_id).get(:completed_at)).to be_nil
+    expect(File.exist?(result_path(work_cycle_id))).to be(true)
+  end
+
+  it 'reports transport cleanup failure after durable completion without retrying' do
+    work_cycle_id = insert_implementation(step_number: 1)
+    write_result(work_cycle_id, implementation_result(work_cycle_id))
+    allow(File).to receive(:delete).with(result_path(work_cycle_id)).and_raise(Errno::EACCES)
+
+    error_pattern = Regexp.new(
+      "Task #{task_id} Work Cycle #{work_cycle_id} transport cleanup failed at .*" \
+      "#{work_cycle_id}\\.json.*ad-hoc Manager handling.*not retry"
+    )
+    expect { described_class.call(work_cycle_id: work_cycle_id) }.
+      to raise_error(RuntimeError, error_pattern)
+
+    expect(db[:work_cycles].where(id: work_cycle_id).get(:completed_at)).to be_a(Time)
     expect(File.exist?(result_path(work_cycle_id))).to be(true)
   end
 
@@ -272,7 +322,10 @@ RSpec.describe WaitTaskWorkCycle do
     allow(ValidateCleanGitState).to receive(:call).and_raise('Working tree is not clean')
 
     expect { described_class.call(work_cycle_id: reviewer_work_cycle_id) }.
-      to raise_error(RuntimeError, 'Working tree is not clean')
+      to raise_error(
+        RuntimeError,
+        /Task #{task_id} Work Cycle #{reviewer_work_cycle_id} Git review validation failed.*normal resume/
+      )
 
     expect(CommitWorkCycle).not_to have_received(:call)
     expect(db[:work_cycles].where(id: reviewer_work_cycle_id).get(:completed_at)).to be_nil
@@ -285,7 +338,10 @@ RSpec.describe WaitTaskWorkCycle do
     write_result(reviewer_work_cycle_id, review_result(reviewer_work_cycle_id, ['Stored issue.', nil]))
 
     expect { described_class.call(work_cycle_id: reviewer_work_cycle_id) }.
-      to raise_error(Sequel::NotNullConstraintViolation)
+      to raise_error(
+        RuntimeError,
+        /Task #{task_id} Work Cycle #{reviewer_work_cycle_id} database completion failed.*ad-hoc Manager handling/
+      )
 
     expect(db[:work_cycles].where(id: reviewer_work_cycle_id).get(:completed_at)).to be_nil
     expect(db[:reported_issues].count).to eq(0)

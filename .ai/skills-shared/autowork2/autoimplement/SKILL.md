@@ -20,9 +20,16 @@ Supported invocations:
 /skill:autoimplement
 /skill:autoimplement <task_id>
 /skill:autoimplement <project-or-session> [task_id]
+/skill:autoimplement --retry
+/skill:autoimplement <task_id> --retry
+/skill:autoimplement <project-or-session> [task_id] --retry
 ```
 
-Reject `--base`, retry, pause, limits, and every other option or extra argument.
+Accept exactly one `--retry` flag in any position alongside an otherwise valid
+invocation. Reject duplicate `--retry` flags, remove it before applying the
+existing argument parser, and treat its presence as confirmation that the
+previous participant has stopped. Reject `--base` and every other option or
+extra argument. Do not add status, doctor, pause, limit, lock, or timeout options.
 Do not expose a root `/autowork2` command.
 
 ## Operator attention notifications
@@ -48,7 +55,9 @@ registered project configuration in
 workspace, Task-folder, and protected-branch resolution. Do not invoke or port
 legacy Autowork's Ruby `ProjectRegistry` or `TaskResolver`.
 
-Parse arguments as follows:
+Before parsing Task selectors, detect `--retry` as described above and remove it
+before applying the existing argument parser. Then parse the remaining arguments
+as follows:
 
 1. With no arguments, infer the registered project and workspace from the
    current checkout. Infer a Task ID only from an `sc-<digits>` branch segment.
@@ -122,18 +131,35 @@ same path resumes it and may report status from a dirty tree. Surface missing
 files, active-Task conflicts, checkout mismatches, branch mismatches, detached
 checkout errors, database errors, and Git errors unchanged and stop.
 
-Run:
+For a normal invocation, run:
 
 ```text
 cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement resume-task <id>
 ```
 
-Do not add arguments derived from the skill. Follow **Work Cycle handoff** when
-stdout contains `AutoImplementCycle <id>` or `WaitWorkCycle <id>`. Follow
-**Issue assessment** when stdout contains an `Issue: <id>` block. Retain
-`Step N accepted.` progress before another control line. Continue automatically
-through every authored step until operator input, `No unimplemented Task step.`,
-or a failure stops the invocation.
+For an invocation containing `--retry`, do not run `resume-task` on the retry
+path. Run exactly:
+
+```text
+cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement retry-task <id>
+```
+
+The retry helper must authorize redispatch before any participant message, then
+follow **Work Cycle handoff** for its returned `AutoImplementCycle <id>`. If it reports a
+dirty tree, no or multiple incomplete Work Cycles, a valid completed result, or a
+transport cleanup failure, put `[MM_NTF]` first, surface the complete helper error,
+and stop without contacting a participant. If tmux delivery fails after helper
+authorization, likewise notify and stop; the Work Cycle remains incomplete and
+requires another explicit `--retry` after the operator reconfirms the participant
+is stopped.
+
+Do not add arguments derived from the skill. On the normal path, follow **Work
+Cycle handoff** when stdout contains `AutoImplementCycle <id>` or
+`WaitWorkCycle <id>`. Follow **Issue assessment** when stdout contains an
+`Issue: <id>` block. Retain `Step N accepted.` progress before another control
+line. Continue automatically through every authored step until operator input,
+`No unimplemented Task step.`, or a failure stops the invocation. Never retry or
+redispatch automatically.
 
 ## Work Cycle handoff
 
@@ -173,7 +199,8 @@ Whenever helper stdout contains an exact `AutoImplementCycle <id>` line:
    invocation. Do not pause between authored steps.
 9. Otherwise follow **Issue assessment** when stdout contains an `Issue: <id>`
    block. Return retained output through `No unimplemented Task step.` after the
-   final accepted step. Stop on any failure. Do not retry or redispatch.
+   final accepted step. Stop on any failure. Never retry or redispatch
+   automatically.
 
 When helper stdout contains an exact `WaitWorkCycle <id>` line, do not send
 another participant message. Run the same blocking `wait-work-cycle` command

@@ -53,7 +53,19 @@ For role `reviewer` and action `review`:
 
 ## Report
 
-Write valid JSON to `/tmp/autoimplement-work-cycle-<id>.json` only after the action finishes.
+After the action finishes, write the complete valid JSON payload to this temporary path:
+
+```text
+/tmp/autoimplement-work-cycle-<id>.json.tmp
+```
+
+Do not create the final result path until the temporary file is complete. Then publish the result with this same-directory atomic rename:
+
+```text
+mv /tmp/autoimplement-work-cycle-<id>.json.tmp /tmp/autoimplement-work-cycle-<id>.json
+```
+
+The temporary and final result paths are the only files the participant may intentionally author outside the returned project path. Focused tools may manage their own ignored caches or temporary files; do not treat those as workflow state. Manager waits only for the final `.json` path.
 
 Every completed result contains these common fields:
 
@@ -79,6 +91,6 @@ A completed Reviewer result also contains:
 }
 ```
 
-If the action cannot complete, write the common fields with status `failed` and add a concise sanitized `error`. Do not include credentials or raw provider data.
+If the action cannot complete, use the same temporary-file and atomic-rename publication steps for the common fields with status `failed` and a concise sanitized `error`. Do not include credentials or raw provider data.
 
-After writing the result, stop. Manager owns result import, Autoimplement database writes, staging, commits, issue decisions, and progression.
+After atomically publishing the result, stop. Manager owns result import, Autoimplement database writes, staging, commits, issue decisions, and progression.
