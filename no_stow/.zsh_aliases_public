@@ -101,10 +101,21 @@ alias vim='nvim'
 ### AI agents ###
 _agent_attention_notify_for_current_tmux_pane() {
   local watcher="$STOW_DIR/no_stow/bin/tmux/agent-attention-notify"
+  local watcher_pattern
+  local wait_count=0
 
   if [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && [ -x "$watcher" ]; then
-    pkill -f "agent-attention-notify --pane $TMUX_PANE" >/dev/null 2>&1 || true
-    "$watcher" --pane "$TMUX_PANE" >/dev/null 2>&1 &!
+    watcher_pattern="agent-attention-notify --pane $TMUX_PANE"
+    pkill -f "$watcher_pattern" >/dev/null 2>&1 || true
+
+    while pgrep -f "$watcher_pattern" >/dev/null 2>&1 && [ "$wait_count" -lt 40 ]; do
+      sleep 0.05
+      wait_count=$((wait_count + 1))
+    done
+
+    if ! pgrep -f "$watcher_pattern" >/dev/null 2>&1; then
+      "$watcher" --pane "$TMUX_PANE" >/dev/null 2>&1 &!
+    fi
   fi
 }
 

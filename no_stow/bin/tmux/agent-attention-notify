@@ -8,7 +8,6 @@ require 'shellwords'
 require 'tmpdir'
 
 PATTERNS = [
-  /MM_NTF/,
   /Would you like to run the following command\?/,
   /Would you like to make the following edits\?/,
   /Dangerous Command/,
@@ -44,8 +43,8 @@ def ghostty_frontmost?
   frontmost_application_name == 'ghostty'
 end
 
-def notify(pane_id, pane_label)
-  if ghostty_frontmost?
+def notify(pane_id, pane_label, is_force: false)
+  if !is_force && ghostty_frontmost?
     log_event("skip notification pane=#{pane_id || '-'} label=#{pane_label} reason=ghostty_frontmost")
     return
   end
@@ -238,6 +237,21 @@ ensure
   log_event("watcher stop pane=#{pane_id}") if pane_id
   clear_tmux_attention_marker(pane_id) if pane_id
   FileUtils.rm_rf(lock_dir) if lock_dir && File.exist?(pid_path) && File.read(pid_path).to_i == Process.pid rescue nil
+end
+
+if ARGV[0] == '--manager-set'
+  pane_id = ARGV[1] || ENV['TMUX_PANE']
+  unless pane_id.nil? || pane_id.empty?
+    set_tmux_attention_marker(pane_id)
+    notify(pane_id, pane_label(pane_id), is_force: true)
+  end
+  exit 0
+end
+
+if ARGV[0] == '--manager-clear'
+  pane_id = ARGV[1] || ENV['TMUX_PANE']
+  clear_tmux_attention_marker(pane_id) unless pane_id.nil? || pane_id.empty?
+  exit 0
 end
 
 if ARGV[0] == '--agent-count'
