@@ -5,6 +5,7 @@ require_relative 'spec_helper'
 
 RSpec.describe 'database schema' do
   let(:db) { Database.connection }
+  let(:initial_schema_version) { 20_260_729_115_455 }
 
   it 'uses the shared runtime database path' do
     expect(Database.default_path).to eq(Database.root.join('db', 'autowork.db'))
@@ -184,14 +185,25 @@ RSpec.describe 'database schema' do
       to raise_error(Sequel::NotNullConstraintViolation)
   end
 
-  it 'keeps Task paths unique and allows only initialized state' do
+  it 'keeps Task paths unique and allows only known runtime states' do
     db[:tasks].insert(task_attributes)
 
     expect do
       db[:tasks].insert(task_attributes(project_path: '/other-project'))
     end.to raise_error(Sequel::UniqueConstraintViolation)
     expect do
-      db[:tasks].insert(task_attributes(task_path: '/tasks/2', state: 'running'))
+      db[:tasks].insert(
+        task_attributes(
+          task_path: '/tasks/2',
+          project_path: '/final-checks-project',
+          state: 'final_checks_passed'
+        )
+      )
+    end.not_to raise_error
+    expect do
+      db[:tasks].insert(
+        task_attributes(task_path: '/tasks/3', project_path: '/running-project', state: 'running')
+      )
     end.to raise_error(Sequel::CheckConstraintViolation)
 
     expect(db.indexes(:tasks).fetch(:tasks_task_path_index)).to include(
@@ -200,7 +212,7 @@ RSpec.describe 'database schema' do
     )
   end
 
-  it 'allows only one initialized Task per project' do
+  it 'allows only one active Task per project' do
     db[:tasks].insert(task_attributes)
 
     expect do
@@ -328,6 +340,82 @@ RSpec.describe 'database schema' do
         select_map(:reported_issue_id)
     ).to eq([reported_issue_id])
     expect(db.table_exists?(:task_issues)).to be(false)
+  end
+
+  it 'keeps the Task-state migration compatible with an Autofix database without Tasks' do
+    Dir.mktmpdir('autofix-legacy-schema-spec') do |dir|
+      legacy_db = Sequel.sqlite(File.join(dir, 'legacy.db'))
+
+      begin
+        legacy_db.create_table(:schema_migrations) do
+          String :filename, primary_key: true
+        end
+        legacy_db[:schema_migrations].insert(filename: '20260729115455_create_reported_issues.rb')
+
+        expect { Sequel::Migrator.run(legacy_db, migrations_path) }.not_to raise_error
+        expect(legacy_db.table_exists?(:tasks)).to be(false)
+        expect(legacy_db[:schema_migrations].count).to eq(2)
+
+        expect do
+          Sequel::Migrator.run(legacy_db, migrations_path, target: initial_schema_version)
+        end.not_to raise_error
+        expect(legacy_db[:schema_migrations].count).to eq(1)
+      ensure
+        legacy_db.disconnect
+      end
+    end
+  end
+
+  it 'preserves existing Task rows, relationships, and indexes across the state migration' do
+    Dir.mktmpdir('task-state-migration-spec') do |dir|
+      migration_db = Sequel.sqlite(File.join(dir, 'migration.db'))
+
+      begin
+        Database.configure_connection(migration_db)
+        Sequel::Migrator.run(migration_db, migrations_path, target: initial_schema_version)
+        task_id = migration_db[:tasks].insert(task_attributes)
+        work_cycle_id = migration_db[:work_cycles].insert(
+          work_cycle_attributes(task_id: task_id, step_number: 1)
+        )
+
+        Sequel::Migrator.run(migration_db, migrations_path)
+
+        expect(migration_db[:tasks].where(id: task_id).first).to include(task_attributes)
+        expect(migration_db[:work_cycles].where(id: work_cycle_id).get(:task_id)).to eq(task_id)
+        expect(migration_db.indexes(:tasks)).to include(
+          tasks_task_path_index: include(unique: true, columns: [:task_path]),
+          tasks_one_active_per_project_index: include(unique: true, columns: [:project_path])
+        )
+        final_task_id = migration_db[:tasks].insert(
+          task_attributes(
+            task_path: '/tasks/2',
+            project_path: '/final-checks-project',
+            state: 'final_checks_passed'
+          )
+        )
+        expect do
+          migration_db[:work_cycles].insert(
+            work_cycle_attributes(task_id: final_task_id + 1, step_number: 1)
+          )
+        end.to raise_error(Sequel::ForeignKeyConstraintViolation)
+
+        migration_db[:tasks].where(id: final_task_id).delete
+        Sequel::Migrator.run(migration_db, migrations_path, target: initial_schema_version)
+
+        expect(migration_db[:tasks].where(id: task_id).first).to include(task_attributes)
+        expect do
+          migration_db[:tasks].insert(
+            task_attributes(
+              task_path: '/tasks/3',
+              project_path: '/rolled-back-project',
+              state: 'final_checks_passed'
+            )
+          )
+        end.to raise_error(Sequel::CheckConstraintViolation)
+      ensure
+        migration_db.disconnect
+      end
+    end
   end
 
   it 'rolls back the schema' do

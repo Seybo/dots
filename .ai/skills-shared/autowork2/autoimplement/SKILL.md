@@ -1,8 +1,8 @@
 ---
 name: autoimplement
 description: >-
-  Create or resume one database-backed Autoimplement Task and implement, review,
-  settle, and correct every authored Task step. Command-only skill.
+  Create or resume one database-backed Autoimplement Task; implement, review,
+  settle, and correct every authored Task step; and run final checks. Command-only skill.
 disable-model-invocation: true
 ---
 
@@ -158,8 +158,8 @@ Cycle handoff** when stdout contains `AutoImplementCycle <id>` or
 `WaitWorkCycle <id>`. Follow **Issue assessment** when stdout contains an
 `Issue: <id>` block. Retain `Step N accepted.` progress before another control
 line. Continue automatically through every authored step until operator input,
-`No unimplemented Task step.`, or a failure stops the invocation. Never retry or
-redispatch automatically.
+`Task <id> final checks passed.`, or a failure stops the invocation. Never retry
+or redispatch automatically.
 
 ## Work Cycle handoff
 
@@ -198,18 +198,33 @@ Whenever helper stdout contains an exact `AutoImplementCycle <id>` line:
    completed and accepted-step output, then repeat this handoff in the same
    invocation. Do not pause between authored steps.
 9. Otherwise follow **Issue assessment** when stdout contains an `Issue: <id>`
-   block. Return retained output through `No unimplemented Task step.` after the
-   final accepted step. Stop on any failure. Never retry or redispatch
-   automatically.
+   block. Follow **Final checks** when stdout contains `Final checks:`. Return
+   retained output through `Task <id> final checks passed.` after the final
+   accepted step. Stop on any failure. Never retry or redispatch automatically.
 
 When helper stdout contains an exact `WaitWorkCycle <id>` line, do not send
 another participant message. Run the same blocking `wait-work-cycle` command
 without a tool timeout. Process its output through the same repeated-handoff,
-issue-assessment, final no-step, or failure rules above.
+issue-assessment, final-check, or failure rules above.
 
 Separate retained completed Work Cycle blocks with one blank line. Surface
 participant, result, commit, database, Git, and tmux failures unchanged after
 the required Manager notification prefix. Never expose machine-control lines.
+
+## Final checks
+
+Whenever helper stdout contains `Final checks:`, retain and display its complete
+output. When it ends with `Task <id> final checks passed.`, the Task has entered
+the durable `final_checks_passed` state; return the output and stop successfully
+without contacting a participant.
+
+When any check reports `failed`, return the complete check output and stop. Do
+not create or assess a Reported Issue, contact a participant, start a correction,
+or retry automatically. A later normal Autoimplement invocation runs
+`resume-task` and reruns the complete check set. Explicit `--retry` remains only
+for an incomplete participant Work Cycle and must not rerun Manager-local final
+checks. A skipped no-root-`Gemfile` result is passing and ends with the same
+terminal Task line.
 
 ## Issue assessment
 
@@ -257,9 +272,9 @@ For one clear decision, run exactly one command:
 
 When stdout contains `AutoImplementCycle <id>`, retain any accepted-step output
 and follow **Work Cycle handoff**, continuing through later authored steps.
-Otherwise follow **Issue assessment** for the next issue or return the final
-`No unimplemented Task step.` output. Process only one decision per operator
-reply. Do not refetch Task input, run Worker classification, or start debate.
+Otherwise follow **Issue assessment** for the next issue or **Final checks** for
+final-check output. Process only one decision per operator reply. Do not refetch
+Task input, run Worker classification, or start debate.
 
 SQLite is authoritative for generated workflow state. Do not create Task logs,
 review reports, or other durable generated artifacts. Structured result files

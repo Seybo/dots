@@ -6,6 +6,7 @@ class ResumeTask
   arguments :task_id
 
   def call
+    return "Task #{task.fetch(:id)} final checks passed." if task.fetch(:state) == 'final_checks_passed'
     return "WaitWorkCycle #{incomplete_work_cycle.fetch(:id)}" unless incomplete_work_cycle.nil?
     return start_initial_implementation if latest_completed_work_cycle.nil?
 
@@ -59,7 +60,11 @@ class ResumeTask
   def continue_after_accepted_step
     step_number = latest_implementation_work_cycle.fetch(:step_number)
     work_cycle_id = StartTaskImplementationWorkCycle.call(task_id: task_id)
-    next_action = work_cycle_id.nil? ? 'No unimplemented Task step.' : render_handoff(work_cycle_id)
+    next_action = if work_cycle_id.nil?
+                    RunTaskFinalChecks.call(task_id: task.fetch(:id))
+                  else
+                    render_handoff(work_cycle_id)
+                  end
     "Step #{step_number} accepted.\n#{next_action}"
   end
 
@@ -79,6 +84,10 @@ class ResumeTask
 
   def render_handoff(work_cycle_id)
     "AutoImplementCycle #{work_cycle_id}"
+  end
+
+  def task
+    @task ||= Database.connection[:tasks].where(id: task_id).first
   end
 
   def work_cycles

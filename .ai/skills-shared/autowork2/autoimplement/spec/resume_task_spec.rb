@@ -132,17 +132,43 @@ RSpec.describe 'ResumeTask' do
     expect(next_implementation.fetch(:step_number)).to eq(2)
   end
 
-  it 'returns the existing final result repeatedly without a clean-Git check' do
+  it 'runs final checks after the last authored step is accepted' do
     File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: First\n")
     insert_implementation(completed_at: Time.now)
     insert_review(completed_at: Time.now)
+
+    output = service_class.call(task_id: task_id)
+
+    expect(output).to eq(
+      "Step 1 accepted.\nFinal checks:\nSkipped: no Gemfile.\n" \
+      "Task #{task_id} final checks passed."
+    )
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('final_checks_passed')
+    expect(ValidateCleanGitState).to have_received(:call).with(project_path: '/project')
+    expect(db[:work_cycles].count).to eq(2)
+  end
+
+  it 'reruns the complete final-check gate on normal resume after failure' do
+    File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: First\n")
+    insert_implementation(completed_at: Time.now)
+    insert_review(completed_at: Time.now)
+    allow(RunTaskFinalChecks).to receive(:call).and_return('Final checks failed.', 'Final checks passed.')
+
+    expect(service_class.call(task_id: task_id)).to eq("Step 1 accepted.\nFinal checks failed.")
+    expect(service_class.call(task_id: task_id)).to eq("Step 1 accepted.\nFinal checks passed.")
+    expect(RunTaskFinalChecks).to have_received(:call).with(task_id: task_id).twice
+  end
+
+  it 'returns the durable final-check result without rerunning checks or checking Git' do
+    db[:tasks].where(id: task_id).update(state: 'final_checks_passed')
+    allow(RunTaskFinalChecks).to receive(:call).and_raise('should not run')
     allow(ValidateCleanGitState).to receive(:call).and_raise('should not run')
 
-    expected_output = "Step 1 accepted.\nNo unimplemented Task step."
+    expected_output = "Task #{task_id} final checks passed."
 
     expect(service_class.call(task_id: task_id)).to eq(expected_output)
     expect(service_class.call(task_id: task_id)).to eq(expected_output)
-    expect(db[:work_cycles].count).to eq(2)
+    expect(db[:work_cycles].count).to eq(0)
   end
 
   it 'creates one correction with every approved issue after the pass is settled' do

@@ -209,7 +209,7 @@ RSpec.describe WaitTaskWorkCycle do
     expect(next_implementation.fetch(:step_number)).to eq(2)
   end
 
-  it 'returns the existing final result after the last step is accepted' do
+  it 'runs final checks after the last step is accepted' do
     File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: Build it\n")
     insert_implementation(step_number: 1, completed_at: Time.now)
     reviewer_work_cycle_id = insert_review
@@ -219,8 +219,10 @@ RSpec.describe WaitTaskWorkCycle do
 
     expect(output).to eq(
       "Reviewer review completed (Cycle #{reviewer_work_cycle_id}). Reported issues:\n" \
-      "- None\nStep 1 accepted.\nNo unimplemented Task step."
+      "- None\nStep 1 accepted.\nFinal checks:\nSkipped: no Gemfile.\n" \
+      "Task #{task_id} final checks passed."
     )
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('final_checks_passed')
     expect(db[:work_cycles].count).to eq(2)
   end
 
