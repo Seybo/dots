@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative '../../spec/spec_helper'
+require_relative 'spec_helper'
 
 RSpec.describe StoreDecision do
   let(:reported_issues) { Database.connection[:reported_issues] }

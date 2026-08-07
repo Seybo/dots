@@ -1,8 +1,8 @@
 ---
 name: autoimplement
 description: >-
-  Create or resume one database-backed Autoimplement Task and run one Worker
-  implementation Work Cycle for its next authored step. Command-only skill.
+  Create or resume one database-backed Autoimplement Task and implement, review,
+  settle, and correct one authored Task step. Command-only skill.
 disable-model-invocation: true
 ---
 
@@ -24,6 +24,21 @@ Supported invocations:
 
 Reject `--base`, retry, pause, limits, and every other option or extra argument.
 Do not expose a root `/autowork2` command.
+
+## Operator attention notifications
+
+Begin the complete operator-facing turn with `[MM_NTF]` whenever Autoimplement
+cannot continue without operator input or action. This includes:
+
+- every Fix, Skip, or Unclear Reported Issue assessment
+- clarification questions and genuine decision ambiguity
+- participant, Work Cycle, helper, Git, database, or tmux failures that require
+  operator direction
+
+When retained progress and a blocking request share one turn, put `[MM_NTF]`
+before the retained progress. Do not prefix normal progress, successful step
+acceptance, participant messages, or machine-control lines such as
+`AutoImplementCycle <id>` and `WaitWorkCycle <id>`.
 
 ## Resolve the authored Task
 
@@ -114,44 +129,111 @@ cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement resume-task <id
 ```
 
 Do not add arguments derived from the skill. Follow **Work Cycle handoff** when
-stdout is `AutoImplementCycle <id>` or `WaitWorkCycle <id>`. Return
-`No unimplemented Task step.` unchanged.
+stdout contains `AutoImplementCycle <id>` or `WaitWorkCycle <id>`. Follow
+**Issue assessment** when stdout contains an `Issue: <id>` block. Return
+`Step N accepted.` or `No unimplemented Task step.` unchanged. This checkpoint
+does not start another authored step.
 
 ## Work Cycle handoff
 
-When stdout is exactly `AutoImplementCycle <id>`:
+Whenever helper stdout contains an exact `AutoImplementCycle <id>` line:
 
-1. Require the dynamic `$TMUX_PANE` value for Manager's pane. Resolve its window
+1. Retain any Task, decision, or completed Work Cycle output before the control
+   line. Do not display the control line.
+2. Run `/Volumes/dev/bin/skills/autoimplement show-work-cycle <id>` and treat
+   its JSON as authoritative. Read its persisted `role` and `action`; do not
+   display the JSON.
+3. Require either `worker`/`implementation` or `reviewer`/`review`. Map the role
+   to the fixed pane title:
+   - `worker` → `agent-worker`
+   - `reviewer` → `agent-reviewer`
+4. Require the dynamic `$TMUX_PANE` value for Manager's pane. Resolve its window
    with `tmux display-message -p -t "$TMUX_PANE" '#{window_id}'`, then run
    `tmux list-panes -t <resolved-window-id> -F '#{pane_id}\t#{pane_title}'`.
-2. Select the only pane titled `agent-worker` in that window. Fail unless there
+5. Select the only pane with the mapped title in that window. Fail unless there
    is exactly one. Never search another window or session, hardcode a pane ID,
    use `tmux list-panes -a`, or add pane-root checks.
-3. Send only the literal participant message:
+6. Send only the literal participant message:
 
    ```text
    tmux send-keys -t <pane-id> -l 'AutoImplementCycle <id>'
    tmux send-keys -t <pane-id> Enter
    ```
 
-4. Immediately run the following command without a tool timeout and perform no
+7. Immediately run the following command without a tool timeout and perform no
    other Autoimplement work while it blocks:
 
    ```text
    /Volumes/dev/bin/skills/autoimplement wait-work-cycle <id>
    ```
 
-5. Return the retained Task output followed by the wait-command output. Do not
-   display the `AutoImplementCycle` control line.
+8. If wait stdout contains another `AutoImplementCycle <id>` line, retain its
+   completed output and repeat this handoff in the same invocation.
+9. Otherwise follow **Issue assessment** when stdout contains an `Issue: <id>`
+   block. Return retained output through `Step N accepted.` when the step is
+   accepted. Stop on any failure. Do not retry, redispatch, or start another
+   authored step.
 
-When stdout is exactly `WaitWorkCycle <id>`, do not send another tmux message.
-Run the same blocking `wait-work-cycle` command without a tool timeout and
-return its output with the retained Task output.
+When helper stdout contains an exact `WaitWorkCycle <id>` line, do not send
+another participant message. Run the same blocking `wait-work-cycle` command
+without a tool timeout. Process its output through the same repeated-handoff,
+issue-assessment, accepted-step, or failure rules above.
 
-Surface participant, result, commit, database, Git, and tmux failures unchanged
-and stop. Do not retry or redispatch. This checkpoint stops after one completed
-Worker implementation Work Cycle; it does not start review or another step.
+Separate retained completed Work Cycle blocks with one blank line. Surface
+participant, result, commit, database, Git, and tmux failures unchanged after
+the required Manager notification prefix. Never expose machine-control lines.
+
+## Issue assessment
+
+Whenever helper stdout contains an `Issue: <id>` block, treat the ID and quoted
+stored body as Manager handoff data.
+
+1. Retain the ID and complete stored body.
+2. Read `../app/prompts/assess_issue.md` from the shared package.
+3. Inspect only relevant current project code, the authored Task, and existing
+   conversation context. Do not edit files or run tests, linters, or formatters.
+4. Follow the prompt and present its concise assessment. With retained progress,
+   put `[MM_NTF]` first, then the progress, one blank line, and the assessment
+   beginning at `Issue <id>` without repeating the prefix.
+5. Treat the recommendation as advisory. Do not persist a decision, create a
+   Work Cycle, or contact a participant until the operator clearly decides.
+
+If the operator asks for details, begin with `[MM_NTF]`, answer without recording
+a decision, and request the still-needed decision.
+
+For an `Unclear` recommendation, ask one precise question and persist nothing.
+Treat the next reply as clarification, including `yes` or `go`; reassess the
+same issue and request a separate clear decision. Only an explicit `fix` or
+`skip` in that clarification reply is also a decision.
+
+## Decisions
+
+Use the currently assessed issue ID for the operator's next clear decision:
+
+- `fix`, `approve`, or `approved` → `approved`
+- `skip`, `ignore`, `reject`, or `invalid` → `skipped`
+- `yes` or `go` accepts the current recommendation: Fix becomes `approved` and
+  Skip becomes `skipped`
+- `yes` or `go` for Unclear is clarification only and persists nothing
+- questions, details requests, clarifications, and unrelated messages are not
+  decisions
+
+For genuine ambiguity, begin with `[MM_NTF]`, name the Reported Issue ID, and
+ask one precise question without persisting anything.
+
+For one clear decision, run exactly one command:
+
+```text
+/Volumes/dev/bin/skills/autoimplement store-decision <id> <approved|skipped>
+```
+
+When stdout contains `AutoImplementCycle <id>`, follow **Work Cycle handoff**.
+Otherwise follow **Issue assessment** for the next issue or return
+`Step N accepted.` unchanged. Process only one decision per operator reply. Do
+not refetch Task input, run Worker classification, start debate, or advance to
+another authored step.
 
 SQLite is authoritative for generated workflow state. Do not create Task logs,
-reports, or other durable artifacts. Structured result files are temporary
-transport owned by the Work Cycle protocol. Autoimplement never pushes.
+review reports, or other durable generated artifacts. Structured result files
+are temporary transport owned by the Work Cycle protocol. Manager remains the
+only workflow database writer. Autoimplement never pushes.

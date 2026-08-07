@@ -6,53 +6,28 @@ class StoreWorkCycleCompletion
   arguments :work_cycle_id, :work_cycle_result
 
   def call
-    completed_at = Time.now
     Database.connection.transaction(savepoint: true) do
-      store_completion(completed_at)
-      store_reported_issues(completed_at)
+      issue_ids = StoreWorkCycleResult.call(
+        work_cycle_id: work_cycle_id,
+        project_path: review.fetch(:project_path),
+        work_cycle_result: work_cycle_result
+      )
+      link_review_issues(issue_ids)
       Database.connection[:reviews].where(id: work_cycle.fetch(:review_id)).update(state: next_review_state)
     end
   end
 
   private
 
-  def store_completion(completed_at)
-    Database.connection[:work_cycles].where(id: work_cycle_id).update(
-      completed_at: completed_at,
-      provider: work_cycle_result.fetch('provider'),
-      model: work_cycle_result.fetch('model'),
-      reasoning_level: work_cycle_result.fetch('reasoning_level')
-    )
-  end
-
-  def store_reported_issues(created_at)
-    return unless stores_reported_issues?
-
-    reported_issues.each do |body|
-      issue_id = StoreIssue.call(
-        project_path: review.fetch(:project_path),
-        source: work_cycle.fetch(:role),
-        body: body
+  def link_review_issues(issue_ids)
+    created_at = Time.now
+    issue_ids.each do |issue_id|
+      Database.connection[:review_issues].insert(
+        created_at: created_at,
+        review_id: review.fetch(:id),
+        reported_issue_id: issue_id
       )
-      link_reported_issue(issue_id, created_at)
     end
-  end
-
-  def stores_reported_issues?
-    work_cycle.fetch(:action) == 'review' && %w[manager worker reviewer].include?(work_cycle.fetch(:role))
-  end
-
-  def link_reported_issue(issue_id, created_at)
-    Database.connection[:review_issues].insert(
-      created_at: created_at,
-      review_id: review.fetch(:id),
-      reported_issue_id: issue_id
-    )
-    Database.connection[:work_cycle_reported_issues].insert(
-      created_at: created_at,
-      work_cycle_id: work_cycle.fetch(:id),
-      reported_issue_id: issue_id
-    )
   end
 
   def reported_issues

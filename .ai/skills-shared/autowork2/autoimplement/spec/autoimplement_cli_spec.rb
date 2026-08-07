@@ -27,6 +27,7 @@ RSpec.describe 'AutoimplementCli' do
     allow(ResumeTask).to receive(:call).and_return('AutoImplementCycle 12')
     allow(ShowTaskWorkCycle).to receive(:call).and_return('{"work_cycle_id":12}')
     allow(WaitTaskWorkCycle).to receive(:call).and_return('Worker implementation completed.')
+    allow(HandleTaskDecision).to receive(:call).and_return('Decision: approved')
   end
 
   it 'initializes or resumes the selected Task and renders it' do
@@ -46,6 +47,15 @@ RSpec.describe 'AutoimplementCli' do
 
     expect(MigrateDatabase).to have_received(:call)
     expect(ResumeTask).to have_received(:call).with(task_id: '7')
+  end
+
+  it 'stores one Task Reported Issue decision' do
+    expect do
+      service_class.call(cli_args: %w[store-decision 4 approved])
+    end.to output("Decision: approved\n").to_stdout
+
+    expect(MigrateDatabase).to have_received(:call)
+    expect(HandleTaskDecision).to have_received(:call).with(issue_id: '4', decision: 'approved')
   end
 
   it 'shows one Work Cycle without running migrations' do
@@ -75,13 +85,16 @@ RSpec.describe 'AutoimplementCli' do
       %w[resume-task 7 extra],
       ['show-work-cycle'],
       ['wait-work-cycle'],
+      ['store-decision'],
+      %w[store-decision 4],
+      %w[store-decision 4 approved extra],
       %w[other 12],
     ].each do |cli_args|
       expect { service_class.call(cli_args: cli_args) }.
         to raise_error(
           ArgumentError,
           'Usage: autoimplement [initialize-task <canonical-task-path> | resume-task <task-id> | ' \
-          'show-work-cycle <id> | wait-work-cycle <id>]'
+          'store-decision <issue-id> <decision> | show-work-cycle <id> | wait-work-cycle <id>]'
         )
     end
   end

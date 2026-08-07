@@ -16,17 +16,68 @@ class ShowTaskWorkCycle
       task_path: task.fetch(:task_path),
       project_path: task.fetch(:project_path),
       branch_name: task.fetch(:branch_name),
-      step_number: work_cycle.fetch(:step_number)
+      step_number: step_number,
+      step_commit_count: step_commit_count,
+      inputs: issues(:work_cycle_inputs),
+      reported_issues: issues(:work_cycle_reported_issues)
     )
   end
 
   private
 
   def work_cycle
-    @work_cycle ||= Database.readonly_connection[:work_cycles].where(id: work_cycle_id).first
+    @work_cycle ||= connection[:work_cycles].where(id: work_cycle_id).first
   end
 
   def task
-    @task ||= Database.readonly_connection[:tasks].where(id: work_cycle.fetch(:task_id)).first
+    @task ||= connection[:tasks].where(id: work_cycle.fetch(:task_id)).first
+  end
+
+  def step_number
+    @step_number ||= work_cycle.fetch(:step_number) || latest_implementation_work_cycle.fetch(:step_number)
+  end
+
+  def latest_implementation_work_cycle
+    current_work_cycle_id = work_cycle.fetch(:id)
+    @latest_implementation_work_cycle ||= connection[:work_cycles].
+                                          where(
+                                            task_id: task.fetch(:id),
+                                            role: 'worker',
+                                            action: 'implementation'
+                                          ).
+                                          exclude(completed_at: nil).
+                                          where { id < current_work_cycle_id }.
+                                          order(:id).
+                                          last
+  end
+
+  def step_commit_count
+    current_work_cycle_id = work_cycle.fetch(:id)
+    completed_step_implementations.where { id < current_work_cycle_id }.count
+  end
+
+  def completed_step_implementations
+    connection[:work_cycles].
+      where(
+        task_id: task.fetch(:id),
+        step_number: step_number,
+        role: 'worker',
+        action: 'implementation'
+      ).
+      exclude(completed_at: nil)
+  end
+
+  def issues(link_table)
+    connection[:reported_issues].
+      join(link_table, reported_issue_id: :id).
+      where(Sequel[link_table][:work_cycle_id] => work_cycle_id).
+      select_all(:reported_issues).
+      order(Sequel[:reported_issues][:id]).
+      all.
+      map { |issue| issue.slice(:id, :source, :body, :decision) }
+  end
+
+  def connection
+    Database.readonly_connection
   end
 end

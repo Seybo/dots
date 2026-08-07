@@ -371,7 +371,7 @@ Worker/Reviewer/Manager result import, and a decision that selects the next
 issue.
 
 1. Retain the ID and complete stored body.
-2. Read `app/prompts/assess_issue.md` from this skill directory.
+2. Read `../app/prompts/assess_issue.md` from the shared package.
 3. Inspect only relevant current project code and existing Review/conversation
    context. Do not edit files or run tests, linters, or formatters.
 4. Follow the prompt and present its concise assessment. With no completed-step

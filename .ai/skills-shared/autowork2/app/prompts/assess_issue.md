@@ -8,7 +8,7 @@ Use the supplied:
 
 - issue ID and complete stored body
 - relevant current project code
-- existing Review and conversation context
+- existing Review or Task and conversation context
 
 ## Output
 
