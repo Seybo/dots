@@ -151,7 +151,48 @@ RSpec.describe WaitTaskWorkCycle do
     expect(File.exist?(result_path(reviewer_work_cycle_id))).to be(false)
   end
 
-  it 'accepts a clean Reviewer pass and leaves the Task initialized' do
+  it 'accepts a clean Reviewer pass and starts the next authored step' do
+    insert_implementation(step_number: 1, completed_at: Time.now)
+    reviewer_work_cycle_id = insert_review
+    write_result(reviewer_work_cycle_id, review_result(reviewer_work_cycle_id, []))
+
+    output = described_class.call(work_cycle_id: reviewer_work_cycle_id)
+    next_implementation = db[:work_cycles].order(:id).last
+
+    expect(output).to eq(
+      "Reviewer review completed (Cycle #{reviewer_work_cycle_id}). Reported issues:\n" \
+      "- None\nStep 1 accepted.\nAutoImplementCycle #{next_implementation.fetch(:id)}"
+    )
+    expect(next_implementation).to include(step_number: 2, role: 'worker', action: 'implementation')
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('initialized')
+    expect(db[:work_cycles].count).to eq(3)
+    expect(File.exist?(result_path(reviewer_work_cycle_id))).to be(false)
+  end
+
+  it 'continues to the next step after a correction receives a clean Reviewer pass' do
+    insert_implementation(step_number: 1, completed_at: Time.now)
+    first_review_id = insert_review(completed_at: Time.now)
+    issue_id = insert_produced_issue(first_review_id, decision: 'approved')
+    correction_id = insert_implementation(step_number: 1, completed_at: Time.now)
+    db[:work_cycle_inputs].insert(
+      created_at: Time.now,
+      work_cycle_id: correction_id,
+      reported_issue_id: issue_id
+    )
+    final_review_id = insert_review
+    write_result(final_review_id, review_result(final_review_id, []))
+
+    output = described_class.call(work_cycle_id: final_review_id)
+    next_implementation = db[:work_cycles].order(:id).last
+
+    expect(output).to end_with(
+      "Step 1 accepted.\nAutoImplementCycle #{next_implementation.fetch(:id)}"
+    )
+    expect(next_implementation.fetch(:step_number)).to eq(2)
+  end
+
+  it 'returns the existing final result after the last step is accepted' do
+    File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: Build it\n")
     insert_implementation(step_number: 1, completed_at: Time.now)
     reviewer_work_cycle_id = insert_review
     write_result(reviewer_work_cycle_id, review_result(reviewer_work_cycle_id, []))
@@ -160,11 +201,9 @@ RSpec.describe WaitTaskWorkCycle do
 
     expect(output).to eq(
       "Reviewer review completed (Cycle #{reviewer_work_cycle_id}). Reported issues:\n" \
-      "- None\nStep 1 accepted."
+      "- None\nStep 1 accepted.\nNo unimplemented Task step."
     )
-    expect(db[:tasks].where(id: task_id).get(:state)).to eq('initialized')
     expect(db[:work_cycles].count).to eq(2)
-    expect(File.exist?(result_path(reviewer_work_cycle_id))).to be(false)
   end
 
   it 'retains a failed result without committing or completing' do

@@ -53,7 +53,14 @@ class ResumeTask
     )
     return render_handoff(work_cycle_id) unless work_cycle_id.nil?
 
-    "Step #{latest_implementation_work_cycle.fetch(:step_number)} accepted."
+    continue_after_accepted_step
+  end
+
+  def continue_after_accepted_step
+    step_number = latest_implementation_work_cycle.fetch(:step_number)
+    work_cycle_id = StartTaskImplementationWorkCycle.call(task_id: task_id)
+    next_action = work_cycle_id.nil? ? 'No unimplemented Task step.' : render_handoff(work_cycle_id)
+    "Step #{step_number} accepted.\n#{next_action}"
   end
 
   def latest_implementation_work_cycle

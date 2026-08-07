@@ -2,7 +2,7 @@
 name: autoimplement
 description: >-
   Create or resume one database-backed Autoimplement Task and implement, review,
-  settle, and correct one authored Task step. Command-only skill.
+  settle, and correct every authored Task step. Command-only skill.
 disable-model-invocation: true
 ---
 
@@ -130,9 +130,10 @@ cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement resume-task <id
 
 Do not add arguments derived from the skill. Follow **Work Cycle handoff** when
 stdout contains `AutoImplementCycle <id>` or `WaitWorkCycle <id>`. Follow
-**Issue assessment** when stdout contains an `Issue: <id>` block. Return
-`Step N accepted.` or `No unimplemented Task step.` unchanged. This checkpoint
-does not start another authored step.
+**Issue assessment** when stdout contains an `Issue: <id>` block. Retain
+`Step N accepted.` progress before another control line. Continue automatically
+through every authored step until operator input, `No unimplemented Task step.`,
+or a failure stops the invocation.
 
 ## Work Cycle handoff
 
@@ -168,16 +169,16 @@ Whenever helper stdout contains an exact `AutoImplementCycle <id>` line:
    ```
 
 8. If wait stdout contains another `AutoImplementCycle <id>` line, retain its
-   completed output and repeat this handoff in the same invocation.
+   completed and accepted-step output, then repeat this handoff in the same
+   invocation. Do not pause between authored steps.
 9. Otherwise follow **Issue assessment** when stdout contains an `Issue: <id>`
-   block. Return retained output through `Step N accepted.` when the step is
-   accepted. Stop on any failure. Do not retry, redispatch, or start another
-   authored step.
+   block. Return retained output through `No unimplemented Task step.` after the
+   final accepted step. Stop on any failure. Do not retry or redispatch.
 
 When helper stdout contains an exact `WaitWorkCycle <id>` line, do not send
 another participant message. Run the same blocking `wait-work-cycle` command
 without a tool timeout. Process its output through the same repeated-handoff,
-issue-assessment, accepted-step, or failure rules above.
+issue-assessment, final no-step, or failure rules above.
 
 Separate retained completed Work Cycle blocks with one blank line. Surface
 participant, result, commit, database, Git, and tmux failures unchanged after
@@ -227,11 +228,11 @@ For one clear decision, run exactly one command:
 /Volumes/dev/bin/skills/autoimplement store-decision <id> <approved|skipped>
 ```
 
-When stdout contains `AutoImplementCycle <id>`, follow **Work Cycle handoff**.
-Otherwise follow **Issue assessment** for the next issue or return
-`Step N accepted.` unchanged. Process only one decision per operator reply. Do
-not refetch Task input, run Worker classification, start debate, or advance to
-another authored step.
+When stdout contains `AutoImplementCycle <id>`, retain any accepted-step output
+and follow **Work Cycle handoff**, continuing through later authored steps.
+Otherwise follow **Issue assessment** for the next issue or return the final
+`No unimplemented Task step.` output. Process only one decision per operator
+reply. Do not refetch Task input, run Worker classification, or start debate.
 
 SQLite is authoritative for generated workflow state. Do not create Task logs,
 review reports, or other durable generated artifacts. Structured result files

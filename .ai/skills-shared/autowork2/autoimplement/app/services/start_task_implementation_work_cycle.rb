@@ -29,19 +29,33 @@ class StartTaskImplementationWorkCycle
 
   def task_step
     @task_step ||= TaskSteps.new(task_path: task.fetch(:task_path)).all.find do |step|
-      !completed_step_numbers.include?(step.fetch(:number))
+      !accepted_step_numbers.include?(step.fetch(:number))
     end
   end
 
-  def completed_step_numbers
-    @completed_step_numbers ||= work_cycles.
-                                where(
-                                  task_id: task.fetch(:id),
-                                  role: 'worker',
-                                  action: 'implementation'
-                                ).
-                                exclude(completed_at: nil).
-                                select_map(:step_number)
+  def accepted_step_numbers
+    current_step_number = nil
+    completed_work_cycles.each_with_object([]) do |work_cycle, step_numbers|
+      case [work_cycle.fetch(:role), work_cycle.fetch(:action)]
+      when %w[worker implementation]
+        current_step_number = work_cycle.fetch(:step_number)
+        step_numbers.delete(current_step_number)
+      when %w[reviewer review]
+        step_numbers << current_step_number if reviewer_accepted?(work_cycle.fetch(:id))
+      end
+    end.uniq
+  end
+
+  def completed_work_cycles
+    work_cycles.where(task_id: task.fetch(:id)).exclude(completed_at: nil).order(:id).all
+  end
+
+  def reviewer_accepted?(work_cycle_id)
+    decisions = Database.connection[:reported_issues].
+                join(:work_cycle_reported_issues, reported_issue_id: :id).
+                where(Sequel[:work_cycle_reported_issues][:work_cycle_id] => work_cycle_id).
+                select_map(Sequel[:reported_issues][:decision])
+    decisions.all?('skipped')
   end
 
   def task

@@ -104,18 +104,45 @@ RSpec.describe 'ResumeTask' do
     expect(db[:work_cycles].count).to eq(2)
   end
 
-  it 'accepts a clean or skipped-only Reviewer pass without starting the next step' do
+  it 'starts the next authored step after a clean Reviewer pass' do
     insert_implementation(completed_at: Time.now)
-    clean_review_id = insert_review(completed_at: Time.now)
+    insert_review(completed_at: Time.now)
 
-    expect(service_class.call(task_id: task_id)).to eq('Step 1 accepted.')
+    output = service_class.call(task_id: task_id)
+    next_implementation = db[:work_cycles].order(:id).last
 
-    db[:work_cycles].where(id: clean_review_id).delete
-    skipped_review_id = insert_review(completed_at: Time.now)
-    insert_produced_issue(skipped_review_id, decision: 'skipped')
+    expect(output).to eq("Step 1 accepted.\nAutoImplementCycle #{next_implementation.fetch(:id)}")
+    expect(next_implementation).to include(
+      step_number: 2,
+      role: 'worker',
+      action: 'implementation',
+      completed_at: nil
+    )
+  end
 
-    expect(service_class.call(task_id: task_id)).to eq('Step 1 accepted.')
-    expect(db[:work_cycles].where(role: 'worker', action: 'implementation').count).to eq(1)
+  it 'starts the next authored step after a skipped-only Reviewer pass' do
+    insert_implementation(completed_at: Time.now)
+    review_work_cycle_id = insert_review(completed_at: Time.now)
+    insert_produced_issue(review_work_cycle_id, decision: 'skipped')
+
+    output = service_class.call(task_id: task_id)
+    next_implementation = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("Step 1 accepted.\nAutoImplementCycle #{next_implementation.fetch(:id)}")
+    expect(next_implementation.fetch(:step_number)).to eq(2)
+  end
+
+  it 'returns the existing final result repeatedly without a clean-Git check' do
+    File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: First\n")
+    insert_implementation(completed_at: Time.now)
+    insert_review(completed_at: Time.now)
+    allow(ValidateCleanGitState).to receive(:call).and_raise('should not run')
+
+    expected_output = "Step 1 accepted.\nNo unimplemented Task step."
+
+    expect(service_class.call(task_id: task_id)).to eq(expected_output)
+    expect(service_class.call(task_id: task_id)).to eq(expected_output)
+    expect(db[:work_cycles].count).to eq(2)
   end
 
   it 'creates one correction with every approved issue after the pass is settled' do
