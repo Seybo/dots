@@ -2,13 +2,13 @@
 
 ## Purpose of this file
 
-This file records the top-level development principles agreed before building
-`autofix`, the eventual replacement for `addressit`.
+This file records the Autofix-specific development principles agreed before
+building `autofix`, the eventual replacement for `addressit`.
 
-It exists for implementation agents. It should contain only context that cannot
-be reliably inferred from the code, tests, comments, or task instructions.
-Runtime behavior belongs in code. Non-obvious implementation reasons should be
-recorded in comments beside the relevant code instead of being added here.
+Follow the shared principles in `~/.ai/rules/development-principles.md`. This file
+adds only context that cannot be reliably inferred from Autofix code, tests,
+comments, or task instructions. Runtime behavior belongs in code. Non-obvious
+implementation reasons should be recorded beside the relevant code.
 
 The existing `addressit` skill remains in use while `autofix` is developed.
 Autofix starts clean and does not need to read, migrate, or resume Addressit
@@ -36,15 +36,6 @@ state.
 - Credentials, authentication data, and secrets are not Autofix domain data.
   Keep them out of code, persisted debug data, and committed files because those
   artifacts may leave the local machine.
-
-## Priority of principles
-
-1. KISS is the main design principle.
-2. DRY comes after KISS. Small duplication is preferable to a harder abstraction.
-3. YAGNI follows from those priorities. Do not build hypothetical flexibility,
-   compatibility, recovery, or extension points.
-4. Use the simplest current assumption and change the code when reality proves
-   it wrong.
 
 ## Application shape
 
@@ -91,18 +82,10 @@ state.
   writes. Every role reports completion through the same structured result
   transport; those files are not authoritative state.
 
-## Language and naming
+## Autofix language and naming
 
-- Use simple, concise, accurate language everywhere: code, database names,
-  prompts, tests, task files, and documentation.
-- Prefer the shortest name that preserves the full meaning. Remove words already
-  clear from the local context, but do not shorten names into ambiguity.
 - Use the domain terms Reported Issue, Review, Work Cycle, Manager, Worker, and
-  Reviewer consistently. Avoid synonyms and unnecessary abbreviations.
-- Before choosing a name, inspect nearby code and existing names for the same
-  responsibility or data shape. Reuse their domain terms, verbs, qualifiers,
-  and suffix patterns unless an existing name is inaccurate. Do not introduce a
-  synonym or a new naming pattern for an established concept.
+  Reviewer consistently.
 - Name root services for their complete use case and lower-level services for
   their exact effect. Use `Handle` for use-case orchestration, `Store` for
   database writes, `Find` for lookup without mutation, `Resolve` for deriving a
@@ -118,20 +101,15 @@ state.
   its JSON file. Do not use generic names such as `payload` or `path` when the
   narrower meaning is known.
 - Use explicit identifier and value suffixes such as `_id`, `_sha`, and `_name`.
-  Boolean attributes, arguments, and variables start with `is_`; Ruby predicate
-  methods end with `?`. Count names use a count-like suffix.
 - Keep Work Cycle terms distinct: `role` identifies the participant, `action`
   identifies the work, `inputs` are Reported Issues received by the participant,
   and `reported_issues` are Reported Issues produced by review.
 - Prefer separate tables for distinct relationships over a generic relationship
   table with a discriminator, as with `work_cycle_inputs` and
   `work_cycle_reported_issues`.
-- Keep headings, sentences, examples, and explanations short. Include details
-  that affect behavior; remove repetition and filler.
 
 ## Ruby conventions
 
-- Prefer explicit, boring Ruby and one obvious execution path.
 - Use the shared package-root `ServiceObject` mixin, originally copied from
   `/Volumes/dev/projects/my/my_health/1st/app/services/service_object.rb`.
 - ServiceObjects expose `.call`, declare keyword arguments with `arguments`, keep
@@ -271,8 +249,6 @@ protocol are intentionally deferred to implementation-task grilling.
 
 ## Testing and quality
 
-- Test the core happy path, important deterministic behavior, important database
-  constraints, and regressions for real bugs.
 - Use a real temporary SQLite database in specs. Run real migrations and roll
   each example back in a transaction, following the `my_health` test setup.
 - Do not mock Sequel.
@@ -285,22 +261,12 @@ protocol are intentionally deferred to implementation-task grilling.
 - Use local RSpec and RuboCop as quality gates.
 - Do not add coverage thresholds, static typing, or CI initially.
 
-## Documentation and comments
+## Documentation
 
-- Code and tests are authoritative for mechanics.
-- Prefer comments beside code over separate documentation.
-- Comments explain only non-obvious intent, constraints, or reasons. They must
-  not paraphrase visible behavior.
-- Do not create a README or architecture documentation by default.
-- This file is an exception because multiple implementation tasks need the same
-  non-inferable development constraints before the code exists.
+- Do not create an Autofix README or architecture documentation by default.
 
 ## Development process
 
-- Build one end-to-end happy path first.
-- Refactor only where working code demonstrates a need.
-- Do not design the complete architecture, schema, or reusable components
-  upfront.
 - Keep the existing Addressit operational while Autofix is developed.
 - Create Autofix through separate implementation tasks.
 - Start each implementation task with a task-specific grilling session.

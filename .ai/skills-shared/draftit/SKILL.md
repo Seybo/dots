@@ -11,6 +11,10 @@ disable-model-invocation: true
 
 # Draftit
 
+Follow `~/.ai/rules/development-principles.md` throughout this workflow. The
+draft's scope, requirements, and implementation constraints must follow those
+principles.
+
 This is a command-only skill.
 
 ## Invocation

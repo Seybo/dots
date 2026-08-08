@@ -1,1 +1,1 @@
-../.ai/rules/response-style.md
+../.ai/rules/codex-global.md

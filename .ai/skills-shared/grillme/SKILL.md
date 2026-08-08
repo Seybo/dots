@@ -4,6 +4,9 @@ description: A relentless interview to sharpen a plan or design. When invoked on
 disable-model-invocation: true
 ---
 
+Follow `~/.ai/rules/development-principles.md` throughout this workflow. All
+questions, recommendations, and settled decisions must follow those principles.
+
 Read and follow `../grilling/SKILL.md` completely.
 
 Invoke explicitly via `/skill:grillme` (or `/grillme` where that short alias is

@@ -245,8 +245,10 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - only `task.md` and `steps.md` define the work — do not read other files in the task folder (e.g. `next.md`, notes, drafts) as instructions unless `task.md` explicitly references them
    - if the body is just `# Context` (or otherwise empty of instructions), ask the user what they want done before proceeding
 
-9. **After completing the task:**
+9. **After completing implementation:**
    - re-read `task.md` and `steps.md` and verify nothing was missed
+   - review the completed implementation against `~/.ai/rules/development-principles.md` and fix any violation before reporting completion
+   - explicitly confirm in the final report that the implementation follows those principles; report any intentional exception instead of claiming compliance
    - report what was done
    - separately propose all improvements, findings, validations, edge cases, follow-up tasks, and behavior changes you noticed but intentionally did not implement because they were outside the current task/current behavior
 

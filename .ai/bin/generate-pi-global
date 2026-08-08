@@ -8,6 +8,7 @@ cd "$(dirname "$0")/../rules"
 # Order matters: shared rules first, then Pi-only rules, then abbreviations.
 SOURCES=(
   response-style.md
+  development-principles.md
   ruby-general.md
   agent-ops.md
   pi-only.md
