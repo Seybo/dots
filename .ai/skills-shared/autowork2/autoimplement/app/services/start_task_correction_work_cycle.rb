@@ -3,6 +3,8 @@
 class StartTaskCorrectionWorkCycle
   include ServiceObject
 
+  FINAL_REVIEW_STATES = %w[super_review worker_final_review manager_review].freeze
+
   arguments :task_id, :review_work_cycle_id
 
   def call
@@ -11,6 +13,7 @@ class StartTaskCorrectionWorkCycle
     return if issue_ids.empty?
 
     implementation_work_cycle
+    correction_step_number
     ValidateCleanGitState.call(project_path: task.fetch(:project_path))
     Database.connection.transaction(savepoint: true) do
       work_cycle_id = create_work_cycle
@@ -48,6 +51,7 @@ class StartTaskCorrectionWorkCycle
   end
 
   def implementation_work_cycle
+    return if whole_task_correction?
     return @implementation_work_cycle if defined?(@implementation_work_cycle)
 
     current_review_work_cycle_id = review_work_cycle.fetch(:id)
@@ -76,13 +80,26 @@ class StartTaskCorrectionWorkCycle
       completed_at: nil,
       review_id: nil,
       task_id: task_id,
-      step_number: implementation_work_cycle.fetch(:step_number),
+      step_number: correction_step_number,
       role: 'worker',
       action: 'implementation',
       provider: nil,
       model: nil,
       reasoning_level: nil
     )
+  end
+
+  def correction_step_number
+    return if whole_task_correction?
+
+    step_number = implementation_work_cycle.fetch(:step_number)
+    return step_number if step_number.is_a?(Integer) && step_number.positive?
+
+    raise "Task #{task_id} latest authored-step implementation has no positive step number"
+  end
+
+  def whole_task_correction?
+    FINAL_REVIEW_STATES.include?(task.fetch(:state))
   end
 
   def link_inputs(work_cycle_id, issue_ids)

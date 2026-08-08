@@ -51,6 +51,34 @@ RSpec.describe StartTaskReviewerReviewWorkCycle do
     expect(ValidateCleanGitState).to have_received(:call).with(project_path: '/project')
   end
 
+  it 'creates a scoped Reviewer Work Cycle for a whole-task correction' do
+    db[:tasks].where(id: task_id).update(state: 'super_review')
+    issue_id = StoreIssue.call(
+      project_path: '/project',
+      source: 'reviewer',
+      body: 'Approved whole-task correction.'
+    )
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    implementation_id = insert_implementation(step_number: nil)
+    db[:work_cycles].where(id: implementation_id).update(completed_at: Time.now)
+    db[:work_cycle_inputs].insert(
+      created_at: Time.now,
+      work_cycle_id: implementation_id,
+      reported_issue_id: issue_id
+    )
+
+    work_cycle_id = described_class.call(task_id: task_id)
+
+    expect(db[:work_cycles].where(id: work_cycle_id).first).to include(
+      task_id: task_id,
+      step_number: nil,
+      role: 'reviewer',
+      action: 'review'
+    )
+    expect(db[:work_cycle_inputs].where(work_cycle_id: work_cycle_id).
+      select_map(:reported_issue_id)).to eq([issue_id])
+  end
+
   it 'creates nothing when Git is dirty' do
     implementation_id = insert_implementation(step_number: 1)
     db[:work_cycles].where(id: implementation_id).update(completed_at: Time.now)

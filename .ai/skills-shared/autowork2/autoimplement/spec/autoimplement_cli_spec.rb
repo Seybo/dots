@@ -16,7 +16,8 @@ RSpec.describe 'AutoimplementCli' do
       project_path: '/project',
       branch_name: 'feature',
       starting_commit_sha: 'abc123',
-      state: 'initialized'
+      state: 'initialized',
+      super_review_agent: 'claude'
     }
   end
 
@@ -39,6 +40,17 @@ RSpec.describe 'AutoimplementCli' do
     expect(MigrateDatabase).to have_received(:call)
     expect(InitializeTask).to have_received(:call).with(task_path: task_path)
     expect(RenderTask).to have_received(:call).with(task: task)
+  end
+
+  it 'initializes with an explicit super-review agent' do
+    expect do
+      service_class.call(cli_args: ['initialize-task', task_path, 'codex'])
+    end.to output("Task: 7\n").to_stdout
+
+    expect(InitializeTask).to have_received(:call).with(
+      task_path: task_path,
+      super_review_agent: 'codex'
+    )
   end
 
   it 'resumes one persisted Task' do
@@ -90,7 +102,7 @@ RSpec.describe 'AutoimplementCli' do
     [
       [],
       ['initialize-task'],
-      ['initialize-task', task_path, 'extra'],
+      ['initialize-task', task_path, 'codex', 'extra'],
       ['resume-task'],
       %w[resume-task 7 extra],
       ['retry-task'],
@@ -105,7 +117,8 @@ RSpec.describe 'AutoimplementCli' do
       expect { service_class.call(cli_args: cli_args) }.
         to raise_error(
           ArgumentError,
-          'Usage: autoimplement [initialize-task <canonical-task-path> | resume-task <task-id> | ' \
+          'Usage: autoimplement [initialize-task <canonical-task-path> [super-review-agent] | ' \
+          'resume-task <task-id> | ' \
           'retry-task <task-id> | store-decision <issue-id> <decision> | show-work-cycle <id> | ' \
           'wait-work-cycle <id>]'
         )

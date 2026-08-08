@@ -6,6 +6,7 @@ require_relative 'spec_helper'
 RSpec.describe 'database schema' do
   let(:db) { Database.connection }
   let(:initial_schema_version) { 20_260_729_115_455 }
+  let(:final_checks_schema_version) { 20_260_807_190_000 }
 
   it 'uses the shared runtime database path' do
     expect(Database.default_path).to eq(Database.root.join('db', 'autowork.db'))
@@ -171,10 +172,10 @@ RSpec.describe 'database schema' do
 
   it 'creates Tasks with required identity and Git metadata' do
     expect(columns(:tasks)).to eq(
-      %i[id created_at task_path project_path branch_name starting_commit_sha state]
+      %i[id created_at task_path project_path branch_name starting_commit_sha state super_review_agent]
     )
     expect_generated_id_and_created_at(:tasks)
-    %i[task_path project_path branch_name starting_commit_sha state].each do |name|
+    %i[task_path project_path branch_name starting_commit_sha state super_review_agent].each do |name|
       expect(column(:tasks, name)).to include(allow_null: false)
     end
 
@@ -185,24 +186,36 @@ RSpec.describe 'database schema' do
       to raise_error(Sequel::NotNullConstraintViolation)
   end
 
-  it 'keeps Task paths unique and allows only known runtime states' do
+  it 'keeps Task paths unique and allows only known runtime states and super-review agents' do
     db[:tasks].insert(task_attributes)
 
     expect do
       db[:tasks].insert(task_attributes(project_path: '/other-project'))
     end.to raise_error(Sequel::UniqueConstraintViolation)
+    %w[super_review worker_final_review manager_review final_checks_passed].each_with_index do |state, index|
+      expect do
+        db[:tasks].insert(
+          task_attributes(
+            task_path: "/tasks/#{index + 2}",
+            project_path: "/#{state}-project",
+            state: state,
+            super_review_agent: index.even? ? 'claude' : 'codex'
+          )
+        )
+      end.not_to raise_error
+    end
+    expect do
+      db[:tasks].insert(
+        task_attributes(task_path: '/tasks/6', project_path: '/running-project', state: 'running')
+      )
+    end.to raise_error(Sequel::CheckConstraintViolation)
     expect do
       db[:tasks].insert(
         task_attributes(
-          task_path: '/tasks/2',
-          project_path: '/final-checks-project',
-          state: 'final_checks_passed'
+          task_path: '/tasks/7',
+          project_path: '/unsupported-agent-project',
+          super_review_agent: 'terra'
         )
-      )
-    end.not_to raise_error
-    expect do
-      db[:tasks].insert(
-        task_attributes(task_path: '/tasks/3', project_path: '/running-project', state: 'running')
       )
     end.to raise_error(Sequel::CheckConstraintViolation)
 
@@ -274,7 +287,7 @@ RSpec.describe 'database schema' do
     end.to raise_error(Sequel::ForeignKeyConstraintViolation)
   end
 
-  it 'allows step numbers only for Task-owned Worker implementation Work Cycles' do
+  it 'allows positive or whole-task scope only for Task-owned Worker implementation Work Cycles' do
     review_id = db[:reviews].insert(review_attributes)
     task_id = db[:tasks].insert(task_attributes)
 
@@ -283,7 +296,7 @@ RSpec.describe 'database schema' do
     end.not_to raise_error
     expect do
       db[:work_cycles].insert(work_cycle_attributes(task_id: task_id))
-    end.to raise_error(Sequel::CheckConstraintViolation)
+    end.not_to raise_error
     expect do
       db[:work_cycles].insert(work_cycle_attributes(task_id: task_id, step_number: 0))
     end.to raise_error(Sequel::CheckConstraintViolation)
@@ -354,7 +367,7 @@ RSpec.describe 'database schema' do
 
         expect { Sequel::Migrator.run(legacy_db, migrations_path) }.not_to raise_error
         expect(legacy_db.table_exists?(:tasks)).to be(false)
-        expect(legacy_db[:schema_migrations].count).to eq(2)
+        expect(legacy_db[:schema_migrations].count).to eq(3)
 
         expect do
           Sequel::Migrator.run(legacy_db, migrations_path, target: initial_schema_version)
@@ -380,7 +393,9 @@ RSpec.describe 'database schema' do
 
         Sequel::Migrator.run(migration_db, migrations_path)
 
-        expect(migration_db[:tasks].where(id: task_id).first).to include(task_attributes)
+        expect(migration_db[:tasks].where(id: task_id).first).to include(
+          task_attributes.merge(super_review_agent: 'claude')
+        )
         expect(migration_db[:work_cycles].where(id: work_cycle_id).get(:task_id)).to eq(task_id)
         expect(migration_db.indexes(:tasks)).to include(
           tasks_task_path_index: include(unique: true, columns: [:task_path]),
@@ -400,6 +415,13 @@ RSpec.describe 'database schema' do
         end.to raise_error(Sequel::ForeignKeyConstraintViolation)
 
         migration_db[:tasks].where(id: final_task_id).delete
+        Sequel::Migrator.run(migration_db, migrations_path, target: final_checks_schema_version)
+
+        expect(migration_db[:tasks].columns).not_to include(:super_review_agent)
+        expect do
+          migration_db[:work_cycles].insert(work_cycle_attributes(task_id: task_id))
+        end.to raise_error(Sequel::CheckConstraintViolation)
+
         Sequel::Migrator.run(migration_db, migrations_path, target: initial_schema_version)
 
         expect(migration_db[:tasks].where(id: task_id).first).to include(task_attributes)

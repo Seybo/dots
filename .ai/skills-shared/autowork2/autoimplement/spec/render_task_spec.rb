@@ -13,7 +13,8 @@ RSpec.describe 'RenderTask' do
       project_path: '/project',
       branch_name: 'feature',
       starting_commit_sha: 'abc123',
-      state: 'initialized'
+      state: 'initialized',
+      super_review_agent: 'codex'
     }
 
     expect(service_class.call(task: task)).to eq(
@@ -22,7 +23,8 @@ RSpec.describe 'RenderTask' do
       "Project path: /project\n" \
       "Branch: feature\n" \
       "Starting commit: abc123\n" \
-      'State: initialized'
+      "State: initialized\n" \
+      'Super-review agent: codex'
     )
   end
 end

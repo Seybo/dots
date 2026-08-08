@@ -9,7 +9,7 @@ description: >-
 
 # super-review
 
-**Explicit invocation only:** run this skill only after `/super-review` or `/skill:super-review`. A plain request to review a PR, branch, commit, or working tree must use a direct review instead.
+**Explicit invocation only:** run this skill only after `/super-review`, `/skill:super-review`, or an authoritative Autoimplement Work Cycle loaded from an exact `AutoImplementCycle <id>` message with role `reviewer`, action `review`, and scope: `super_review`. That persisted scope is explicit internal authorization from Autoimplement; no other review request is. A plain request to review a PR, branch, commit, or working tree must use a direct review instead.
 
 ## Invocation
 
@@ -66,6 +66,8 @@ Read each file at the phase that needs it:
 ```
 
 Autowork mode stops after Phase 3.5 and follows the output/status paths in its request. It never enters interactive posting.
+
+Autoimplement mode stops review output after Phase 3.5, skips interactive posting, always performs Phase 5 temporary-worktree cleanup, and then returns control to the Autoimplement participant instructions. The participant converts only the final synthesized concerns into its Work Cycle result and removes the generated human report before result publication. Candidate, adjudication, validation, synthesis, and temporary-worktree behavior remain unchanged.
 
 ## Step 0 — preflight
 

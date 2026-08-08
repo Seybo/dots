@@ -8,15 +8,12 @@ class ResumeTask
   def call
     return "Task #{task.fetch(:id)} final checks passed." if task.fetch(:state) == 'final_checks_passed'
     return "WaitWorkCycle #{incomplete_work_cycle.fetch(:id)}" unless incomplete_work_cycle.nil?
-    return start_initial_implementation if latest_completed_work_cycle.nil?
+    return resume_initialized if task.fetch(:state) == 'initialized'
+    return resume_super_review if task.fetch(:state) == 'super_review'
+    return resume_final_worker_review if task.fetch(:state) == 'worker_final_review'
+    return ready_for_manager_review if task.fetch(:state) == 'manager_review'
 
-    case [latest_completed_work_cycle.fetch(:role), latest_completed_work_cycle.fetch(:action)]
-    when %w[worker implementation] then start_reviewer_review
-    when %w[reviewer review] then resume_reviewer_issues
-    else
-      raise "Cannot resume Task #{task_id} after " \
-            "#{latest_completed_work_cycle.fetch(:role)}/#{latest_completed_work_cycle.fetch(:action)}"
-    end
+    raise "Cannot resume Task #{task_id} from state #{task.fetch(:state)}"
   end
 
   private
@@ -33,6 +30,32 @@ class ResumeTask
                                      last
   end
 
+  def resume_initialized
+    return start_initial_implementation if latest_completed_work_cycle.nil?
+
+    case [latest_completed_work_cycle.fetch(:role), latest_completed_work_cycle.fetch(:action)]
+    when %w[worker implementation] then start_reviewer_review
+    when %w[reviewer review] then resume_review_issues { continue_after_accepted_step }
+    else
+      raise "Cannot resume Task #{task_id} after " \
+            "#{latest_completed_work_cycle.fetch(:role)}/#{latest_completed_work_cycle.fetch(:action)}"
+    end
+  end
+
+  def resume_super_review
+    if latest_completed_work_cycle.nil?
+      raise "Task #{task_id} has no completed Work Cycle during super-review"
+    end
+
+    case [latest_completed_work_cycle.fetch(:role), latest_completed_work_cycle.fetch(:action)]
+    when %w[worker implementation] then start_reviewer_review
+    when %w[reviewer review] then resume_review_issues { start_final_worker_review }
+    else
+      raise "Cannot resume Task #{task_id} super-review after " \
+            "#{latest_completed_work_cycle.fetch(:role)}/#{latest_completed_work_cycle.fetch(:action)}"
+    end
+  end
+
   def start_initial_implementation
     work_cycle_id = StartTaskImplementationWorkCycle.call(task_id: task_id)
     return 'No unimplemented Task step.' if work_cycle_id.nil?
@@ -44,7 +67,24 @@ class ResumeTask
     render_handoff(StartTaskReviewerReviewWorkCycle.call(task_id: task_id))
   end
 
-  def resume_reviewer_issues
+  def resume_final_worker_review
+    return start_final_worker_review unless final_worker_review_exists?
+
+    if latest_completed_work_cycle.nil?
+      raise "Task #{task_id} has no completed Work Cycle during final Worker review"
+    end
+
+    case [latest_completed_work_cycle.fetch(:role), latest_completed_work_cycle.fetch(:action)]
+    when %w[worker implementation] then start_reviewer_review
+    when %w[worker review], %w[reviewer review]
+      resume_review_issues { transition_to_manager_review }
+    else
+      raise "Cannot resume Task #{task_id} final Worker review after " \
+            "#{latest_completed_work_cycle.fetch(:role)}/#{latest_completed_work_cycle.fetch(:action)}"
+    end
+  end
+
+  def resume_review_issues
     issue = FindNextTaskIssue.call(review_work_cycle_id: latest_completed_work_cycle.fetch(:id))
     return RenderIssue.call(issue: issue) unless issue.nil?
 
@@ -54,18 +94,37 @@ class ResumeTask
     )
     return render_handoff(work_cycle_id) unless work_cycle_id.nil?
 
-    continue_after_accepted_step
+    yield
+  end
+
+  def start_final_worker_review
+    work_cycle_id = StartTaskFinalWorkerReviewWorkCycle.call(task_id: task_id)
+    render_handoff(work_cycle_id)
+  end
+
+  def final_worker_review_exists?
+    work_cycles.where(task_id: task_id, role: 'worker', action: 'review').any?
+  end
+
+  def transition_to_manager_review
+    Database.connection.transaction(savepoint: true) do
+      updated_count = Database.connection[:tasks].
+                      where(id: task.fetch(:id), state: 'worker_final_review').
+                      update(state: 'manager_review')
+      raise "Task #{task_id} did not remain in final Worker review" unless updated_count == 1
+    end
+    ready_for_manager_review
+  end
+
+  def ready_for_manager_review
+    "Task #{task.fetch(:id)} ready for Manager-context review."
   end
 
   def continue_after_accepted_step
     step_number = latest_implementation_work_cycle.fetch(:step_number)
     work_cycle_id = StartTaskImplementationWorkCycle.call(task_id: task_id)
-    next_action = if work_cycle_id.nil?
-                    RunTaskFinalChecks.call(task_id: task.fetch(:id))
-                  else
-                    render_handoff(work_cycle_id)
-                  end
-    "Step #{step_number} accepted.\n#{next_action}"
+    work_cycle_id ||= StartTaskSuperReviewWorkCycle.call(task_id: task.fetch(:id))
+    "Step #{step_number} accepted.\n#{render_handoff(work_cycle_id)}"
   end
 
   def latest_implementation_work_cycle

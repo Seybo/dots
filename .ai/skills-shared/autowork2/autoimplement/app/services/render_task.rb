@@ -11,6 +11,7 @@ class RenderTask
       "Project path: #{task.fetch(:project_path)}\n" \
       "Branch: #{task.fetch(:branch_name)}\n" \
       "Starting commit: #{task.fetch(:starting_commit_sha)}\n" \
-      "State: #{task.fetch(:state)}"
+      "State: #{task.fetch(:state)}\n" \
+      "Super-review agent: #{task.fetch(:super_review_agent)}"
   end
 end

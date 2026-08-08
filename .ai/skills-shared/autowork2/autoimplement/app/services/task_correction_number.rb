@@ -6,6 +6,15 @@ class TaskCorrectionNumber
   arguments :work_cycle_id
 
   def call
+    count = previous_completed_implementation_count
+    return count unless work_cycle.fetch(:step_number).nil?
+
+    count + 1
+  end
+
+  private
+
+  def previous_completed_implementation_count
     current_work_cycle_id = work_cycle.fetch(:id)
     Database.connection[:work_cycles].
       where(
@@ -18,8 +27,6 @@ class TaskCorrectionNumber
       where { id < current_work_cycle_id }.
       count
   end
-
-  private
 
   def work_cycle
     @work_cycle ||= Database.connection[:work_cycles].where(id: work_cycle_id).first

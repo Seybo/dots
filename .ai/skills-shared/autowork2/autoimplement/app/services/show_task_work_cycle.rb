@@ -16,6 +16,9 @@ class ShowTaskWorkCycle
       task_path: task.fetch(:task_path),
       project_path: task.fetch(:project_path),
       branch_name: task.fetch(:branch_name),
+      starting_commit_sha: task.fetch(:starting_commit_sha),
+      super_review_agent: task.fetch(:super_review_agent),
+      scope: scope,
       step_number: step_number,
       step_commit_count: step_commit_count,
       inputs: issues(:work_cycle_inputs),
@@ -33,8 +36,28 @@ class ShowTaskWorkCycle
     @task ||= connection[:tasks].where(id: work_cycle.fetch(:task_id)).first
   end
 
+  def scope
+    return work_cycle.fetch(:step_number).nil? ? 'whole_task_correction' : 'step_implementation' if implementation?
+    return 'final_worker_review' if final_worker_review?
+
+    return 'whole_task_correction_review' if latest_implementation_work_cycle.fetch(:step_number).nil?
+    return 'super_review' if task.fetch(:state) == 'super_review'
+
+    'step_review'
+  end
+
+  def implementation?
+    work_cycle.fetch(:action) == 'implementation'
+  end
+
+  def final_worker_review?
+    work_cycle.fetch(:role) == 'worker' && work_cycle.fetch(:action) == 'review'
+  end
+
   def step_number
-    @step_number ||= work_cycle.fetch(:step_number) || latest_implementation_work_cycle.fetch(:step_number)
+    return if %w[whole_task_correction whole_task_correction_review super_review final_worker_review].include?(scope)
+
+    work_cycle.fetch(:step_number) || latest_implementation_work_cycle.fetch(:step_number)
   end
 
   def latest_implementation_work_cycle
@@ -52,6 +75,9 @@ class ShowTaskWorkCycle
   end
 
   def step_commit_count
+    return if %w[whole_task_correction super_review final_worker_review].include?(scope)
+    return 1 if scope == 'whole_task_correction_review'
+
     current_work_cycle_id = work_cycle.fetch(:id)
     completed_step_implementations.where { id < current_work_cycle_id }.count
   end

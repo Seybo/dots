@@ -46,6 +46,49 @@ RSpec.describe StartTaskCorrectionWorkCycle do
     expect(ValidateCleanGitState).to have_received(:call).with(project_path: '/project')
   end
 
+  it 'batches final-review issues into one whole-task correction' do
+    db[:tasks].where(id: task_id).update(state: 'super_review')
+    insert_implementation(step_number: 3, completed_at: Time.now)
+    review_work_cycle_id = insert_review
+    approved_issue_ids = [
+      insert_produced_issue(review_work_cycle_id, body: 'Fix the cross-step flow.', decision: 'approved'),
+      insert_produced_issue(review_work_cycle_id, body: 'Fix the final boundary.', decision: 'approved'),
+    ]
+
+    work_cycle_id = described_class.call(
+      task_id: task_id,
+      review_work_cycle_id: review_work_cycle_id
+    )
+
+    expect(db[:work_cycles].where(id: work_cycle_id).first).to include(
+      task_id: task_id,
+      step_number: nil,
+      role: 'worker',
+      action: 'implementation',
+      completed_at: nil
+    )
+    expect(db[:work_cycle_inputs].where(work_cycle_id: work_cycle_id).order(:id).
+      select_map(:reported_issue_id)).to eq(approved_issue_ids)
+    expect(TaskCorrectionNumber.call(work_cycle_id: work_cycle_id)).to eq(1)
+  end
+
+  it 'uses whole-task corrections for every final-review Task state' do
+    %w[super_review worker_final_review manager_review].each do |state|
+      db[:tasks].where(id: task_id).update(state: state)
+      insert_implementation(step_number: 3, completed_at: Time.now)
+      review_work_cycle_id = insert_review
+      insert_produced_issue(review_work_cycle_id, body: "Fix from #{state}.", decision: 'approved')
+
+      work_cycle_id = described_class.call(
+        task_id: task_id,
+        review_work_cycle_id: review_work_cycle_id
+      )
+
+      expect(db[:work_cycles].where(id: work_cycle_id).get(:step_number)).to be_nil
+      db[:work_cycles].where(id: work_cycle_id).update(completed_at: Time.now)
+    end
+  end
+
   it 'numbers a later correction from completed implementation history without persisting it' do
     insert_implementation(step_number: 3, completed_at: Time.now)
     first_review_id = insert_review
@@ -104,6 +147,21 @@ RSpec.describe StartTaskCorrectionWorkCycle do
     expect do
       described_class.call(task_id: task_id, review_work_cycle_id: review_work_cycle_id)
     end.to raise_error(RuntimeError, "Work Cycle #{review_work_cycle_id} has undecided Reported Issues")
+
+    expect(ValidateCleanGitState).not_to have_received(:call)
+  end
+
+  it 'requires a positive step for an authored-step correction' do
+    insert_implementation(step_number: nil, completed_at: Time.now)
+    review_work_cycle_id = insert_review
+    insert_produced_issue(review_work_cycle_id, body: 'Approved fix.', decision: 'approved')
+
+    expect do
+      described_class.call(task_id: task_id, review_work_cycle_id: review_work_cycle_id)
+    end.to raise_error(
+      RuntimeError,
+      "Task #{task_id} latest authored-step implementation has no positive step number"
+    )
 
     expect(ValidateCleanGitState).not_to have_received(:call)
   end

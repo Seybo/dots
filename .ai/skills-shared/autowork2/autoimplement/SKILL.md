@@ -2,7 +2,8 @@
 name: autoimplement
 description: >-
   Create or resume one database-backed Autoimplement Task; implement, review,
-  settle, and correct every authored Task step; and run final checks. Command-only skill.
+  settle, and correct every authored Task step; run its independent final reviews;
+  and stop at the pending Manager gate. Command-only skill.
 disable-model-invocation: true
 ---
 
@@ -23,14 +24,20 @@ Supported invocations:
 /skill:autoimplement --retry
 /skill:autoimplement <task_id> --retry
 /skill:autoimplement <project-or-session> [task_id] --retry
+/skill:autoimplement --super-review-agent claude|codex
+/skill:autoimplement <task_id> --super-review-agent claude|codex
+/skill:autoimplement <project-or-session> [task_id] --super-review-agent claude|codex
 ```
 
-Accept exactly one `--retry` flag in any position alongside an otherwise valid
-invocation. Reject duplicate `--retry` flags, remove it before applying the
-existing argument parser, and treat its presence as confirmation that the
-previous participant has stopped. Reject `--base` and every other option or
-extra argument. Do not add status, doctor, pause, limit, lock, or timeout options.
-Do not expose a root `/autowork2` command.
+Accept at most one `--retry` flag and at most one `--super-review-agent
+claude|codex` pair in any position alongside an otherwise valid invocation.
+Treat `--retry` as confirmation that the previous participant has stopped.
+Reject duplicate `--retry` flags. Reject duplicate `--super-review-agent` flags,
+a missing agent value, and every value except exact `claude` or `codex`.
+Before Task resolution, remove `--retry` and remove the flag and its value before
+applying the existing Task argument parser. Reject `--base`, every other option,
+and every extra argument. Do not add status, doctor, pause, limit, lock, or
+timeout options. Do not expose a root `/autowork2` command.
 
 ## Operator attention notifications
 
@@ -55,9 +62,9 @@ registered project configuration in
 workspace, Task-folder, and protected-branch resolution. Do not invoke or port
 legacy Autowork's Ruby `ProjectRegistry` or `TaskResolver`.
 
-Before parsing Task selectors, detect `--retry` as described above and remove it
-before applying the existing argument parser. Then parse the remaining arguments
-as follows:
+Before parsing Task selectors, extract and validate `--retry` and
+`--super-review-agent` as described above. Remove the accepted controls, then
+parse the remaining arguments as follows:
 
 1. With no arguments, infer the registered project and workspace from the
    current checkout. Infer a Task ID only from an `sc-<digits>` branch segment.
@@ -122,8 +129,22 @@ Task path:
 cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement initialize-task <canonical-task-path>
 ```
 
-Pass only the canonical Task path. Do not pass a project key, expected checkout,
-branch, Task contents, hashes, step details, prompts, or runtime controls.
+When `--super-review-agent` is present, instead run:
+
+```text
+cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement initialize-task <canonical-task-path> <claude|codex>
+```
+
+Pass the selection only to `initialize-task`. Do not pass it to `resume-task`,
+`retry-task`, or any participant command. Pass no project key, expected checkout,
+branch, Task contents, hashes, step details, prompts, or other runtime controls.
+
+A new Task defaults to Claude when the option is omitted. An existing Task keeps
+its persisted selection when the option is omitted and accepts an explicit
+selection only when it matches. Surface a conflicting or unsupported selection
+unchanged and stop without mutation. The operator must run the matching
+application in `agent-reviewer`; never inspect that pane to infer an agent,
+change providers, or fall back.
 
 Retain the helper output and require its exact `Task: <id>` line. A first
 invocation creates one initialized Task only when Git is clean. Reinvoking the
@@ -144,8 +165,10 @@ path. Run exactly:
 cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement retry-task <id>
 ```
 
-The retry helper must authorize redispatch before any participant message, then
-follow **Work Cycle handoff** for its returned `AutoImplementCycle <id>`. If it reports a
+The retry helper must authorize redispatch before any participant message and
+reuse only the agent persisted on the Task. Never derive or pass an agent on the
+retry command. Then follow **Work Cycle handoff** for its returned
+`AutoImplementCycle <id>`. If it reports a
 dirty tree, no or multiple incomplete Work Cycles, a valid completed result, or a
 transport cleanup failure, put `[MM_NTF]` first, surface the complete helper error,
 and stop without contacting a participant. If tmux delivery fails after helper
@@ -157,9 +180,10 @@ Do not add arguments derived from the skill. On the normal path, follow **Work
 Cycle handoff** when stdout contains `AutoImplementCycle <id>` or
 `WaitWorkCycle <id>`. Follow **Issue assessment** when stdout contains an
 `Issue: <id>` block. Retain `Step N accepted.` progress before another control
-line. Continue automatically through every authored step until operator input,
-`Task <id> final checks passed.`, or a failure stops the invocation. Never retry
-or redispatch automatically.
+line. Continue automatically through every authored step and both independent
+final-review gates until operator input, `Task <id> ready for Manager-context
+review.`, or a failure stops the invocation. Never retry or redispatch
+automatically.
 
 ## Work Cycle handoff
 
@@ -170,7 +194,7 @@ Whenever helper stdout contains an exact `AutoImplementCycle <id>` line:
 2. Run `/Volumes/dev/bin/skills/autoimplement show-work-cycle <id>` and treat
    its JSON as authoritative. Read its persisted `role` and `action`; do not
    display the JSON.
-3. Require either `worker`/`implementation` or `reviewer`/`review`. Map the role
+3. Require `worker`/`implementation`, `worker`/`review`, or `reviewer`/`review`. Map the role
    to the fixed pane title:
    - `worker` → `agent-worker`
    - `reviewer` → `agent-reviewer`
@@ -198,33 +222,52 @@ Whenever helper stdout contains an exact `AutoImplementCycle <id>` line:
    completed and accepted-step output, then repeat this handoff in the same
    invocation. Do not pause between authored steps.
 9. Otherwise follow **Issue assessment** when stdout contains an `Issue: <id>`
-   block. Follow **Final checks** when stdout contains `Final checks:`. Return
-   retained output through `Task <id> final checks passed.` after the final
-   accepted step. Stop on any failure. Never retry or redispatch automatically.
+   block. When stdout contains `Task <id> ready for Manager-context review.`,
+   retain it and follow **Pending Manager boundary**. Stop on any failure. Never
+   retry or redispatch automatically.
 
 When helper stdout contains an exact `WaitWorkCycle <id>` line, do not send
 another participant message. Run the same blocking `wait-work-cycle` command
 without a tool timeout. Process its output through the same repeated-handoff,
-issue-assessment, final-check, or failure rules above.
+issue-assessment, pending-Manager, or failure rules above.
 
 Separate retained completed Work Cycle blocks with one blank line. Surface
 participant, result, commit, database, Git, and tmux failures unchanged after
 the required Manager notification prefix. Never expose machine-control lines.
 
-## Final checks
+## Final review order
 
-Whenever helper stdout contains `Final checks:`, retain and display its complete
-output. When it ends with `Task <id> final checks passed.`, the Task has entered
-the durable `final_checks_passed` state; return the output and stop successfully
-without contacting a participant.
+The persisted lifecycle order is:
 
-When any check reports `failed`, return the complete check output and stop. Do
-not create or assess a Reported Issue, contact a participant, start a correction,
-or retry automatically. A later normal Autoimplement invocation runs
-`resume-task` and reruns the complete check set. Explicit `--retry` remains only
-for an incomplete participant Work Cycle and must not rerun Manager-local final
-checks. A skipped no-root-`Gemfile` result is passing and ends with the same
-terminal Task line.
+1. independent Reviewer review for every authored step
+2. one whole-task super-review
+3. one whole-task Worker self-review
+4. pending Manager-context boundary
+
+The super-review and Worker self-review each run exactly once. Findings from
+either review use ordinary Reported Issue Fix, Skip, or Unclear assessment.
+Approved final-review findings are batched into a nil-step Worker implementation
+committed as `Final review correction N`; each correction receives a scoped
+independent Reviewer pass over exactly `git diff HEAD~1..HEAD`. Scoped findings
+use the same assessment and correction loop. Corrections never rerun either
+one-time whole-task gate.
+
+The super-review uses the persisted agent and exact
+`Task.starting_commit_sha..HEAD` range. Its `super-review.md` is temporary and
+non-authoritative: remove it before result publication, never commit it, and
+store no raw candidates or adjudication prose in SQLite.
+
+## Pending Manager boundary
+
+When output contains `Task <id> ready for Manager-context review.`, retain and
+display the complete output, then stop successfully without contacting a
+participant, inspecting Git, or writing workflow state. Repeated normal resume
+returns the same boundary message.
+
+Final checks are deferred until the future Manager-context review and its
+correction loops settle. At this boundary Autoimplement must not run
+`RunTaskFinalChecks`, set `final_checks_passed`, or treat the Task as complete.
+Explicit `--retry` remains only for an incomplete participant Work Cycle.
 
 ## Issue assessment
 
@@ -272,9 +315,9 @@ For one clear decision, run exactly one command:
 
 When stdout contains `AutoImplementCycle <id>`, retain any accepted-step output
 and follow **Work Cycle handoff**, continuing through later authored steps.
-Otherwise follow **Issue assessment** for the next issue or **Final checks** for
-final-check output. Process only one decision per operator reply. Do not refetch
-Task input, run Worker classification, or start debate.
+Otherwise follow **Issue assessment** for the next issue or **Pending Manager
+boundary** for its stable output. Process only one decision per operator reply.
+Do not refetch Task input, run Worker classification, or start debate.
 
 SQLite is authoritative for generated workflow state. Do not create Task logs,
 review reports, or other durable generated artifacts. Structured result files

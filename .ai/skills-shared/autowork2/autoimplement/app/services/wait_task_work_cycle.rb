@@ -19,7 +19,7 @@ class WaitTaskWorkCycle
     store_completion
     remove_result
     output = "Worker implementation completed (Cycle #{work_cycle.fetch(:id)}, " \
-             "Step #{work_cycle.fetch(:step_number)})."
+             "#{implementation_scope_label})."
     "#{output}\n#{ResumeTask.call(task_id: task.fetch(:id))}"
   end
 
@@ -131,6 +131,11 @@ class WaitTaskWorkCycle
     @task ||= Database.connection[:tasks].where(id: work_cycle.fetch(:task_id)).first
   end
 
+  def implementation_scope_label
+    step_number = work_cycle.fetch(:step_number)
+    step_number.nil? ? 'Whole Task' : "Step #{step_number}"
+  end
+
   def commit_message
     return correction_commit_message if correction?
 
@@ -146,6 +151,8 @@ class WaitTaskWorkCycle
 
   def correction_commit_message
     correction_number = TaskCorrectionNumber.call(work_cycle_id: work_cycle.fetch(:id))
+    return "Final review correction #{correction_number}" if work_cycle.fetch(:step_number).nil?
+
     "Step #{work_cycle.fetch(:step_number)} correction #{correction_number}"
   end
 

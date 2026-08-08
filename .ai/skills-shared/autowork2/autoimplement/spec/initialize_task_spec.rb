@@ -32,18 +32,44 @@ RSpec.describe 'InitializeTask' do
       project_path: File.realpath(project_path),
       branch_name: 'main',
       starting_commit_sha: git!('rev-parse', 'HEAD').strip,
-      state: 'initialized'
+      state: 'initialized',
+      super_review_agent: 'claude'
     )
     expect(db[:tasks].count).to eq(1)
     expect(ResolveProjectPath).to have_received(:call)
   end
 
-  it 'resumes the same canonical Task without creating another row' do
-    first_task = service_class.call(task_path: task_path)
+  it 'persists an explicit supported super-review agent' do
+    task = service_class.call(task_path: task_path, super_review_agent: 'codex')
+
+    expect(task.fetch(:super_review_agent)).to eq('codex')
+    expect(db[:tasks].where(id: task.fetch(:id)).get(:super_review_agent)).to eq('codex')
+  end
+
+  it 'resumes the same canonical Task without changing its super-review agent' do
+    first_task = service_class.call(task_path: task_path, super_review_agent: 'codex')
     second_task = service_class.call(task_path: task_path)
+    matching_task = service_class.call(task_path: task_path, super_review_agent: 'codex')
 
     expect(second_task).to eq(first_task)
+    expect(matching_task).to eq(first_task)
     expect(db[:tasks].count).to eq(1)
+  end
+
+  it 'rejects an unsupported or conflicting super-review agent without mutation' do
+    expect do
+      service_class.call(task_path: task_path, super_review_agent: 'terra')
+    end.to raise_error('Unsupported super-review agent terra; expected claude or codex')
+    expect(db[:tasks].count).to eq(0)
+
+    task = service_class.call(task_path: task_path, super_review_agent: 'codex')
+
+    expect do
+      service_class.call(task_path: task_path, super_review_agent: 'claude')
+    end.to raise_error(
+      "Task #{task.fetch(:id)} super-review agent mismatch: expected codex, got claude"
+    )
+    expect(db[:tasks].where(id: task.fetch(:id)).get(:super_review_agent)).to eq('codex')
   end
 
   it 'uses the real Task path as its lifetime identity' do

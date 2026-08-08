@@ -99,6 +99,63 @@ RSpec.describe WaitTaskWorkCycle do
       select_map(:reported_issue_id)).to eq([issue_id])
   end
 
+  it 'commits a whole-task correction and starts its scoped Reviewer review' do
+    db[:tasks].where(id: task_id).update(state: 'super_review')
+    insert_implementation(step_number: 1, completed_at: Time.now)
+    previous_review_id = insert_review(completed_at: Time.now)
+    issue_id = insert_produced_issue(previous_review_id, decision: 'approved')
+    correction_id = insert_implementation(step_number: nil)
+    db[:work_cycle_inputs].insert(
+      created_at: Time.now,
+      work_cycle_id: correction_id,
+      reported_issue_id: issue_id
+    )
+    write_result(correction_id, implementation_result(correction_id))
+
+    output = described_class.call(work_cycle_id: correction_id)
+    reviewer_work_cycle = db[:work_cycles].order(:id).last
+
+    expect(CommitWorkCycle).to have_received(:call).with(
+      project_path: project_path,
+      message: 'Final review correction 1'
+    )
+    expect(output).to eq(
+      "Worker implementation completed (Cycle #{correction_id}, Whole Task).\n" \
+      "AutoImplementCycle #{reviewer_work_cycle.fetch(:id)}"
+    )
+    expect(reviewer_work_cycle).to include(role: 'reviewer', action: 'review')
+    expect(db[:work_cycle_inputs].where(work_cycle_id: reviewer_work_cycle.fetch(:id)).
+      select_map(:reported_issue_id)).to eq([issue_id])
+  end
+
+  it 'uses the next whole-task correction number after an earlier correction completed' do
+    db[:tasks].where(id: task_id).update(state: 'super_review')
+    first_review_id = insert_review(completed_at: Time.now)
+    first_issue_id = insert_produced_issue(first_review_id, decision: 'approved')
+    first_correction_id = insert_implementation(step_number: nil, completed_at: Time.now)
+    db[:work_cycle_inputs].insert(
+      created_at: Time.now,
+      work_cycle_id: first_correction_id,
+      reported_issue_id: first_issue_id
+    )
+    second_review_id = insert_review(completed_at: Time.now)
+    second_issue_id = insert_produced_issue(second_review_id, decision: 'approved')
+    second_correction_id = insert_implementation(step_number: nil)
+    db[:work_cycle_inputs].insert(
+      created_at: Time.now,
+      work_cycle_id: second_correction_id,
+      reported_issue_id: second_issue_id
+    )
+    write_result(second_correction_id, implementation_result(second_correction_id))
+
+    described_class.call(work_cycle_id: second_correction_id)
+
+    expect(CommitWorkCycle).to have_received(:call).with(
+      project_path: project_path,
+      message: 'Final review correction 2'
+    )
+  end
+
   it 'uses the next correction number after an earlier correction completed' do
     insert_implementation(step_number: 1, completed_at: Time.now)
     first_review_id = insert_review(completed_at: Time.now)
@@ -125,6 +182,42 @@ RSpec.describe WaitTaskWorkCycle do
       project_path: project_path,
       message: 'Step 1 correction 2'
     )
+  end
+
+  it 'stores final Worker findings and displays the first issue without committing' do
+    db[:tasks].where(id: task_id).update(state: 'worker_final_review')
+    insert_implementation(step_number: 1, completed_at: Time.now)
+    insert_review(completed_at: Time.now)
+    worker_review_id = insert_worker_review
+    write_result(worker_review_id, worker_review_result(worker_review_id, ['Final Worker issue.']))
+
+    output = described_class.call(work_cycle_id: worker_review_id)
+    issue = db[:reported_issues].first
+
+    expect(output).to eq(
+      "Worker review completed (Cycle #{worker_review_id}). Reported issues:\n" \
+      "- Final Worker issue.\n\nIssue: #{issue.fetch(:id)}\n\n> Final Worker issue."
+    )
+    expect(issue).to include(source: 'worker', decision: nil)
+    expect(CommitWorkCycle).not_to have_received(:call)
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('worker_final_review')
+  end
+
+  it 'advances a clean final Worker result to the Manager boundary' do
+    db[:tasks].where(id: task_id).update(state: 'worker_final_review')
+    insert_implementation(step_number: 1, completed_at: Time.now)
+    insert_review(completed_at: Time.now)
+    worker_review_id = insert_worker_review
+    write_result(worker_review_id, worker_review_result(worker_review_id, []))
+
+    output = described_class.call(work_cycle_id: worker_review_id)
+
+    expect(output).to eq(
+      "Worker review completed (Cycle #{worker_review_id}). Reported issues:\n" \
+      "- None\nTask #{task_id} ready for Manager-context review."
+    )
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('manager_review')
+    expect(CommitWorkCycle).not_to have_received(:call)
   end
 
   it 'reports a Reviewer result missing its required issue list as a participant-result failure' do
@@ -209,21 +302,22 @@ RSpec.describe WaitTaskWorkCycle do
     expect(next_implementation.fetch(:step_number)).to eq(2)
   end
 
-  it 'runs final checks after the last step is accepted' do
+  it 'starts super-review after the last step is accepted' do
     File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: Build it\n")
     insert_implementation(step_number: 1, completed_at: Time.now)
     reviewer_work_cycle_id = insert_review
     write_result(reviewer_work_cycle_id, review_result(reviewer_work_cycle_id, []))
 
     output = described_class.call(work_cycle_id: reviewer_work_cycle_id)
+    super_review_work_cycle = db[:work_cycles].order(:id).last
 
     expect(output).to eq(
       "Reviewer review completed (Cycle #{reviewer_work_cycle_id}). Reported issues:\n" \
-      "- None\nStep 1 accepted.\nFinal checks:\nSkipped: no Gemfile.\n" \
-      "Task #{task_id} final checks passed."
+      "- None\nStep 1 accepted.\nAutoImplementCycle #{super_review_work_cycle.fetch(:id)}"
     )
-    expect(db[:tasks].where(id: task_id).get(:state)).to eq('final_checks_passed')
-    expect(db[:work_cycles].count).to eq(2)
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('super_review')
+    expect(super_review_work_cycle).to include(role: 'reviewer', action: 'review')
+    expect(db[:work_cycles].count).to eq(3)
   end
 
   it 'retains a failed result without committing or completing' do
@@ -375,6 +469,16 @@ RSpec.describe WaitTaskWorkCycle do
     )
   end
 
+  def insert_worker_review(completed_at: nil)
+    db[:work_cycles].insert(
+      created_at: Time.now,
+      completed_at: completed_at,
+      task_id: task_id,
+      role: 'worker',
+      action: 'review'
+    )
+  end
+
   def insert_produced_issue(work_cycle_id, decision:)
     issue_id = StoreIssue.call(project_path: project_path, source: 'reviewer', body: 'Approved correction.')
     db[:reported_issues].where(id: issue_id).update(decision: decision)
@@ -393,6 +497,14 @@ RSpec.describe WaitTaskWorkCycle do
   def review_result(work_cycle_id, reported_issues)
     completed_result(work_cycle_id).merge(
       'role' => 'reviewer',
+      'action' => 'review',
+      'reported_issues' => reported_issues
+    )
+  end
+
+  def worker_review_result(work_cycle_id, reported_issues)
+    completed_result(work_cycle_id).merge(
+      'role' => 'worker',
       'action' => 'review',
       'reported_issues' => reported_issues
     )

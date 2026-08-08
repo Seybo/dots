@@ -26,8 +26,12 @@ class AutoimplementCli
   end
 
   def validate_arguments
-    argument_count = cli_args.first == 'store-decision' ? 3 : 2
-    raise ArgumentError, usage unless cli_args.length == argument_count
+    is_valid = case cli_args.first
+               when 'initialize-task' then [2, 3].include?(cli_args.length)
+               when 'store-decision' then cli_args.length == 3
+               else cli_args.length == 2
+               end
+    raise ArgumentError, usage unless is_valid
   end
 
   def store_decision
@@ -35,12 +39,15 @@ class AutoimplementCli
   end
 
   def initialize_task
-    task = InitializeTask.call(task_path: cli_args.fetch(1))
+    arguments = { task_path: cli_args.fetch(1) }
+    arguments[:super_review_agent] = cli_args.fetch(2) if cli_args.length == 3
+    task = InitializeTask.call(**arguments)
     RenderTask.call(task: task)
   end
 
   def usage
-    'Usage: autoimplement [initialize-task <canonical-task-path> | resume-task <task-id> | ' \
+    'Usage: autoimplement [initialize-task <canonical-task-path> [super-review-agent] | ' \
+      'resume-task <task-id> | ' \
       'retry-task <task-id> | store-decision <issue-id> <decision> | show-work-cycle <id> | ' \
       'wait-work-cycle <id>]'
   end

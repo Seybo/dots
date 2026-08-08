@@ -40,6 +40,9 @@ RSpec.describe 'ShowTaskWorkCycle' do
       'task_path' => '/tasks/0028-task',
       'project_path' => '/project',
       'branch_name' => 'feature',
+      'starting_commit_sha' => 'starting-sha',
+      'super_review_agent' => 'claude',
+      'scope' => 'step_implementation',
       'step_number' => 2,
       'step_commit_count' => 0,
       'inputs' => [],
@@ -89,6 +92,9 @@ RSpec.describe 'ShowTaskWorkCycle' do
       'work_cycle_id' => reviewer_work_cycle_id,
       'role' => 'reviewer',
       'action' => 'review',
+      'starting_commit_sha' => 'starting-sha',
+      'super_review_agent' => 'claude',
+      'scope' => 'step_review',
       'step_number' => 2,
       'step_commit_count' => 2
     )
@@ -112,6 +118,112 @@ RSpec.describe 'ShowTaskWorkCycle' do
         },
       ]
     )
+  end
+
+  it 'returns the persisted whole-task super-review context' do
+    db[:tasks].where(id: task_id).update(state: 'super_review', super_review_agent: 'codex')
+    db[:work_cycles].insert(
+      created_at: Time.now,
+      completed_at: Time.now,
+      task_id: task_id,
+      step_number: 2,
+      role: 'worker',
+      action: 'implementation'
+    )
+    reviewer_work_cycle_id = db[:work_cycles].insert(
+      created_at: Time.now,
+      task_id: task_id,
+      role: 'reviewer',
+      action: 'review'
+    )
+
+    context = JSON.parse(service_class.call(work_cycle_id: reviewer_work_cycle_id))
+
+    expect(context).to include(
+      'starting_commit_sha' => 'starting-sha',
+      'super_review_agent' => 'codex',
+      'scope' => 'super_review',
+      'step_number' => nil,
+      'step_commit_count' => nil,
+      'inputs' => []
+    )
+  end
+
+  it 'returns the whole-task final Worker self-review context' do
+    db[:tasks].where(id: task_id).update(state: 'worker_final_review')
+    db[:work_cycles].insert(
+      created_at: Time.now,
+      completed_at: Time.now,
+      task_id: task_id,
+      step_number: 2,
+      role: 'worker',
+      action: 'implementation'
+    )
+    worker_review_id = db[:work_cycles].insert(
+      created_at: Time.now,
+      task_id: task_id,
+      role: 'worker',
+      action: 'review'
+    )
+
+    context = JSON.parse(service_class.call(work_cycle_id: worker_review_id))
+
+    expect(context).to include(
+      'starting_commit_sha' => 'starting-sha',
+      'scope' => 'final_worker_review',
+      'step_number' => nil,
+      'step_commit_count' => nil,
+      'inputs' => []
+    )
+  end
+
+  it 'returns nil-step whole-task correction and exact scoped-review context' do
+    db[:tasks].where(id: task_id).update(state: 'super_review')
+    input_issue_id = insert_issue(body: 'Approved whole-task correction.', decision: 'approved')
+    correction_id = db[:work_cycles].insert(
+      created_at: Time.now,
+      completed_at: Time.now,
+      task_id: task_id,
+      step_number: nil,
+      role: 'worker',
+      action: 'implementation'
+    )
+    db[:work_cycle_inputs].insert(
+      created_at: Time.now,
+      work_cycle_id: correction_id,
+      reported_issue_id: input_issue_id
+    )
+
+    correction_context = JSON.parse(service_class.call(work_cycle_id: correction_id))
+
+    expect(correction_context).to include(
+      'starting_commit_sha' => 'starting-sha',
+      'scope' => 'whole_task_correction',
+      'step_number' => nil,
+      'step_commit_count' => nil
+    )
+
+    reviewer_work_cycle_id = db[:work_cycles].insert(
+      created_at: Time.now,
+      task_id: task_id,
+      role: 'reviewer',
+      action: 'review'
+    )
+    db[:work_cycle_inputs].insert(
+      created_at: Time.now,
+      work_cycle_id: reviewer_work_cycle_id,
+      reported_issue_id: input_issue_id
+    )
+
+    review_context = JSON.parse(service_class.call(work_cycle_id: reviewer_work_cycle_id))
+
+    expect(review_context).to include(
+      'starting_commit_sha' => 'starting-sha',
+      'scope' => 'whole_task_correction_review',
+      'step_number' => nil,
+      'step_commit_count' => 1
+    )
+    expect(review_context.fetch('inputs').map { |issue| issue.fetch('id') }).to eq([input_issue_id])
   end
 
   def insert_issue(body:, decision:)

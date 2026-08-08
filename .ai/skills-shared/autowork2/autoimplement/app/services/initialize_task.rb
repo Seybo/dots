@@ -5,9 +5,12 @@ require 'open3'
 class InitializeTask
   include ServiceObject
 
-  arguments :task_path
+  SUPER_REVIEW_AGENTS = %w[claude codex].freeze
+
+  arguments :task_path, super_review_agent: nil
 
   def call
+    validate_super_review_agent
     return resume_task unless existing_task.nil?
 
     create_task
@@ -23,6 +26,10 @@ class InitializeTask
     unless existing_task.fetch(:branch_name) == branch_name
       raise "Task #{existing_task.fetch(:id)} branch mismatch: " \
             "expected #{existing_task.fetch(:branch_name)}, got #{branch_name}"
+    end
+    if !super_review_agent.nil? && existing_task.fetch(:super_review_agent) != super_review_agent
+      raise "Task #{existing_task.fetch(:id)} super-review agent mismatch: " \
+            "expected #{existing_task.fetch(:super_review_agent)}, got #{super_review_agent}"
     end
 
     existing_task
@@ -42,10 +49,17 @@ class InitializeTask
         project_path: project_path,
         branch_name: branch_name,
         starting_commit_sha: starting_commit_sha,
-        state: 'initialized'
+        state: 'initialized',
+        super_review_agent: super_review_agent || 'claude'
       )
     end
     tasks.where(id: task_id).first
+  end
+
+  def validate_super_review_agent
+    return if super_review_agent.nil? || SUPER_REVIEW_AGENTS.include?(super_review_agent)
+
+    raise "Unsupported super-review agent #{super_review_agent}; expected claude or codex"
   end
 
   def existing_task

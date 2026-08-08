@@ -104,6 +104,67 @@ RSpec.describe 'ResumeTask' do
     expect(db[:work_cycles].count).to eq(2)
   end
 
+  it 'runs every authored-step Reviewer loop before the final gates in order' do
+    allow(Database).to receive(:readonly_connection).and_return(db)
+    File.write(
+      File.join(task_path, 'steps.md'),
+      "# Steps\n\n## Step 1: First\n\n## Step 2: Second\n"
+    )
+
+    first_implementation_output = service_class.call(task_id: task_id)
+    first_implementation = db[:work_cycles].order(:id).last
+    db[:work_cycles].where(id: first_implementation.fetch(:id)).update(completed_at: Time.now)
+
+    first_review_output = service_class.call(task_id: task_id)
+    first_review = db[:work_cycles].order(:id).last
+    first_review_context = JSON.parse(ShowTaskWorkCycle.call(work_cycle_id: first_review.fetch(:id)))
+    db[:work_cycles].where(id: first_review.fetch(:id)).update(completed_at: Time.now)
+
+    second_implementation_output = service_class.call(task_id: task_id)
+    second_implementation = db[:work_cycles].order(:id).last
+    db[:work_cycles].where(id: second_implementation.fetch(:id)).update(completed_at: Time.now)
+
+    second_review_output = service_class.call(task_id: task_id)
+    second_review = db[:work_cycles].order(:id).last
+    second_review_context = JSON.parse(ShowTaskWorkCycle.call(work_cycle_id: second_review.fetch(:id)))
+    db[:work_cycles].where(id: second_review.fetch(:id)).update(completed_at: Time.now)
+
+    super_review_output = service_class.call(task_id: task_id)
+    super_review = db[:work_cycles].order(:id).last
+    db[:work_cycles].where(id: super_review.fetch(:id)).update(completed_at: Time.now)
+
+    worker_review_output = service_class.call(task_id: task_id)
+    worker_review = db[:work_cycles].order(:id).last
+    db[:work_cycles].where(id: worker_review.fetch(:id)).update(completed_at: Time.now)
+
+    manager_output = service_class.call(task_id: task_id)
+
+    expect(first_implementation_output).to eq("AutoImplementCycle #{first_implementation.fetch(:id)}")
+    expect(first_review_output).to eq("AutoImplementCycle #{first_review.fetch(:id)}")
+    expect(second_implementation_output).to eq(
+      "Step 1 accepted.\nAutoImplementCycle #{second_implementation.fetch(:id)}"
+    )
+    expect(second_review_output).to eq("AutoImplementCycle #{second_review.fetch(:id)}")
+    expect(super_review_output).to eq(
+      "Step 2 accepted.\nAutoImplementCycle #{super_review.fetch(:id)}"
+    )
+    expect(first_review_context).to include('scope' => 'step_review', 'step_number' => 1)
+    expect(second_review_context).to include('scope' => 'step_review', 'step_number' => 2)
+    expect(worker_review_output).to eq("AutoImplementCycle #{worker_review.fetch(:id)}")
+    expect(manager_output).to eq("Task #{task_id} ready for Manager-context review.")
+    expect(db[:work_cycles].order(:id).select_map(%i[role action step_number])).to eq(
+      [
+        ['worker', 'implementation', 1],
+        ['reviewer', 'review', nil],
+        ['worker', 'implementation', 2],
+        ['reviewer', 'review', nil],
+        ['reviewer', 'review', nil],
+        ['worker', 'review', nil],
+      ]
+    )
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('manager_review')
+  end
+
   it 'starts the next authored step after a clean Reviewer pass' do
     insert_implementation(completed_at: Time.now)
     insert_review(completed_at: Time.now)
@@ -132,31 +193,122 @@ RSpec.describe 'ResumeTask' do
     expect(next_implementation.fetch(:step_number)).to eq(2)
   end
 
-  it 'runs final checks after the last authored step is accepted' do
+  it 'starts one super-review after the last authored step is accepted' do
     File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: First\n")
     insert_implementation(completed_at: Time.now)
     insert_review(completed_at: Time.now)
 
     output = service_class.call(task_id: task_id)
+    super_review_work_cycle = db[:work_cycles].order(:id).last
 
     expect(output).to eq(
-      "Step 1 accepted.\nFinal checks:\nSkipped: no Gemfile.\n" \
-      "Task #{task_id} final checks passed."
+      "Step 1 accepted.\nAutoImplementCycle #{super_review_work_cycle.fetch(:id)}"
     )
-    expect(db[:tasks].where(id: task_id).get(:state)).to eq('final_checks_passed')
-    expect(ValidateCleanGitState).to have_received(:call).with(project_path: '/project')
-    expect(db[:work_cycles].count).to eq(2)
+    expect(super_review_work_cycle).to include(
+      role: 'reviewer',
+      action: 'review',
+      step_number: nil,
+      completed_at: nil
+    )
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('super_review')
+    expect(db[:work_cycles].count).to eq(3)
   end
 
-  it 'reruns the complete final-check gate on normal resume after failure' do
+  it 'starts final Worker review exactly once after a clean super-review' do
     File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: First\n")
     insert_implementation(completed_at: Time.now)
     insert_review(completed_at: Time.now)
-    allow(RunTaskFinalChecks).to receive(:call).and_return('Final checks failed.', 'Final checks passed.')
+    service_class.call(task_id: task_id)
+    super_review_work_cycle = db[:work_cycles].order(:id).last
+    db[:work_cycles].where(id: super_review_work_cycle.fetch(:id)).update(completed_at: Time.now)
 
-    expect(service_class.call(task_id: task_id)).to eq("Step 1 accepted.\nFinal checks failed.")
-    expect(service_class.call(task_id: task_id)).to eq("Step 1 accepted.\nFinal checks passed.")
-    expect(RunTaskFinalChecks).to have_received(:call).with(task_id: task_id).twice
+    output = service_class.call(task_id: task_id)
+    worker_review = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("AutoImplementCycle #{worker_review.fetch(:id)}")
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('worker_final_review')
+    expect(worker_review).to include(role: 'worker', action: 'review', completed_at: nil)
+    allow(ValidateCleanGitState).to receive(:call).and_raise('should not run')
+    expect(service_class.call(task_id: task_id)).to eq("WaitWorkCycle #{worker_review.fetch(:id)}")
+    expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(1)
+  end
+
+  it 'starts one final Worker self-review after the super-review loop' do
+    db[:tasks].where(id: task_id).update(state: 'worker_final_review')
+    insert_implementation(completed_at: Time.now)
+    insert_review(completed_at: Time.now)
+
+    output = service_class.call(task_id: task_id)
+    worker_review = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("AutoImplementCycle #{worker_review.fetch(:id)}")
+    expect(worker_review).to include(
+      role: 'worker',
+      action: 'review',
+      step_number: nil,
+      completed_at: nil
+    )
+  end
+
+  it 'advances a clean final Worker self-review to the Manager boundary' do
+    db[:tasks].where(id: task_id).update(state: 'worker_final_review')
+    insert_implementation(completed_at: Time.now)
+    insert_review(completed_at: Time.now)
+    insert_worker_review(completed_at: Time.now)
+
+    expected_output = "Task #{task_id} ready for Manager-context review."
+
+    expect(service_class.call(task_id: task_id)).to eq(expected_output)
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('manager_review')
+    allow(ValidateCleanGitState).to receive(:call).and_raise('should not run')
+    expect(service_class.call(task_id: task_id)).to eq(expected_output)
+    expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(1)
+  end
+
+  it 'creates a whole-task correction for approved final Worker findings' do
+    db[:tasks].where(id: task_id).update(state: 'worker_final_review')
+    insert_implementation(completed_at: Time.now)
+    insert_review(completed_at: Time.now)
+    worker_review_id = insert_worker_review(completed_at: Time.now)
+    issue_id = insert_produced_issue(
+      worker_review_id,
+      body: 'Fix the final Worker finding.',
+      decision: 'approved',
+      source: 'worker'
+    )
+
+    output = service_class.call(task_id: task_id)
+    correction = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("AutoImplementCycle #{correction.fetch(:id)}")
+    expect(correction).to include(step_number: nil, role: 'worker', action: 'implementation')
+    expect(db[:work_cycle_inputs].where(work_cycle_id: correction.fetch(:id)).
+      select_map(:reported_issue_id)).to eq([issue_id])
+  end
+
+  it 'settles a scoped final Worker correction without rerunning Worker self-review' do
+    db[:tasks].where(id: task_id).update(state: 'worker_final_review')
+    insert_implementation(completed_at: Time.now)
+    insert_review(completed_at: Time.now)
+    worker_review_id = insert_worker_review(completed_at: Time.now)
+    issue_id = insert_produced_issue(
+      worker_review_id,
+      decision: 'approved',
+      source: 'worker'
+    )
+    correction_id = insert_implementation(completed_at: Time.now, step_number: nil)
+    db[:work_cycle_inputs].insert(
+      created_at: Time.now,
+      work_cycle_id: correction_id,
+      reported_issue_id: issue_id
+    )
+    insert_review(completed_at: Time.now)
+
+    expect(service_class.call(task_id: task_id)).to eq(
+      "Task #{task_id} ready for Manager-context review."
+    )
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('manager_review')
+    expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(1)
   end
 
   it 'returns the durable final-check result without rerunning checks or checking Git' do
@@ -169,6 +321,46 @@ RSpec.describe 'ResumeTask' do
     expect(service_class.call(task_id: task_id)).to eq(expected_output)
     expect(service_class.call(task_id: task_id)).to eq(expected_output)
     expect(db[:work_cycles].count).to eq(0)
+  end
+
+  it 'creates one whole-task correction for approved super-review issues' do
+    db[:tasks].where(id: task_id).update(state: 'super_review')
+    insert_implementation(completed_at: Time.now)
+    review_work_cycle_id = insert_review(completed_at: Time.now)
+    approved_issue_ids = [
+      insert_produced_issue(review_work_cycle_id, body: 'First final fix.', decision: 'approved'),
+      insert_produced_issue(review_work_cycle_id, body: 'Second final fix.', decision: 'approved'),
+    ]
+
+    output = service_class.call(task_id: task_id)
+    correction = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("AutoImplementCycle #{correction.fetch(:id)}")
+    expect(correction).to include(step_number: nil, role: 'worker', action: 'implementation')
+    expect(db[:work_cycle_inputs].where(work_cycle_id: correction.fetch(:id)).order(:id).
+      select_map(:reported_issue_id)).to eq(approved_issue_ids)
+  end
+
+  it 'settles a clean scoped super-review correction without rerunning super-review' do
+    db[:tasks].where(id: task_id).update(state: 'super_review')
+    insert_implementation(completed_at: Time.now)
+    super_review_work_cycle_id = insert_review(completed_at: Time.now)
+    issue_id = insert_produced_issue(super_review_work_cycle_id, decision: 'approved')
+    correction_id = insert_implementation(completed_at: Time.now, step_number: nil)
+    db[:work_cycle_inputs].insert(
+      created_at: Time.now,
+      work_cycle_id: correction_id,
+      reported_issue_id: issue_id
+    )
+    insert_review(completed_at: Time.now)
+
+    output = service_class.call(task_id: task_id)
+    worker_review = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("AutoImplementCycle #{worker_review.fetch(:id)}")
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('worker_final_review')
+    expect(worker_review).to include(role: 'worker', action: 'review')
+    expect(db[:work_cycles].where(role: 'reviewer', action: 'review').count).to eq(2)
   end
 
   it 'creates one correction with every approved issue after the pass is settled' do
@@ -189,12 +381,12 @@ RSpec.describe 'ResumeTask' do
       select_map(:reported_issue_id)).to eq(approved_issue_ids)
   end
 
-  def insert_implementation(completed_at: nil)
+  def insert_implementation(completed_at: nil, step_number: 1)
     db[:work_cycles].insert(
       created_at: Time.now,
       completed_at: completed_at,
       task_id: task_id,
-      step_number: 1,
+      step_number: step_number,
       role: 'worker',
       action: 'implementation'
     )
@@ -210,8 +402,18 @@ RSpec.describe 'ResumeTask' do
     )
   end
 
-  def insert_produced_issue(work_cycle_id, body: 'Review issue.', decision: nil)
-    issue_id = StoreIssue.call(project_path: '/project', source: 'reviewer', body: body)
+  def insert_worker_review(completed_at: nil)
+    db[:work_cycles].insert(
+      created_at: Time.now,
+      completed_at: completed_at,
+      task_id: task_id,
+      role: 'worker',
+      action: 'review'
+    )
+  end
+
+  def insert_produced_issue(work_cycle_id, body: 'Review issue.', decision: nil, source: 'reviewer')
+    issue_id = StoreIssue.call(project_path: '/project', source: source, body: body)
     db[:reported_issues].where(id: issue_id).update(decision: decision)
     db[:work_cycle_reported_issues].insert(
       created_at: Time.now,
