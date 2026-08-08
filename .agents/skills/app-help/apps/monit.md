@@ -42,6 +42,7 @@
 - `monit-cpu-alerts procmatch` can fail when Monit has no default control file because it does not pass the runtime `-c` path; use `ps` to sanity-check scan regexes in that case.
 - `monit-notify` prefers a custom Hammerspoon drawing and falls back to `osascript display notification` when `hs`/Hammerspoon is unavailable.
 - Current notification styling/text behavior lives in `~/.dots/.hammerspoon/init.lua`; consult that file instead of duplicating details here.
+- The Hammerspoon formatter assumes every `monit-notify` event is a high-CPU scan. Monit uptime events therefore render misleading `CPU 0.0%`, `matched: unknown`, and duplicated `exceeded threshold exceeded` text; inspect `~/Library/Logs/monit-notify.log` for the raw event.
 - `hs -c` runs code in the Hammerspoon app process, so environment variables assigned to the `hs` CLI are not visible through `os.getenv` in the evaluated Lua. Pass dynamic notification text another way, such as temp files.
 - The terminal-themed alert is an `hs.drawing` overlay from `~/.dots/.hammerspoon/init.lua`; if it sticks, reload Hammerspoon to clear active drawings.
 
