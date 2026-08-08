@@ -30,6 +30,7 @@ RSpec.describe 'AutoimplementCli' do
     allow(ShowTaskWorkCycle).to receive(:call).and_return('{"work_cycle_id":12}')
     allow(WaitTaskWorkCycle).to receive(:call).and_return('Worker implementation completed.')
     allow(HandleTaskDecision).to receive(:call).and_return('Decision: approved')
+    allow(SquashTask).to receive(:call).and_return('Task 7 squashed locally.')
   end
 
   it 'initializes or resumes the selected Task and renders it' do
@@ -80,6 +81,21 @@ RSpec.describe 'AutoimplementCli' do
     expect(HandleTaskDecision).to have_received(:call).with(issue_id: '4', decision: 'approved')
   end
 
+  it 'squashes one completed Task with an explicit checkout and subject' do
+    expect do
+      service_class.call(
+        cli_args: ['squash-task', '7', '/canonical/project', 'Current Shortcut story name']
+      )
+    end.to output("Task 7 squashed locally.\n").to_stdout
+
+    expect(MigrateDatabase).to have_received(:call)
+    expect(SquashTask).to have_received(:call).with(
+      task_id: '7',
+      project_path: '/canonical/project',
+      subject: 'Current Shortcut story name'
+    )
+  end
+
   it 'shows one Work Cycle without running migrations' do
     expect do
       service_class.call(cli_args: %w[show-work-cycle 12])
@@ -112,6 +128,9 @@ RSpec.describe 'AutoimplementCli' do
       ['store-decision'],
       %w[store-decision 4],
       %w[store-decision 4 approved extra],
+      ['squash-task'],
+      %w[squash-task 7 /project],
+      %w[squash-task 7 /project subject extra],
       %w[other 12],
     ].each do |cli_args|
       expect { service_class.call(cli_args: cli_args) }.
@@ -119,7 +138,8 @@ RSpec.describe 'AutoimplementCli' do
           ArgumentError,
           'Usage: autoimplement [initialize-task <canonical-task-path> [super-review-agent] | ' \
           'resume-task <task-id> | ' \
-          'retry-task <task-id> | store-decision <issue-id> <decision> | show-work-cycle <id> | ' \
+          'retry-task <task-id> | store-decision <issue-id> <decision> | ' \
+          'squash-task <task-id> <canonical-project-path> <subject> | show-work-cycle <id> | ' \
           'wait-work-cycle <id>]'
         )
     end

@@ -1,6 +1,6 @@
-# Autoimplement Work Cycle participant
+# Autoimplement Work Cycle execution
 
-Follow these instructions only when the complete user message is exactly `AutoImplementCycle <id>` with a numeric ID.
+Follow these instructions only when the complete user message is exactly `AutoImplementCycle <id>` with a numeric ID, or when the Autoimplement skill routes a persisted `manager`/`review` Work Cycle inline in the current Manager conversation.
 
 ## Load authoritative context
 
@@ -106,6 +106,27 @@ For role `reviewer` and action `review`:
 11. Write a completed result with the common fields plus a `reported_issues` array. Use one self-contained independently actionable Reported Issue body per element, in review order. Use an empty array when the review reports no issues.
 12. Add no verdict, severity, summary, file list, issue ID, commit SHA, or other fields.
 
+## Manager review
+
+For role `manager` and action `review`:
+
+1. Require returned `scope` is `manager_review`, `step_number` and `step_commit_count` are null, and `history` is the complete ordered Work Cycle history.
+2. Run this review inline in the current Manager conversation. Do not contact a participant pane.
+3. Read the complete `task.md` and `steps.md`; `task.md` and `steps.md` remain authoritative when prior conversation is absent.
+4. Use the complete ordered `history`, including every input, produced issue, decision, and completion state. Also use live Manager conversation context when available, including task creation and grilling decisions. Do not persist that conversation.
+5. Review the complete Task diff using:
+
+   ```text
+   git -C <project_path> diff <starting_commit_sha>..HEAD
+   ```
+
+6. Inspect the complete commit list, relevant surrounding code, and affected flows. Judge the implementation against every authored step as one whole Task.
+7. Report only an unmet Task requirement, concrete bug or regression, concrete security or data-loss risk, or meaningful performance defect. Do not report style, nits, speculative improvements, or missing tests without a concrete defect.
+8. Apply normal judgment to prior issues and decisions. Do not suppress a concern because history contains a similar concern.
+9. Do not edit, stage, commit, push, switch branches, run linters/specs/tests/checks, or write workflow state.
+10. Write a completed result with the common fields plus a `reported_issues` array. Use one self-contained independently actionable Manager concern per element, in review order. Use an empty array when the review reports no issues.
+11. Add no verdict, severity, summary, file list, issue ID, commit SHA, transcript, or other fields.
+
 ## Report
 
 After the action finishes, write the complete valid JSON payload to this temporary path:
@@ -120,7 +141,7 @@ Do not create the final result path until the temporary file is complete. Then p
 mv /tmp/autoimplement-work-cycle-<id>.json.tmp /tmp/autoimplement-work-cycle-<id>.json
 ```
 
-Outside a super-review's own temporary artifact and worktree lifecycle, the temporary and final result paths are the only files the participant may intentionally author outside the returned project path. Focused tools may manage their own ignored caches or temporary files; do not treat those as workflow state. Manager waits only for the final `.json` path.
+Outside a super-review's own temporary artifact and worktree lifecycle, the temporary and final result paths are the only files the Work Cycle executor may intentionally author outside the returned project path. Focused tools may manage their own ignored caches or temporary files; do not treat those as workflow state. Autoimplement imports only the final `.json` path.
 
 Every completed result contains these common fields:
 
@@ -138,7 +159,7 @@ Every completed result contains these common fields:
 
 Use the actual numeric Work Cycle ID. Copy `work_cycle_id`, `role`, and `action` from the returned context. Copy `PI_PROVIDER`, `PI_MODEL`, and `PI_REASONING_LEVEL` when present; otherwise use JSON `null`. Do not infer missing provenance.
 
-A completed Worker or Reviewer review result also contains:
+A completed Worker, Reviewer, or Manager review result also contains:
 
 ```json
 {
@@ -148,4 +169,4 @@ A completed Worker or Reviewer review result also contains:
 
 If the action cannot complete, use the same temporary-file and atomic-rename publication steps for the common fields with status `failed` and a concise sanitized `error`. Do not include credentials or raw provider data.
 
-After atomically publishing the result, stop. Manager owns result import, Autoimplement database writes, staging, commits, issue decisions, and progression.
+After atomically publishing the result, return control to Autoimplement orchestration. Manager owns result import, Autoimplement database writes, staging, commits, issue decisions, and progression.

@@ -2,8 +2,8 @@
 name: autoimplement
 description: >-
   Create or resume one database-backed Autoimplement Task; implement, review,
-  settle, and correct every authored Task step; run its independent final reviews;
-  and stop at the pending Manager gate. Command-only skill.
+  settle, and correct every authored Task step; complete all final reviews and
+  checks; and optionally squash the completed local history. Command-only skill.
 disable-model-invocation: true
 ---
 
@@ -31,7 +31,7 @@ Supported invocations:
 
 Accept at most one `--retry` flag and at most one `--super-review-agent
 claude|codex` pair in any position alongside an otherwise valid invocation.
-Treat `--retry` as confirmation that the previous participant has stopped.
+Treat `--retry` as confirmation that the previous participant or inline Manager execution has stopped.
 Reject duplicate `--retry` flags. Reject duplicate `--super-review-agent` flags,
 a missing agent value, and every value except exact `claude` or `codex`.
 Before Task resolution, remove `--retry` and remove the flag and its value before
@@ -176,14 +176,14 @@ authorization, likewise notify and stop; the Work Cycle remains incomplete and
 requires another explicit `--retry` after the operator reconfirms the participant
 is stopped.
 
-Do not add arguments derived from the skill. On the normal path, follow **Work
-Cycle handoff** when stdout contains `AutoImplementCycle <id>` or
-`WaitWorkCycle <id>`. Follow **Issue assessment** when stdout contains an
-`Issue: <id>` block. Retain `Step N accepted.` progress before another control
-line. Continue automatically through every authored step and both independent
-final-review gates until operator input, `Task <id> ready for Manager-context
-review.`, or a failure stops the invocation. Never retry or redispatch
-automatically.
+Do not add arguments derived from the skill. On the normal path, process stdout
+through **Continue helper output**, including `AutoImplementCycle <id>`,
+`WaitWorkCycle <id>`, `Issue: <id>`, and `AutoImplementSquash <task-id>` controls.
+Retain `Step N accepted.` progress before another control line. Continue
+automatically through every authored step, every final-review gate, Manager
+correction loops, final checks, and durable completion until operator input, the
+optional squash question, or a failure stops the invocation.
+Never retry or redispatch automatically.
 
 ## Work Cycle handoff
 
@@ -192,82 +192,191 @@ Whenever helper stdout contains an exact `AutoImplementCycle <id>` line:
 1. Retain any Task, decision, or completed Work Cycle output before the control
    line. Do not display the control line.
 2. Run `/Volumes/dev/bin/skills/autoimplement show-work-cycle <id>` and treat
-   its JSON as authoritative. Read its persisted `role` and `action`; do not
-   display the JSON.
-3. Require `worker`/`implementation`, `worker`/`review`, or `reviewer`/`review`. Map the role
-   to the fixed pane title:
+   its JSON as authoritative. Do not display the JSON.
+3. For `manager`/`review`, follow **Inline Manager review**. Never contact a
+   participant pane for a Manager Work Cycle.
+4. Otherwise require `worker`/`implementation`, `worker`/`review`, or
+   `reviewer`/`review`, and map the role to the fixed pane title:
    - `worker` → `agent-worker`
    - `reviewer` → `agent-reviewer`
-4. Require the dynamic `$TMUX_PANE` value for Manager's pane. Resolve its window
-   with `tmux display-message -p -t "$TMUX_PANE" '#{window_id}'`, then run
+5. Require dynamic `$TMUX_PANE`. Resolve Manager's window with
+   `tmux display-message -p -t "$TMUX_PANE" '#{window_id}'`, then run
    `tmux list-panes -t <resolved-window-id> -F '#{pane_id}\t#{pane_title}'`.
-5. Select the only pane with the mapped title in that window. Fail unless there
+6. Select the only pane with the mapped title in that window. Fail unless there
    is exactly one. Never search another window or session, hardcode a pane ID,
    use `tmux list-panes -a`, or add pane-root checks.
-6. Send only the literal participant message:
+7. Send only the literal participant message:
 
    ```text
    tmux send-keys -t <pane-id> -l 'AutoImplementCycle <id>'
    tmux send-keys -t <pane-id> Enter
    ```
 
-7. Immediately run the following command without a tool timeout and perform no
-   other Autoimplement work while it blocks:
+8. Immediately run this command without a tool timeout and do no other
+   Autoimplement work while it blocks:
 
    ```text
    /Volumes/dev/bin/skills/autoimplement wait-work-cycle <id>
    ```
 
-8. If wait stdout contains another `AutoImplementCycle <id>` line, retain its
-   completed and accepted-step output, then repeat this handoff in the same
-   invocation. Do not pause between authored steps.
-9. Otherwise follow **Issue assessment** when stdout contains an `Issue: <id>`
-   block. When stdout contains `Task <id> ready for Manager-context review.`,
-   retain it and follow **Pending Manager boundary**. Stop on any failure. Never
-   retry or redispatch automatically.
+9. Process wait stdout through **Continue helper output**.
 
-When helper stdout contains an exact `WaitWorkCycle <id>` line, do not send
-another participant message. Run the same blocking `wait-work-cycle` command
-without a tool timeout. Process its output through the same repeated-handoff,
-issue-assessment, pending-Manager, or failure rules above.
+When helper stdout contains an exact `WaitWorkCycle <id>` line, first run
+`show-work-cycle <id>`. For a `manager`/`review`, do not block waiting and do not
+run the review on a normal resume: begin with `[MM_NTF]`, report that the
+incomplete Manager Work Cycle requires explicit `--retry`, and stop. An explicit
+retry returns `AutoImplementCycle <id>` and runs the Manager review inline. For
+participant roles, do not send another participant message; run the blocking
+`wait-work-cycle <id>` command and process its output normally.
 
 Separate retained completed Work Cycle blocks with one blank line. Surface
 participant, result, commit, database, Git, and tmux failures unchanged after
 the required Manager notification prefix. Never expose machine-control lines.
 
-## Final review order
+## Inline Manager review
+
+For a persisted `manager`/`review` Work Cycle, run it inline in the current Manager conversation:
+
+1. Require `scope: manager_review`, null step fields, and complete ordered
+   `history` from `show-work-cycle`.
+2. Read the complete Task files. `task.md` and `steps.md` are authoritative when
+   conversation history is absent; also use live conversation context when
+   available, including task creation and grilling decisions.
+   Do not persist conversation transcripts.
+3. Read every Work Cycle, input, produced issue, decision, and completion state
+   in the complete ordered `history`.
+4. Inspect the full commit range and Task diff:
+
+   ```text
+   git -C <canonical-checkout> log --oneline <starting_commit_sha>..HEAD
+   git -C <canonical-checkout> diff <starting_commit_sha>..HEAD
+   ```
+
+5. Inspect relevant surrounding code and review every authored step as one
+   implementation. Do not edit, stage, commit, push, switch branches, or run checks.
+6. Follow `app/prompts/work_cycle.md`'s **Manager review** criteria. Use normal
+   judgment over prior decisions. Do not suppress duplicate concerns merely
+   because history contains a similar concern.
+7. Publish one completed `manager`/`review` result with normal provenance and a
+   `reported_issues` array. Write the complete payload first to:
+
+   ```text
+   /tmp/autoimplement-work-cycle-<id>.json.tmp
+   ```
+
+   Then atomically publish it with:
+
+   ```text
+   mv /tmp/autoimplement-work-cycle-<id>.json.tmp /tmp/autoimplement-work-cycle-<id>.json
+   ```
+
+8. Run `/Volumes/dev/bin/skills/autoimplement wait-work-cycle <id>` directly and
+   process its stdout through **Continue helper output**.
+
+If inline review is interrupted before publication, leave the Work Cycle
+incomplete. A later normal invocation requests explicit `--retry`; retrying a
+Manager review remains inline and never contacts a participant pane. Never
+retry automatically.
+
+## Continue helper output
+
+Process helper stdout in this order:
+
+1. Retain completed and accepted-step output before any control line.
+2. For `AutoImplementCycle <id>` or `WaitWorkCycle <id>`, follow **Work Cycle
+   handoff** in this invocation.
+3. For an `Issue: <id>` block, follow **Issue assessment**.
+4. For `AutoImplementSquash <task-id>`, follow **Optional squash**.
+5. Return ordinary failed-check output without creating a Work Cycle; a normal
+   later resume reruns the complete checks.
+6. Surface every other failure unchanged and stop. Never retry automatically.
+
+## Final lifecycle order
 
 The persisted lifecycle order is:
 
 1. independent Reviewer review for every authored step
 2. one whole-task super-review
 3. one whole-task Worker self-review
-4. pending Manager-context boundary
+4. Manager-context review and its correction loops
+5. final checks
+6. durable completion
 
-The super-review and Worker self-review each run exactly once. Findings from
-either review use ordinary Reported Issue Fix, Skip, or Unclear assessment.
-Approved final-review findings are batched into a nil-step Worker implementation
-committed as `Final review correction N`; each correction receives a scoped
-independent Reviewer pass over exactly `git diff HEAD~1..HEAD`. Scoped findings
-use the same assessment and correction loop. Corrections never rerun either
-one-time whole-task gate.
+The super-review and Worker self-review each run exactly once. Findings from any
+final review use ordinary Reported Issue Fix, Skip, or Unclear assessment.
+Approved findings are batched into a nil-step Worker implementation committed as
+`Final review correction N`; each correction receives a scoped independent
+Reviewer pass over exactly `git diff HEAD~1..HEAD`. A clean or skipped-only
+scoped pass after a Manager correction starts a fresh Manager review with the
+complete updated history. Corrections never rerun either one-time whole-task
+gate. Do not suppress duplicate concerns; rely on Manager judgment.
 
 The super-review uses the persisted agent and exact
 `Task.starting_commit_sha..HEAD` range. Its `super-review.md` is temporary and
 non-authoritative: remove it before result publication, never commit it, and
 store no raw candidates or adjudication prose in SQLite.
 
-## Pending Manager boundary
+A clean or all-skipped Manager pass runs final checks. Failed or interrupted
+checks leave the Task in `manager_review`; normal resume reruns the full check
+set without another Manager review. Passing checks on clean Git persist only
+`final_checks_passed`. Stable terminal resume returns completion without checks,
+Git inspection, a new Work Cycle, or another squash offer. Autoimplement never
+pushes.
 
-When output contains `Task <id> ready for Manager-context review.`, retain and
-display the complete output, then stop successfully without contacting a
-participant, inspecting Git, or writing workflow state. Repeated normal resume
-returns the same boundary message.
+## Optional squash
 
-Final checks are deferred until the future Manager-context review and its
-correction loops settle. At this boundary Autoimplement must not run
-`RunTaskFinalChecks`, set `final_checks_passed`, or treat the Task as complete.
-Explicit `--retry` remains only for an incomplete participant Work Cycle.
+When stdout contains `AutoImplementSquash <task-id>`, the Task is already
+durably complete. Retain and display all other completion output, but never
+display the control line.
+
+1. Briefly inspect the complete local range:
+
+   ```text
+   git -C <canonical-checkout> log --oneline <starting_commit_sha>..HEAD
+   git -C <canonical-checkout> diff <starting_commit_sha>..HEAD
+   ```
+
+2. Confirm by Manager judgment that the range belongs to the Task. If anything
+   looks unrelated, missing, suspicious, or outside intended scope, begin with
+   `[MM_NTF]`, ask the operator about it, and do not offer or run squash yet.
+   Do not validate commit subjects or counts against SQLite.
+3. Resolve the subject before asking:
+   - For `task_provider: shortcut`, use the resolved numeric Task folder ID as
+     the attached story ID. Follow the shared Shortcut skill and run its
+     `get-story` command, preferring:
+
+     ```text
+     ruby ~/.pi/agent/extensions/shortcut/scripts/shortcut.rb get-story <story-id>
+     ```
+
+     Use the current Shortcut story name exactly. If lookup or name extraction
+     fails, abort without fallback or Git mutation.
+   - For `task_provider: local`, derive
+     `Task <task-id>: <folder slug as words>` from the canonical Task folder,
+     removing its leading numeric ID and converting slug separators to spaces.
+4. Ask exactly:
+
+   ```text
+   [MM_NTF] Should i squash?
+   ```
+
+Do not persist the question, answer, pending state, or squash result. For the
+operator's next reply while the question is active:
+
+- Treat `yes`, `go`, `squash`, `approve`, or `approved` as approval and run:
+
+  ```text
+  /Volumes/dev/bin/skills/autoimplement squash-task <task-id> <canonical-checkout> <subject>
+  ```
+
+- Treat `no`, `skip`, or `leave` as declining. Run no helper and report that the
+  Task commits remain unchanged.
+- A question or unrelated message is not an answer. Answer it without invoking
+  the helper, then ask `[MM_NTF] Should i squash?` again.
+
+Return squash success or failure unchanged. A failure, decline, or successful
+squash leaves durable Task state unchanged. Never resume, persist squash
+metadata, push, or automatically retry.
 
 ## Issue assessment
 
@@ -313,11 +422,10 @@ For one clear decision, run exactly one command:
 /Volumes/dev/bin/skills/autoimplement store-decision <id> <approved|skipped>
 ```
 
-When stdout contains `AutoImplementCycle <id>`, retain any accepted-step output
-and follow **Work Cycle handoff**, continuing through later authored steps.
-Otherwise follow **Issue assessment** for the next issue or **Pending Manager
-boundary** for its stable output. Process only one decision per operator reply.
-Do not refetch Task input, run Worker classification, or start debate.
+Process decision-command stdout through **Continue helper output**, retaining
+accepted-step or completed Work Cycle output before its next control. Process
+only one decision per operator reply. Do not refetch Task input, run Worker
+classification, or start debate.
 
 SQLite is authoritative for generated workflow state. Do not create Task logs,
 review reports, or other durable generated artifacts. Structured result files

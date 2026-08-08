@@ -28,7 +28,7 @@ RSpec.describe 'Autoimplement Work Cycle prompt' do
     expect(prompt).to include('scope` is `final_worker_review`')
     expect(prompt).to include('git -C <project_path> diff <starting_commit_sha>..HEAD')
     expect(prompt).to include('Do not report style, nits, speculative improvements')
-    expect(prompt).to include('A completed Worker or Reviewer review result also contains')
+    expect(prompt).to include('A completed Worker, Reviewer, or Manager review result also contains')
   end
 
   it 'runs the authorized whole-task super-review with persisted scope and agent' do
@@ -53,6 +53,16 @@ RSpec.describe 'Autoimplement Work Cycle prompt' do
       'report it only when an approved input remains unresolved or the correction introduced it'
     )
     expect(prompt).to include('exclude every unrelated defect that already existed before the correction')
+  end
+
+  it 'defines the inline whole-Task Manager review result' do
+    expect(prompt).to include('## Manager review')
+    expect(prompt).to include('scope` is `manager_review`')
+    expect(prompt).to include('complete ordered `history`')
+    expect(prompt).to include('live Manager conversation context when available')
+    expect(prompt).to include('`task.md` and `steps.md` remain authoritative')
+    expect(prompt).to include('Do not suppress a concern because history contains a similar concern')
+    expect(prompt).to include('A completed Worker, Reviewer, or Manager review result also contains')
   end
 
   it 'keeps participant writes outside SQLite and workflow state' do

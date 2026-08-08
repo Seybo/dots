@@ -44,4 +44,30 @@ RSpec.describe HandleTaskDecision do
     expect(ResumeTask).to have_received(:call).with(task_id: task_id)
     expect(output).to eq("Decision: skipped\n\nStep 1 accepted.")
   end
+
+  it 'uses the same decision path for Manager findings' do
+    db[:tasks].where(id: task_id).update(state: 'manager_review')
+    manager_review_id = db[:work_cycles].insert(
+      created_at: Time.now,
+      completed_at: Time.now,
+      task_id: task_id,
+      role: 'manager',
+      action: 'review'
+    )
+    manager_issue_id = StoreIssue.call(
+      project_path: '/project',
+      source: 'manager',
+      body: 'Manager finding.'
+    )
+    db[:work_cycle_reported_issues].insert(
+      created_at: Time.now,
+      work_cycle_id: manager_review_id,
+      reported_issue_id: manager_issue_id
+    )
+
+    described_class.call(issue_id: manager_issue_id, decision: 'approved')
+
+    expect(db[:reported_issues].where(id: manager_issue_id).get(:decision)).to eq('approved')
+    expect(ResumeTask).to have_received(:call).with(task_id: task_id)
+  end
 end

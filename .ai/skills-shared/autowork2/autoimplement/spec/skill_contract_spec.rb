@@ -42,25 +42,70 @@ RSpec.describe 'Autoimplement skill contract' do
     expect(skill).to include('`worker` → `agent-worker`')
   end
 
-  it 'documents the final gate order through the pending Manager boundary' do
+  it 'documents the complete final gate order and one-time reviews' do
     step_index = skill.index('independent Reviewer review for every authored step')
     super_index = skill.index('one whole-task super-review')
     worker_index = skill.index('one whole-task Worker self-review')
-    manager_index = skill.index('pending Manager-context boundary')
+    manager_index = skill.index('4. Manager-context review')
+    checks_index = skill.index('5. final checks')
+    completion_index = skill.index('6. durable completion')
 
     expect(step_index).to be < super_index
     expect(super_index).to be < worker_index
     expect(worker_index).to be < manager_index
+    expect(manager_index).to be < checks_index
+    expect(checks_index).to be < completion_index
     expect(skill).to include('exactly once')
     expect(skill).to include('Final review correction N')
     expect(skill).to include('git diff HEAD~1..HEAD')
   end
 
-  it 'stops at the pending Manager boundary and defers final checks' do
-    expect(skill).to include('Task <id> ready for Manager-context review.')
-    expect(skill).to include('Final checks are deferred')
-    expect(skill).to match(/must not run\s+`RunTaskFinalChecks`/)
-    expect(skill).to match(/stop successfully without contacting a\s+participant/)
+  it 'runs Manager reviews inline with durable intent and complete history' do
+    expect(skill).to include('`manager`/`review`')
+    expect(skill).to match(/run it inline in the current Manager conversation/i)
+    expect(skill).to include('`task.md` and `steps.md` are authoritative')
+    expect(skill).to include('live conversation context')
+    expect(skill).to include('complete ordered `history`')
+    expect(skill).to include('git -C <canonical-checkout> diff <starting_commit_sha>..HEAD')
+    expect(skill).to match(/Do not edit, stage, commit, push, switch branches, or run checks/)
+  end
+
+  it 'publishes Manager results atomically and continues the normal lifecycle' do
+    expect(skill).to include('/tmp/autoimplement-work-cycle-<id>.json.tmp')
+    expect(skill).to include('/tmp/autoimplement-work-cycle-<id>.json')
+    expect(skill).to include('reported_issues')
+    expect(skill).to include('wait-work-cycle <id>')
+    expect(skill).to include('fresh Manager review')
+    expect(skill).to include('final_checks_passed')
+    expect(skill).to match(/incomplete Manager Work Cycle.*`--retry`/m)
+    expect(skill).to match(/retry.*Manager review.*inline/im)
+  end
+
+  it 'offers one non-durable local squash after completion' do
+    inspect_index = skill.index(
+      'git -C <canonical-checkout> log --oneline <starting_commit_sha>..HEAD',
+      skill.index('## Optional squash')
+    )
+    lookup_index = skill.index('current Shortcut story name')
+    failure_index = skill.index('abort without fallback or Git mutation')
+    ask_index = skill.index('[MM_NTF] Should i squash?')
+    helper_index = skill.index('squash-task <task-id> <canonical-checkout> <subject>')
+
+    expect(skill).to include('AutoImplementSquash <task-id>')
+    expect(inspect_index).to be < lookup_index
+    expect(lookup_index).to be < failure_index
+    expect(failure_index).to be < ask_index
+    expect(ask_index).to be < helper_index
+    expect(skill).to include('Task <task-id>: <folder slug as words>')
+    expect(skill).to include('`no`, `skip`, or `leave`')
+    expect(skill).to match(/Do not persist the question, answer, pending state, or squash result/)
+  end
+
+  it 'keeps omitted recovery and reconciliation behavior unavailable' do
+    expect(skill).to include('Do not suppress duplicate concerns')
+    expect(skill).to include('Do not persist conversation transcripts')
+    expect(skill).to include('Do not validate commit subjects or counts against SQLite')
+    expect(skill).to include('never pushes')
   end
 
   it 'keeps temporary super-review artifacts and workflow database writes constrained' do

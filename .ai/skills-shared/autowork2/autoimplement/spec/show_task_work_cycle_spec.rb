@@ -226,8 +226,105 @@ RSpec.describe 'ShowTaskWorkCycle' do
     expect(review_context.fetch('inputs').map { |issue| issue.fetch('id') }).to eq([input_issue_id])
   end
 
-  def insert_issue(body:, decision:)
-    issue_id = StoreIssue.call(project_path: '/project', source: 'reviewer', body: body)
+  it 'returns Manager scope with complete ordered Task Work Cycle history' do
+    db[:tasks].where(id: task_id).update(state: 'manager_review')
+    implementation_id = db[:work_cycles].insert(
+      created_at: Time.now,
+      completed_at: Time.now,
+      task_id: task_id,
+      step_number: 2,
+      role: 'worker',
+      action: 'implementation'
+    )
+    reviewer_id = db[:work_cycles].insert(
+      created_at: Time.now,
+      completed_at: Time.now,
+      task_id: task_id,
+      role: 'reviewer',
+      action: 'review'
+    )
+    issue_id = insert_issue(body: 'Settled review issue.', decision: 'skipped', source: 'reviewer')
+    db[:work_cycle_reported_issues].insert(
+      created_at: Time.now,
+      work_cycle_id: reviewer_id,
+      reported_issue_id: issue_id
+    )
+    manager_id = db[:work_cycles].insert(
+      created_at: Time.now,
+      task_id: task_id,
+      role: 'manager',
+      action: 'review'
+    )
+    db[:work_cycle_inputs].insert(
+      created_at: Time.now,
+      work_cycle_id: manager_id,
+      reported_issue_id: issue_id
+    )
+
+    context = JSON.parse(service_class.call(work_cycle_id: manager_id))
+
+    expect(context).to include(
+      'scope' => 'manager_review',
+      'step_number' => nil,
+      'step_commit_count' => nil,
+      'inputs' => [
+        {
+          'id' => issue_id,
+          'source' => 'reviewer',
+          'body' => 'Settled review issue.',
+          'decision' => 'skipped'
+        },
+      ]
+    )
+    expect(context.fetch('history')).to eq(
+      [
+        {
+          'id' => implementation_id,
+          'role' => 'worker',
+          'action' => 'implementation',
+          'step_number' => 2,
+          'is_completed' => true,
+          'inputs' => [],
+          'reported_issues' => []
+        },
+        {
+          'id' => reviewer_id,
+          'role' => 'reviewer',
+          'action' => 'review',
+          'step_number' => nil,
+          'is_completed' => true,
+          'inputs' => [],
+          'reported_issues' => [
+            {
+              'id' => issue_id,
+              'source' => 'reviewer',
+              'body' => 'Settled review issue.',
+              'decision' => 'skipped'
+            },
+          ]
+        },
+        {
+          'id' => manager_id,
+          'role' => 'manager',
+          'action' => 'review',
+          'step_number' => nil,
+          'is_completed' => false,
+          'inputs' => [
+            {
+              'id' => issue_id,
+              'source' => 'reviewer',
+              'body' => 'Settled review issue.',
+              'decision' => 'skipped'
+            },
+          ],
+          'reported_issues' => []
+        },
+      ]
+    )
+  end
+
+  def insert_issue(body:, decision:, source: 'reviewer')
+    issue_id = StoreIssue.call(project_path: '/project', source: source, body: body)
     db[:reported_issues].where(id: issue_id).update(decision: decision)
     issue_id
   end

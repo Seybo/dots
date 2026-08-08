@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'open3'
-
 class SquashReview
   include ServiceObject
 
@@ -31,23 +29,14 @@ class SquashReview
   end
 
   def squash
-    tree_sha = capture!('git', '-C', project_path, 'rev-parse', 'HEAD^{tree}').strip
-    final_commit_sha = capture!(
-      'git', '-C', project_path, 'commit-tree', tree_sha,
-      '-p', review.fetch(:starting_commit_sha), '-m', "Review #{review.fetch(:number)}"
-    ).strip
-    capture!('git', '-C', project_path, 'reset', '--soft', final_commit_sha)
-    final_commit_sha
+    SquashGitRange.call(
+      project_path: project_path,
+      parent_sha: review.fetch(:starting_commit_sha),
+      subject: "Review #{review.fetch(:number)}"
+    )
   end
 
   def review
     @review ||= Database.connection[:reviews].where(id: review_id).first
-  end
-
-  def capture!(*command)
-    stdout, stderr, status = Open3.capture3(*command)
-    return stdout if status.success?
-
-    raise "#{command.join(' ')} failed with exit #{status.exitstatus}: #{stderr.strip}"
   end
 end

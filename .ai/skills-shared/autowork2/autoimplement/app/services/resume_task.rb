@@ -6,12 +6,12 @@ class ResumeTask
   arguments :task_id
 
   def call
-    return "Task #{task.fetch(:id)} final checks passed." if task.fetch(:state) == 'final_checks_passed'
+    return completed_output if task.fetch(:state) == 'final_checks_passed'
     return "WaitWorkCycle #{incomplete_work_cycle.fetch(:id)}" unless incomplete_work_cycle.nil?
     return resume_initialized if task.fetch(:state) == 'initialized'
     return resume_super_review if task.fetch(:state) == 'super_review'
     return resume_final_worker_review if task.fetch(:state) == 'worker_final_review'
-    return ready_for_manager_review if task.fetch(:state) == 'manager_review'
+    return resume_manager_review if task.fetch(:state) == 'manager_review'
 
     raise "Cannot resume Task #{task_id} from state #{task.fetch(:state)}"
   end
@@ -113,11 +113,34 @@ class ResumeTask
                       update(state: 'manager_review')
       raise "Task #{task_id} did not remain in final Worker review" unless updated_count == 1
     end
-    ready_for_manager_review
+    start_manager_review
   end
 
-  def ready_for_manager_review
-    "Task #{task.fetch(:id)} ready for Manager-context review."
+  def resume_manager_review
+    return start_manager_review unless manager_review_exists?
+
+    case [latest_completed_work_cycle.fetch(:role), latest_completed_work_cycle.fetch(:action)]
+    when %w[worker implementation] then start_reviewer_review
+    when %w[manager review]
+      resume_review_issues { RunTaskFinalChecks.call(task_id: task.fetch(:id)) }
+    when %w[reviewer review]
+      resume_review_issues { start_manager_review }
+    else
+      raise "Cannot resume Task #{task_id} Manager review after " \
+            "#{latest_completed_work_cycle.fetch(:role)}/#{latest_completed_work_cycle.fetch(:action)}"
+    end
+  end
+
+  def start_manager_review
+    render_handoff(StartTaskManagerReviewWorkCycle.call(task_id: task.fetch(:id)))
+  end
+
+  def manager_review_exists?
+    work_cycles.where(task_id: task_id, role: 'manager', action: 'review').any?
+  end
+
+  def completed_output
+    "Task #{task.fetch(:id)} completed locally.\nPush: not performed."
   end
 
   def continue_after_accepted_step
