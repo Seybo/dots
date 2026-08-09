@@ -28,6 +28,11 @@ projects:
     code_root: /Volumes/dev/projects/shaka/gtm
     tmux_layout: shaka_gtm
     task_provider: shortcut
+  shaka_outreach:
+    checkout_layout: ordinal_workspaces
+    code_root: /Volumes/dev/projects/shaka/outreach
+    tmux_layout: shaka_outreach
+    task_provider: local
   shaka_trp:
     checkout_layout: ordinal_workspaces
     code_root: /Volumes/dev/projects/shaka/trp
