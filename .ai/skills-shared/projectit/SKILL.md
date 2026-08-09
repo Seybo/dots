@@ -2,8 +2,9 @@
 name: projectit
 description: >-
   Create an ordinal-workspace project for the task workflow. Creates its task
-  root, first code workspace, Git repository, tmuxinator layout, and registry
-  entry. Command-only skill. In Pi, invoke via /skill:projectit; /projectit is
+  root, first code workspace, Git repository, tmuxinator layout, registry
+  entry, and active-project entry. Offers an optional explicitly approved tmux
+  shortcut. Command-only skill. In Pi, invoke via /skill:projectit; /projectit is
   also accepted where that alias is exposed.
 disable-model-invocation: true
 ---
@@ -52,14 +53,21 @@ shaka -> project key shaka_<name>, code root /Volumes/dev/projects/shaka/<name>/
 misc  -> project key misc_<name>,  code root /Volumes/dev/projects/misc/<name>/
 ```
 
-It initializes the `1st` workspace as a Git repository and registers an `ordinal_workspaces` project in:
+It initializes the `1st` workspace as a Git repository, registers an `ordinal_workspaces` project in:
 
 ```text
 /Users/inseybo/.ai/skills-shared/components/projects.yml
 ```
 
+and adds the workspace repo root to:
+
+```text
+/Users/inseybo/.dots/refs/dev-env/active-projects.md
+```
+
 Additional workspaces use positive ordinals such as `2nd`, `7th`, and `28th`.
-Tmux sessions use `<project-key><number>`.
+Tmux sessions use `<project-key><number>`. At the end, the skill suggests an
+available one-letter tmux shortcut but adds it only after explicit approval.
 
 ## Instructions
 
@@ -93,6 +101,14 @@ Tmux sessions use `<project-key><number>`.
    - project registry:
      ```text
      /Users/inseybo/.ai/skills-shared/components/projects.yml
+     ```
+   - active-project registry:
+     ```text
+     /Users/inseybo/.dots/refs/dev-env/active-projects.md
+     ```
+   - tmux project bindings:
+     ```text
+     /Users/inseybo/.dots/.tmux-projects.conf
      ```
 
 4. **Validate base directories:**
@@ -134,9 +150,30 @@ Tmux sessions use `<project-key><number>`.
      ```
    - do not create per-workspace configuration files; all ordinals reuse the project layout
 
-8. **Return paths clearly:**
-   - show whether the task root, code root, `1st` workspace, Git repo, and registry entry were created or already existed
-   - show the full task root, first workspace, and registry paths
+8. **Register the active workspace:**
+   - require `/Users/inseybo/.dots/refs/dev-env/active-projects.md`
+   - verify `<code-root>/1st/` is a Git repo root before registering it
+   - add the full `<code-root>/1st` path under `## Projects` when absent
+   - keep project paths sorted and preserve the rest of the file
+   - never add inferred sibling workspaces or other projects
+
+9. **Offer an optional tmux shortcut:**
+   - read `/Users/inseybo/.dots/.tmux-projects.conf`
+   - inspect lowercase one-letter bindings in the `user-sessions` key table
+   - show the available lowercase letters and suggest one meaningful available letter based on `<name>`
+   - ask whether the user wants to add a shortcut and which letter to use
+   - do not edit the tmux config without explicit approval given after showing the suggestion
+   - if approved, require exactly one available lowercase letter; refuse an existing binding rather than replacing it
+   - add this project binding alongside the existing project aliases:
+     ```text
+     bind-key -T user-sessions <letter> set-option -q @tmux-project <project> \; switch-client -T user-project-workspaces
+     ```
+   - do not reload tmux automatically; tell the user to reload the config after adding a binding
+
+10. **Return paths clearly:**
+   - show whether the task root, code root, `1st` workspace, Git repo, project registry entry, and active-project entry were created or already existed
+   - show the full task root, first workspace, project registry, and active-project registry paths
+   - show whether the optional tmux shortcut was added or skipped
    - state that Git initializes on `main` or `master`, which is protected for every non-`env` project
    - before `/workit`, tell the user to create and switch to a task branch manually:
      ```bash
@@ -152,7 +189,7 @@ Tmux sessions use `<project-key><number>`.
 ## Important Notes
 
 - Do not auto-use this skill without the explicit `/projectit` command.
-- Create only project-level roots, the `1st` workspace, the project-level tmuxinator layout, and the registry entry.
-- Never overwrite, delete, or rename existing files or directories.
+- Create only project-level roots, the `1st` workspace, the project-level tmuxinator layout, the registry entries, and an explicitly approved tmux project binding.
+- Never overwrite, delete, rename, or replace existing files, directories, registry entries, or tmux bindings.
 - Do not create parent/base directories, per-workspace tmuxinator files, Ghostty shortcuts, or shell aliases.
 - This skill creates ordinal-workspace projects. Register existing standalone repositories manually as `checkout_layout: direct` in `projects.yml`.
