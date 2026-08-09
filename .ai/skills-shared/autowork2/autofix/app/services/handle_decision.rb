@@ -21,9 +21,6 @@ class HandleDecision
   end
 
   def resume_review
-    ResumeReview.call(
-      project_path: review.fetch(:project_path),
-      branch_name: review.fetch(:branch_name)
-    )
+    ResumeReview.call(task_id: review.fetch(:task_id))
   end
 end

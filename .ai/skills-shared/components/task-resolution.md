@@ -115,8 +115,9 @@ They do not infer, create, rename, or switch branches. Refuse `main` and
 - `env` may use either branch.
 - Any registered project whose project key starts with `my_` may use either branch.
 
-`/autowork` records the branch, its initial `HEAD` SHA, and the review-base ref
-and SHA at run initialization.
+Local Task config ownership and timing are defined in
+[`task-branch-config.md`](task-branch-config.md). Taskit and Workit must read it
+completely before recording branch metadata.
 
 ## Shortcut story ID inference
 
@@ -132,12 +133,10 @@ task folders use the numeric ID without that prefix.
 ## Optional base branch/ref for stacked task branches
 
 Task-workflow skills that create or verify Shortcut task branches may accept an
-explicit full base branch/ref. Do not infer it from a task ID. Preserve it
-exactly, verify it resolves to a commit, and record it as the review base for
-`/autowork`. Do not use Git upstream as the task base.
-
-If a recorded base moves, stop for explicit rebase/base-change instructions.
-`/autowork` owns updating its recorded base after an intentional change.
+explicit full base branch/ref. Shared base selection, ancestry validation,
+branch creation, and config persistence are defined in
+[`task-branch-config.md`](task-branch-config.md). Read it completely; do not
+restate or override those rules in task-resolution callers.
 
 ## Safety fallbacks
 

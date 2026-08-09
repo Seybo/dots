@@ -64,9 +64,7 @@ RSpec.describe StartImplementationWorkCycle do
       select_map(:reported_issue_id)).to eq(reported_issue_ids.values_at(0, 2))
     expect(db[:reviews].where(id: review_id).first).to include(
       state: 'worker_implementation',
-      starting_commit_sha: review_before.fetch(:starting_commit_sha),
-      active_base_ref: review_before.fetch(:active_base_ref),
-      active_base_commit_sha: review_before.fetch(:active_base_commit_sha)
+      starting_commit_sha: review_before.fetch(:starting_commit_sha)
     )
     expect(db[:review_issues].where(review_id: review_id).count).to eq(4)
   end
@@ -111,7 +109,7 @@ RSpec.describe StartImplementationWorkCycle do
     expect(db[:work_cycles].count).to eq(0)
     expect(db[:reviews].where(id: review_id).first).to include(
       state: 'manager_issues_assessment',
-      starting_commit_sha: nil
+      starting_commit_sha: git!('rev-parse', 'HEAD').strip
     )
   end
 
@@ -141,7 +139,7 @@ RSpec.describe StartImplementationWorkCycle do
     expect(db[:work_cycle_inputs].count).to eq(0)
     expect(db[:reviews].where(id: review_id).first).to include(
       state: 'manager_issues_assessment',
-      starting_commit_sha: nil
+      starting_commit_sha: git!('rev-parse', 'HEAD').strip
     )
   end
 
@@ -178,7 +176,7 @@ RSpec.describe StartImplementationWorkCycle do
   end
 
   def store_review(issue_bodies)
-    StoreReview.call(
+    ReviewFactory.call(
       project_path: project_path,
       source: 'local',
       branch_name: 'feature',

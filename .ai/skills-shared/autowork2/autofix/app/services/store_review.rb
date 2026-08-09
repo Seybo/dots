@@ -3,7 +3,7 @@
 class StoreReview
   include ServiceObject
 
-  arguments :project_path, :source, :branch_name, :base_ref, :base_commit_sha, :issue_data
+  arguments :task_context, :source, :starting_commit_sha, :issue_data
 
   def call
     Database.connection.transaction(savepoint: true) do
@@ -19,7 +19,7 @@ class StoreReview
   def store_issues
     issue_data.map do |issue|
       StoreIssue.call(
-        project_path: project_path,
+        project_path: task.fetch(:project_path),
         source: source,
         source_id: issue.fetch(:source_id),
         body: issue.fetch(:body)
@@ -31,17 +31,16 @@ class StoreReview
     reviews.insert(
       created_at: Time.now,
       completed_at: nil,
-      project_path: project_path,
-      number: reviews.where(project_path: project_path).max(:number).to_i + 1,
+      number: reviews.where(task_id: task.fetch(:id)).max(:number).to_i + 1,
       source: source,
-      branch_name: branch_name,
-      starting_commit_sha: nil,
-      original_base_ref: base_ref,
-      original_base_commit_sha: base_commit_sha,
-      active_base_ref: base_ref,
-      active_base_commit_sha: base_commit_sha,
-      state: 'manager_issues_assessment'
+      starting_commit_sha: starting_commit_sha,
+      state: 'manager_issues_assessment',
+      task_id: task.fetch(:id)
     )
+  end
+
+  def task
+    task_context.fetch(:task)
   end
 
   def reviews

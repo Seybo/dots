@@ -14,7 +14,6 @@ RSpec.describe 'StartTaskImplementationWorkCycle' do
       created_at: Time.now,
       task_path: task_path,
       project_path: project_path,
-      branch_name: 'feature',
       starting_commit_sha: 'starting-sha',
       state: 'initialized'
     )

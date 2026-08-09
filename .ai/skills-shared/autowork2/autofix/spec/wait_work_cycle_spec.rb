@@ -128,7 +128,7 @@ RSpec.describe WaitWorkCycle do
     expect(File.exist?(result_path(work_cycle_id))).to be(false)
 
     git!('restore', 'tracked.txt')
-    output = ResumeReview.call(project_path: project_path, branch_name: 'feature')
+    output = ResumeReview.call(task_id: db[:reviews].where(id: review_id).get(:task_id))
     reviewer_work_cycle = db[:work_cycles].order(:id).last
 
     expect(output).to eq("AutoFixCycle #{reviewer_work_cycle.fetch(:id)}\nAutoFixRole reviewer")
@@ -480,7 +480,7 @@ RSpec.describe WaitWorkCycle do
   end
 
   def store_review
-    StoreReview.call(
+    ReviewFactory.call(
       project_path: project_path,
       source: 'local',
       branch_name: 'feature',

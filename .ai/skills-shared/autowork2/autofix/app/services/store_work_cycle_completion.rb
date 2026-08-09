@@ -9,7 +9,7 @@ class StoreWorkCycleCompletion
     Database.connection.transaction(savepoint: true) do
       issue_ids = StoreWorkCycleResult.call(
         work_cycle_id: work_cycle_id,
-        project_path: review.fetch(:project_path),
+        project_path: review_context.fetch(:project_path),
         work_cycle_result: work_cycle_result
       )
       link_review_issues(issue_ids)
@@ -40,6 +40,10 @@ class StoreWorkCycleCompletion
 
   def review
     @review ||= Database.connection[:reviews].where(id: work_cycle.fetch(:review_id)).first
+  end
+
+  def review_context
+    @review_context ||= LoadReviewContext.call(review: review)
   end
 
   def next_review_state

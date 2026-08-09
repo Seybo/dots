@@ -13,7 +13,6 @@ RSpec.describe 'ResumeTask' do
       created_at: Time.now,
       task_path: task_path,
       project_path: '/project',
-      branch_name: 'feature',
       starting_commit_sha: 'starting-sha',
       state: 'initialized'
     )
@@ -23,6 +22,18 @@ RSpec.describe 'ResumeTask' do
     File.write(
       File.join(task_path, 'steps.md'),
       "# Steps\n\n## Step 1: First\n\n## Step 2: Second\n"
+    )
+    File.write(
+      File.join(task_path, 'config.json'),
+      JSON.generate(
+        'branch' => {
+          'name' => 'feature',
+          'original_base_ref' => 'origin/main',
+          'original_base_commit_sha' => 'base-sha',
+          'active_base_ref' => 'origin/main',
+          'active_base_commit_sha' => 'base-sha'
+        }
+      )
     )
     allow(ValidateCleanGitState).to receive(:call).and_return('head-sha')
   end

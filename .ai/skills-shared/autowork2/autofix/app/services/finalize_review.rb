@@ -25,7 +25,11 @@ class FinalizeReview
   end
 
   def project_path
-    review.fetch(:project_path)
+    review_context.fetch(:project_path)
+  end
+
+  def review_context
+    @review_context ||= LoadReviewContext.call(review: review)
   end
 
   def complete_review

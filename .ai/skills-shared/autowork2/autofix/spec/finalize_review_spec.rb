@@ -74,7 +74,7 @@ RSpec.describe FinalizeReview do
     expect_unfinalized(review_id, original_head)
 
     FileUtils.rm_f(fail_check_path)
-    resumed_output = ResumeReview.call(project_path: project_path, branch_name: 'feature')
+    resumed_output = ResumeReview.call(task_id: db[:reviews].where(id: review_id).get(:task_id))
 
     expect(resumed_output).to include('Review 1 completed locally.')
     expect(File.readlines(command_log_path, chomp: true)).to eq(%w[rubocop rspec rubocop rspec])
@@ -92,7 +92,7 @@ RSpec.describe FinalizeReview do
     expect_unfinalized(review_id, original_head)
 
     allow(Open3).to receive(:capture3).with(*interrupted_command).and_call_original
-    output = ResumeReview.call(project_path: project_path, branch_name: 'feature')
+    output = ResumeReview.call(task_id: db[:reviews].where(id: review_id).get(:task_id))
 
     expect(output).to include('Review 1 completed locally.')
     expect(File.readlines(command_log_path, chomp: true)).to eq(%w[rubocop rspec])
@@ -134,7 +134,7 @@ RSpec.describe FinalizeReview do
   end
 
   def create_implemented_review
-    review_id = StoreReview.call(
+    review_id = ReviewFactory.call(
       project_path: project_path,
       source: 'local',
       branch_name: 'feature',

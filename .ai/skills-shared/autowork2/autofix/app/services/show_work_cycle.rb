@@ -14,11 +14,11 @@ class ShowWorkCycle
       review_number: review.fetch(:number),
       role: work_cycle.fetch(:role),
       action: work_cycle.fetch(:action),
-      project_path: review.fetch(:project_path),
-      branch_name: review.fetch(:branch_name),
+      project_path: review_context.fetch(:project_path),
+      branch_name: review_context.fetch(:branch_name),
       starting_commit_sha: review.fetch(:starting_commit_sha),
-      active_base_ref: review.fetch(:active_base_ref),
-      active_base_commit_sha: review.fetch(:active_base_commit_sha),
+      active_base_ref: branch.fetch('active_base_ref'),
+      active_base_commit_sha: branch.fetch('active_base_commit_sha'),
       inputs: issues(:work_cycle_inputs),
       reported_issues: issues(:work_cycle_reported_issues)
     )
@@ -32,6 +32,14 @@ class ShowWorkCycle
 
   def review
     @review ||= Database.readonly_connection[:reviews].where(id: work_cycle.fetch(:review_id)).first
+  end
+
+  def review_context
+    @review_context ||= LoadReviewContext.call(review: review)
+  end
+
+  def branch
+    @branch ||= review_context.fetch(:config).fetch('branch')
   end
 
   def issues(link_table)

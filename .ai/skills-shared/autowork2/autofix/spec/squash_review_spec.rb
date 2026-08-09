@@ -88,10 +88,10 @@ RSpec.describe SquashReview do
   private
 
   def create_completed_review
-    review_id = StoreReview.call(
+    review_id = ReviewFactory.call(
       project_path: project_path,
       source: 'local',
-      branch_name: 'feature',
+      branch_name: git!('branch', '--show-current').strip,
       base_ref: 'origin/main',
       base_commit_sha: 'base-sha',
       issue_data: [{ source_id: nil, body: 'Approved issue.' }]

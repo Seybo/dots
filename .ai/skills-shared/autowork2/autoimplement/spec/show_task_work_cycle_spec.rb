@@ -6,19 +6,35 @@ require_relative '../../spec/spec_helper'
 RSpec.describe 'ShowTaskWorkCycle' do
   let(:service_class) { Object.const_get(:ShowTaskWorkCycle) }
   let(:db) { Database.connection }
+  let(:task_path) { Dir.mktmpdir('show-task-work-cycle-spec') }
   let(:task_id) do
     db[:tasks].insert(
       created_at: Time.now,
-      task_path: '/tasks/0028-task',
+      task_path: task_path,
       project_path: '/project',
-      branch_name: 'feature',
       starting_commit_sha: 'starting-sha',
       state: 'initialized'
     )
   end
 
   before do
+    File.write(
+      File.join(task_path, 'config.json'),
+      JSON.generate(
+        'branch' => {
+          'name' => 'feature',
+          'original_base_ref' => 'origin/main',
+          'original_base_commit_sha' => 'base-sha',
+          'active_base_ref' => 'origin/main',
+          'active_base_commit_sha' => 'base-sha'
+        }
+      )
+    )
     allow(Database).to receive(:readonly_connection).and_return(db)
+  end
+
+  after do
+    FileUtils.remove_entry(task_path)
   end
 
   it 'returns initial Worker context with no completed step commits or Reported Issues' do
@@ -37,7 +53,7 @@ RSpec.describe 'ShowTaskWorkCycle' do
       'task_id' => task_id,
       'role' => 'worker',
       'action' => 'implementation',
-      'task_path' => '/tasks/0028-task',
+      'task_path' => task_path,
       'project_path' => '/project',
       'branch_name' => 'feature',
       'starting_commit_sha' => 'starting-sha',

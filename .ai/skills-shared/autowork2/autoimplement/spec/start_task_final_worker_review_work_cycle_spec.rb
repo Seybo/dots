@@ -9,7 +9,6 @@ RSpec.describe StartTaskFinalWorkerReviewWorkCycle do
       created_at: Time.now,
       task_path: '/tasks/34',
       project_path: '/project',
-      branch_name: 'feature',
       starting_commit_sha: 'starting-sha',
       state: 'worker_final_review',
       super_review_agent: 'claude'

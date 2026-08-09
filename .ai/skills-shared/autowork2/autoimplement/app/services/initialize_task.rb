@@ -23,10 +23,7 @@ class InitializeTask
       raise "Task #{existing_task.fetch(:id)} checkout mismatch: " \
             "expected #{existing_task.fetch(:project_path)}, got #{project_path}"
     end
-    unless existing_task.fetch(:branch_name) == branch_name
-      raise "Task #{existing_task.fetch(:id)} branch mismatch: " \
-            "expected #{existing_task.fetch(:branch_name)}, got #{branch_name}"
-    end
+    validate_current_branch(existing_task.fetch(:id))
     if !super_review_agent.nil? && existing_task.fetch(:super_review_agent) != super_review_agent
       raise "Task #{existing_task.fetch(:id)} super-review agent mismatch: " \
             "expected #{existing_task.fetch(:super_review_agent)}, got #{super_review_agent}"
@@ -41,13 +38,13 @@ class InitializeTask
             "#{active_task.fetch(:task_path)}"
     end
 
+    validate_current_branch
     starting_commit_sha = ValidateCleanGitState.call(project_path: project_path)
     task_id = Database.connection.transaction(savepoint: true) do
       tasks.insert(
         created_at: Time.now,
         task_path: canonical_task_path,
         project_path: project_path,
-        branch_name: branch_name,
         starting_commit_sha: starting_commit_sha,
         state: 'initialized',
         super_review_agent: super_review_agent || 'claude'
@@ -82,10 +79,28 @@ class InitializeTask
     @project_path ||= File.realpath(ResolveProjectPath.call)
   end
 
-  def branch_name
-    @branch_name ||= capture!('git', '-C', project_path, 'branch', '--show-current').strip.tap do |branch|
+  def configured_branch_name
+    @configured_branch_name ||= task_config.fetch('branch').fetch('name')
+  end
+
+  def current_branch_name
+    @current_branch_name ||= capture!('git', '-C', project_path, 'branch', '--show-current').strip.tap do |branch|
       raise "Current checkout is detached in #{project_path}" if branch.empty?
     end
+  end
+
+  def validate_current_branch(task_id = nil)
+    return if current_branch_name == configured_branch_name
+
+    if task_id
+      raise "Task #{task_id} branch mismatch: expected #{configured_branch_name}, got #{current_branch_name}"
+    end
+
+    raise "Current branch #{current_branch_name} does not match Task config branch #{configured_branch_name}"
+  end
+
+  def task_config
+    @task_config ||= ReadTaskConfig.call(task_path: canonical_task_path)
   end
 
   def capture!(*command)

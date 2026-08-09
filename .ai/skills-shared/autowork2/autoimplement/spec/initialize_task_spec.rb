@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'json'
 require 'open3'
 require 'tmpdir'
 require_relative '../../spec/spec_helper'
@@ -30,7 +31,6 @@ RSpec.describe 'InitializeTask' do
       id: be_a(Integer),
       task_path: File.realpath(task_path),
       project_path: File.realpath(project_path),
-      branch_name: 'main',
       starting_commit_sha: git!('rev-parse', 'HEAD').strip,
       state: 'initialized',
       super_review_agent: 'claude'
@@ -135,6 +135,22 @@ RSpec.describe 'InitializeTask' do
       to raise_error("Task #{task.fetch(:id)} branch mismatch: expected main, got other")
   end
 
+  it 'uses updated Task config as the branch authority on resume' do
+    task = service_class.call(task_path: task_path)
+    write_task_config(task_path, branch_name: 'other')
+
+    expect { service_class.call(task_path: task_path) }.
+      to raise_error("Task #{task.fetch(:id)} branch mismatch: expected other, got main")
+  end
+
+  it 'requires complete Task branch config without database mutation' do
+    File.write(File.join(task_path, 'config.json'), JSON.generate('branch' => { 'name' => 'main' }))
+
+    expect { service_class.call(task_path: task_path) }.
+      to raise_error('Missing Task branch config: original_base_ref')
+    expect(db[:tasks].count).to eq(0)
+  end
+
   it 'revalidates authored files on resume' do
     task = service_class.call(task_path: task_path)
     stored_task = db[:tasks].where(id: task.fetch(:id)).first
@@ -161,6 +177,22 @@ RSpec.describe 'InitializeTask' do
     FileUtils.mkdir_p(path)
     File.write(File.join(path, 'task.md'), "# Context\n")
     File.write(File.join(path, 'steps.md'), "# Steps\n\n## Step 1: Start\n")
+    write_task_config(path)
+  end
+
+  def write_task_config(path, branch_name: 'main')
+    File.write(
+      File.join(path, 'config.json'),
+      JSON.generate(
+        'branch' => {
+          'name' => branch_name,
+          'original_base_ref' => 'base-sha',
+          'original_base_commit_sha' => 'base-sha',
+          'active_base_ref' => 'base-sha',
+          'active_base_commit_sha' => 'base-sha'
+        }
+      )
+    )
   end
 
   def git!(*arguments, path: project_path)

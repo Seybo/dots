@@ -65,7 +65,7 @@ RSpec.describe 'Manager review flow' do
       work_cycle_result: review_result(reviewer_work_cycle_id, role: 'reviewer', reported_issues: [])
     )
 
-    manager_output = ResumeReview.call(project_path: project_path, branch_name: 'feature')
+    manager_output = ResumeReview.call(task_id: db[:reviews].where(id: review_id).get(:task_id))
     second_manager_work_cycle = db[:work_cycles].order(:id).last
 
     expect(manager_output).to eq(
@@ -85,7 +85,7 @@ RSpec.describe 'Manager review flow' do
   private
 
   def complete_manager_review_with_issue
-    review_id = StoreReview.call(
+    review_id = ReviewFactory.call(
       project_path: project_path,
       source: 'local',
       branch_name: 'feature',

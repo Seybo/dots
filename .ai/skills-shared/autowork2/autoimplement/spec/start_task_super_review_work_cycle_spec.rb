@@ -9,7 +9,6 @@ RSpec.describe StartTaskSuperReviewWorkCycle do
       created_at: Time.now,
       task_path: '/tasks/34',
       project_path: '/project',
-      branch_name: 'feature',
       starting_commit_sha: 'starting-sha',
       state: 'initialized',
       super_review_agent: 'claude'

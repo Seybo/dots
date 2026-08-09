@@ -7,10 +7,10 @@ require_relative '../../spec/spec_helper'
 
 RSpec.describe AutofixCli do
   let(:db) { Database.connection }
-  let(:reported_issues) { db[:reported_issues] }
-  let(:reviews) { db[:reviews] }
   let(:json_path) { File.join(Dir.tmpdir, "autofix-cli-spec-#{Process.pid}-#{object_id}.json") }
   let(:project_path) { Dir.mktmpdir('autofix-cli-project-spec') }
+  let(:task_path) { Dir.mktmpdir('autofix-cli-task-spec') }
+  let(:task_id) { insert_task }
 
   before do
     allow(Database).to receive(:readonly_connection).and_return(db)
@@ -20,38 +20,40 @@ RSpec.describe AutofixCli do
     File.write(File.join(project_path, 'tracked.txt'), "initial\n")
     git!('add', 'tracked.txt')
     git!('commit', '-q', '-m', 'Initial commit')
+    git!('checkout', '-q', '-b', 'feature')
+    write_task_files
+    task_id
     allow(ResolveProjectPath).to receive(:call).and_return(project_path)
   end
 
   after do
     FileUtils.rm_f(json_path)
     FileUtils.remove_entry(project_path)
+    FileUtils.remove_entry(task_path)
   end
 
   it 'imports a normalized GitHub Review' do
     write_json(review_input(issues: [{ 'source_id' => '101', 'body' => 'Normalized issue.' }]))
 
     expect do
-      described_class.call(cli_args: ['import-github-review', json_path])
+      described_class.call(cli_args: ['import-github-review', json_path, task_path])
     end.to output("Issue: 1\n\n> Normalized issue.\n").to_stdout
 
-    expect(reviews.first).to include(source: 'github', project_path: project_path)
+    expect(reviews.first).to include(source: 'github', task_id: task_id, starting_commit_sha: head_sha)
     expect(reported_issues.first).to include(source: 'github', source_id: '101', body: 'Normalized issue.')
   end
 
-  it 'imports a local Review with resolved Git metadata' do
+  it 'imports a local Task-owned Review with its starting boundary' do
     write_json(review_input(issues: ['Local issue.']))
 
     expect do
-      described_class.call(cli_args: ['import-local-review', json_path])
+      described_class.call(cli_args: ['import-local-review', json_path, task_path])
     end.to output("Issue: 1\n\n> Local issue.\n").to_stdout
 
     expect(reviews.first).to include(
       source: 'local',
-      project_path: project_path,
-      branch_name: 'feature',
-      active_base_ref: 'origin/main',
-      active_base_commit_sha: 'base-sha'
+      task_id: task_id,
+      starting_commit_sha: head_sha
     )
   end
 
@@ -63,7 +65,7 @@ RSpec.describe AutofixCli do
       write_json(input)
 
       expect do
-        described_class.call(cli_args: [command, json_path])
+        described_class.call(cli_args: [command, json_path, task_path])
       end.to output("No issues found.\n").to_stdout
     end
 
@@ -73,34 +75,36 @@ RSpec.describe AutofixCli do
 
   it 'reports when resume finds no incomplete Review' do
     expect do
-      described_class.call(cli_args: %w[resume feature])
+      described_class.call(cli_args: ['resume', task_path])
     end.to output("No incomplete Review.\n").to_stdout
   end
 
-  it 'starts a Review rebase with an optional exact base ref' do
-    allow(RebaseReview).to receive(:call).and_return('Review 1 rebased.')
+  it 'starts a Task-owned rebase with an optional exact base ref' do
+    allow(RebaseAutofixTask).to receive(:call).and_return('Task 1 rebased.')
+    allow(ResumeReview).to receive(:call)
 
     expect do
-      described_class.call(cli_args: %w[rebase-review feature origin/release])
-    end.to output("Review 1 rebased.\n").to_stdout
-    expect(RebaseReview).to have_received(:call).with(
+      described_class.call(cli_args: ['rebase-task', task_path, 'origin/release'])
+    end.to output("Task 1 rebased.\n").to_stdout
+    expect(RebaseAutofixTask).to have_received(:call).with(
       project_path: project_path,
-      branch_name: 'feature',
+      task_path: task_path,
       base_ref: 'origin/release'
     )
+    expect(ResumeReview).not_to have_received(:call)
   end
 
-  it 'continues a Review rebase with retained target metadata' do
-    allow(ContinueReviewRebase).to receive(:call).and_return('Review 1 rebased.')
+  it 'continues a Task-owned rebase with retained target metadata' do
+    allow(ContinueAutofixRebase).to receive(:call).and_return('Task 1 rebased.')
 
     expect do
       described_class.call(
-        cli_args: %w[continue-review-rebase feature origin/main target-sha]
+        cli_args: ['continue-task-rebase', task_path, 'origin/main', 'target-sha']
       )
-    end.to output("Review 1 rebased.\n").to_stdout
-    expect(ContinueReviewRebase).to have_received(:call).with(
+    end.to output("Task 1 rebased.\n").to_stdout
+    expect(ContinueAutofixRebase).to have_received(:call).with(
       project_path: project_path,
-      branch_name: 'feature',
+      task_path: task_path,
       target_base_ref: 'origin/main',
       target_base_commit_sha: 'target-sha'
     )
@@ -205,7 +209,7 @@ RSpec.describe AutofixCli do
     expect(reported_issues.where(id: issue_id).get(:decision)).to eq('approved')
     expect(reviews.where(id: review_id).first).to include(
       state: 'manager_issues_assessment',
-      starting_commit_sha: nil
+      starting_commit_sha: head_sha
     )
     expect(db[:work_cycles].count).to eq(0)
   end
@@ -308,11 +312,19 @@ RSpec.describe AutofixCli do
     expect(db[:work_cycles].count).to eq(1)
   end
 
+  def reported_issues
+    db[:reported_issues]
+  end
+
+  def reviews
+    db[:reviews]
+  end
+
   def review_input(issues:)
     {
       'branch_name' => 'feature',
-      'base_ref' => 'origin/main',
-      'base_commit_sha' => 'base-sha',
+      'base_ref' => 'main',
+      'base_commit_sha' => head_sha,
       'issues' => issues
     }
   end
@@ -321,13 +333,47 @@ RSpec.describe AutofixCli do
     File.write(json_path, JSON.generate(value))
   end
 
+  def insert_task
+    db[:tasks].insert(
+      created_at: Time.now,
+      task_path: File.realpath(task_path),
+      project_path: File.realpath(project_path),
+      starting_commit_sha: head_sha,
+      state: 'final_checks_passed',
+      super_review_agent: 'claude'
+    )
+  end
+
+  def write_task_files
+    File.write(File.join(task_path, 'task.md'), "# Context\n")
+    File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: Start\n")
+    File.write(
+      File.join(task_path, 'config.json'),
+      JSON.generate(
+        'branch' => {
+          'name' => 'feature',
+          'original_base_ref' => 'main',
+          'original_base_commit_sha' => head_sha,
+          'active_base_ref' => 'main',
+          'active_base_commit_sha' => head_sha
+        }
+      )
+    )
+  end
+
+  def task_context
+    { task: db[:tasks].where(id: task_id).first, config: ReadTaskConfig.call(task_path: task_path) }
+  end
+
+  def head_sha
+    git!('rev-parse', 'HEAD').strip
+  end
+
   def store_review(issue_bodies)
     StoreReview.call(
-      project_path: project_path,
+      task_context: task_context,
       source: 'local',
-      branch_name: 'feature',
-      base_ref: 'origin/main',
-      base_commit_sha: 'base-sha',
+      starting_commit_sha: head_sha,
       issue_data: issue_bodies.map { |body| { source_id: nil, body: body } }
     )
   end

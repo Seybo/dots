@@ -13,7 +13,6 @@ RSpec.describe ValidateWorkCycleResult do
       created_at: Time.now,
       task_path: '/task',
       project_path: '/project',
-      branch_name: 'feature',
       starting_commit_sha: 'starting-sha',
       state: 'initialized'
     )

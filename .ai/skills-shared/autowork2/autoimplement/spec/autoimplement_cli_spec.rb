@@ -14,7 +14,6 @@ RSpec.describe 'AutoimplementCli' do
       id: 7,
       task_path: task_path,
       project_path: '/project',
-      branch_name: 'feature',
       starting_commit_sha: 'abc123',
       state: 'initialized',
       super_review_agent: 'claude'
@@ -31,6 +30,9 @@ RSpec.describe 'AutoimplementCli' do
     allow(WaitTaskWorkCycle).to receive(:call).and_return('Worker implementation completed.')
     allow(HandleTaskDecision).to receive(:call).and_return('Decision: approved')
     allow(SquashTask).to receive(:call).and_return('Task 7 squashed locally.')
+    allow(RebaseTask).to receive(:call).and_return('Task 7 rebased.')
+    allow(ContinueTaskRebase).to receive(:call).and_return('Task 7 rebased.')
+    allow(ResolveProjectPath).to receive(:call).and_return('/canonical/project')
   end
 
   it 'initializes or resumes the selected Task and renders it' do
@@ -96,6 +98,34 @@ RSpec.describe 'AutoimplementCli' do
     )
   end
 
+  it 'starts a Task rebase with an optional exact base ref' do
+    expect do
+      service_class.call(cli_args: ['rebase-task', task_path, 'origin/release'])
+    end.to output("Task 7 rebased.\n").to_stdout
+
+    expect(RebaseTask).to have_received(:call).with(
+      task_path: task_path,
+      project_path: '/canonical/project',
+      base_ref: 'origin/release'
+    )
+    expect(ResumeTask).not_to have_received(:call)
+  end
+
+  it 'continues a Task rebase with retained target metadata' do
+    expect do
+      service_class.call(
+        cli_args: ['continue-task-rebase', task_path, 'origin/main', 'target-sha']
+      )
+    end.to output("Task 7 rebased.\n").to_stdout
+
+    expect(ContinueTaskRebase).to have_received(:call).with(
+      task_path: task_path,
+      project_path: '/canonical/project',
+      target_base_ref: 'origin/main',
+      target_base_commit_sha: 'target-sha'
+    )
+  end
+
   it 'shows one Work Cycle without running migrations' do
     expect do
       service_class.call(cli_args: %w[show-work-cycle 12])
@@ -131,6 +161,9 @@ RSpec.describe 'AutoimplementCli' do
       ['squash-task'],
       %w[squash-task 7 /project],
       %w[squash-task 7 /project subject extra],
+      ['rebase-task'],
+      %w[rebase-task /task origin/main extra],
+      %w[continue-task-rebase /task origin/main target-sha extra],
       %w[other 12],
     ].each do |cli_args|
       expect { service_class.call(cli_args: cli_args) }.
@@ -139,8 +172,10 @@ RSpec.describe 'AutoimplementCli' do
           'Usage: autoimplement [initialize-task <canonical-task-path> [super-review-agent] | ' \
           'resume-task <task-id> | ' \
           'retry-task <task-id> | store-decision <issue-id> <decision> | ' \
-          'squash-task <task-id> <canonical-project-path> <subject> | show-work-cycle <id> | ' \
-          'wait-work-cycle <id>]'
+          'squash-task <task-id> <canonical-project-path> <subject> | ' \
+          'rebase-task <canonical-task-path> [base-ref] | ' \
+          'continue-task-rebase <canonical-task-path> <target-ref> <target-sha> | ' \
+          'show-work-cycle <id> | wait-work-cycle <id>]'
         )
     end
   end

@@ -7,7 +7,7 @@ class StartWorkerReviewWorkCycle
 
   def call
     ensure_no_worker_review
-    ValidateCleanGitState.call(project_path: review.fetch(:project_path))
+    ValidateCleanGitState.call(project_path: review_context.fetch(:project_path))
     Database.connection.transaction(savepoint: true) do
       update_review
       work_cycle_id = create_work_cycle
@@ -20,6 +20,10 @@ class StartWorkerReviewWorkCycle
 
   def review
     @review ||= Database.connection[:reviews].where(id: review_id).first
+  end
+
+  def review_context
+    @review_context ||= LoadReviewContext.call(review: review)
   end
 
   def implementation_work_cycle

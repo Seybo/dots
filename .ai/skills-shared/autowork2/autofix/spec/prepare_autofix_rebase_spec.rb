@@ -5,7 +5,7 @@ require 'open3'
 require 'tmpdir'
 require_relative '../../spec/spec_helper'
 
-RSpec.describe PrepareReviewRebase do
+RSpec.describe PrepareAutofixRebase do
   let(:db) { Database.connection }
   let(:root_path) { Dir.mktmpdir('autofix-prepare-rebase-spec') }
   let(:paths) do
@@ -21,43 +21,51 @@ RSpec.describe PrepareReviewRebase do
   before do
     repository_shas
     review_id
-    insert_work_cycle(completed_at: Time.now)
+    db[:tasks].update(starting_commit_sha: base_sha)
   end
 
   after do
     FileUtils.remove_entry(root_path)
   end
 
-  it 'prepares an advanced version of the stored active base ref without persisting changes' do
+  it 'prepares Task and Review boundaries without requiring a completed implementation' do
     target_sha = advance_main
-    review_before = review
+    task = db[:tasks].first
 
-    result = described_class.call(project_path: project_path, branch_name: 'feature')
+    result = prepare
 
-    expect(result).to eq(
+    expect(result).to include(
+      task_id: task.fetch(:id),
+      task_path: task.fetch(:task_path),
       review_id: review_id,
       review_number: 1,
       project_path: File.realpath(project_path),
       branch_name: 'feature',
-      starting_commit_sha: starting_sha,
-      original_base_ref: 'origin/main',
-      original_base_commit_sha: base_sha,
+      task_starting_commit_sha: base_sha,
+      review_starting_commit_sha: review_starting_sha,
       active_base_ref: 'origin/main',
       active_base_commit_sha: base_sha,
       target_base_ref: 'origin/main',
-      target_base_commit_sha: target_sha,
-      head_commit_sha: head_sha,
-      commits_after_starting_count: 1
+      target_base_commit_sha: target_sha
     )
-    expect(review).to eq(review_before)
+    expect(result.fetch(:git_preparation).fetch(:boundary_counts)).to eq(task: 2, review: 1)
   end
 
-  it 'preserves an explicit ref exactly and resolves it once' do
+  it 'prepares a completed Task before a Review exists' do
+    db[:reviews].where(id: review_id).delete
+
+    result = prepare
+
+    expect(result).to include(review_id: nil, review_number: nil)
+    expect(result.fetch(:git_preparation).fetch(:boundary_counts)).to eq(task: 2)
+  end
+
+  it 'preserves an explicit ref exactly' do
     target_sha = create_remote_branch('release')
 
     result = described_class.call(
+      task_path: task_path,
       project_path: project_path,
-      branch_name: 'feature',
       base_ref: 'origin/release'
     )
 
@@ -67,31 +75,40 @@ RSpec.describe PrepareReviewRebase do
     )
   end
 
-  it 'rejects a Review without a starting commit' do
-    db[:reviews].where(id: review_id).update(starting_commit_sha: nil)
-
-    expect { prepare }.to raise_error('Review 1 has no starting commit')
-  end
-
-  it 'rejects a Review without a completed Worker implementation Work Cycle' do
-    db[:work_cycles].where(review_id: review_id).delete
-    insert_work_cycle(completed_at: Time.now, role: 'reviewer', action: 'review')
+  it 'rejects an incomplete Autofix Work Cycle without requiring a prior implementation' do
+    work_cycle_id = db[:work_cycles].insert(
+      created_at: Time.now,
+      completed_at: nil,
+      review_id: review_id,
+      role: 'reviewer',
+      action: 'review',
+      provider: nil,
+      model: nil,
+      reasoning_level: nil
+    )
 
     expect { prepare }.
-      to raise_error('Review 1 has no completed Worker implementation Work Cycle')
+      to raise_error("Review 1 has incomplete Work Cycle #{work_cycle_id}")
   end
 
-  it 'rejects a Review with an incomplete Work Cycle' do
-    incomplete_id = insert_work_cycle(completed_at: nil, role: 'reviewer', action: 'review')
+  it 'rejects a Task that is no longer durably completed' do
+    db[:tasks].update(state: 'initialized')
 
-    expect { prepare }.to raise_error("Review 1 has incomplete Work Cycle #{incomplete_id}")
+    expect { prepare }.to raise_error(/Task \d+ cannot Autofix rebase from state initialized/)
   end
 
-  it 'rejects a checkout on a different branch' do
+  it 'rejects local-provider Task configuration' do
+    task = db[:tasks].first
+    config = ReadTaskConfig.call(task_path: task.fetch(:task_path))
+    config.fetch('branch').merge!(
+      'name' => 'main',
+      'original_base_ref' => base_sha,
+      'active_base_ref' => base_sha
+    )
+    File.write(File.join(task.fetch(:task_path), 'config.json'), JSON.generate(config))
     git!(project_path, 'checkout', '-q', 'main')
 
-    expect { prepare }.
-      to raise_error('Current branch main does not match Review 1 branch feature')
+    expect { prepare }.to raise_error('Local Tasks cannot be rebased')
   end
 
   it 'checks for a dirty tree before fetching' do
@@ -106,27 +123,24 @@ RSpec.describe PrepareReviewRebase do
   it 'rejects a target ref that does not resolve to a commit' do
     expect do
       described_class.call(
+        task_path: task_path,
         project_path: project_path,
-        branch_name: 'feature',
         base_ref: 'origin/missing'
       )
     end.to raise_error(%r{git .* rev-parse origin/missing\^\{commit\} failed})
   end
 
-  it 'rejects a stored starting commit outside current HEAD history' do
+  it 'rejects either stored starting boundary outside current HEAD history' do
     unrelated_sha = create_remote_branch('unrelated')
+
+    db[:tasks].update(starting_commit_sha: unrelated_sha)
+    expect { prepare }.
+      to raise_error(/git .* merge-base --is-ancestor #{unrelated_sha} .* failed/)
+
+    db[:tasks].update(starting_commit_sha: base_sha)
     db[:reviews].where(id: review_id).update(starting_commit_sha: unrelated_sha)
-
     expect { prepare }.
-      to raise_error(/git .* merge-base --is-ancestor #{unrelated_sha} #{head_sha} failed/)
-  end
-
-  it 'rejects a stored active base outside current HEAD history' do
-    unrelated_sha = create_remote_branch('unrelated')
-    db[:reviews].where(id: review_id).update(active_base_commit_sha: unrelated_sha)
-
-    expect { prepare }.
-      to raise_error(/git .* merge-base --is-ancestor #{unrelated_sha} #{head_sha} failed/)
+      to raise_error(/git .* merge-base --is-ancestor #{unrelated_sha} .* failed/)
   end
 
   private
@@ -147,12 +161,8 @@ RSpec.describe PrepareReviewRebase do
     repository_shas.fetch(:base_sha)
   end
 
-  def starting_sha
-    repository_shas.fetch(:starting_sha)
-  end
-
-  def head_sha
-    repository_shas.fetch(:head_sha)
+  def review_starting_sha
+    repository_shas.fetch(:review_starting_sha)
   end
 
   def setup_repository
@@ -166,13 +176,15 @@ RSpec.describe PrepareReviewRebase do
     git!(project_path, 'remote', 'add', 'origin', origin_path)
     git!(project_path, 'push', '-q', '-u', 'origin', 'main')
     git!(project_path, 'checkout', '-q', '-b', 'feature')
-    starting_sha = git!(project_path, 'rev-parse', 'HEAD').strip
-    File.write(File.join(project_path, 'tracked.txt'), "feature\n")
-    git!(project_path, 'add', 'tracked.txt')
-    git!(project_path, 'commit', '-q', '-m', 'Work cycle 1')
-    head_sha = git!(project_path, 'rev-parse', 'HEAD').strip
+    File.write(File.join(project_path, 'task.txt'), "implemented\n")
+    git!(project_path, 'add', 'task.txt')
+    git!(project_path, 'commit', '-q', '-m', 'Autoimplement Task')
+    review_starting_sha = git!(project_path, 'rev-parse', 'HEAD').strip
+    File.write(File.join(project_path, 'review.txt'), "corrected\n")
+    git!(project_path, 'add', 'review.txt')
+    git!(project_path, 'commit', '-q', '-m', 'Autofix Review')
 
-    { base_sha: base_sha, starting_sha: starting_sha, head_sha: head_sha }
+    { base_sha: base_sha, review_starting_sha: review_starting_sha }
   end
 
   def advance_main
@@ -208,41 +220,22 @@ RSpec.describe PrepareReviewRebase do
   end
 
   def insert_review
-    db[:reviews].insert(
-      created_at: Time.now,
-      completed_at: nil,
+    ReviewFactory.insert(
       project_path: File.realpath(project_path),
-      number: 1,
-      source: 'local',
       branch_name: 'feature',
-      starting_commit_sha: starting_sha,
-      original_base_ref: 'origin/main',
-      original_base_commit_sha: base_sha,
-      active_base_ref: 'origin/main',
-      active_base_commit_sha: base_sha,
-      state: 'reviewer_review'
+      starting_commit_sha: review_starting_sha,
+      base_ref: 'origin/main',
+      base_commit_sha: base_sha,
+      state: 'manager_issues_assessment'
     )
   end
 
-  def insert_work_cycle(completed_at:, role: 'worker', action: 'implementation')
-    db[:work_cycles].insert(
-      created_at: Time.now,
-      completed_at: completed_at,
-      review_id: review_id,
-      role: role,
-      action: action,
-      provider: nil,
-      model: nil,
-      reasoning_level: nil
-    )
-  end
-
-  def review
-    db[:reviews].where(id: review_id).first
+  def task_path
+    db[:tasks].first.fetch(:task_path)
   end
 
   def prepare
-    described_class.call(project_path: project_path, branch_name: 'feature')
+    described_class.call(task_path: task_path, project_path: project_path)
   end
 
   def git!(path, *arguments)

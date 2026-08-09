@@ -9,9 +9,9 @@ class StartImplementationWorkCycle
     issue_ids = approved_issue_ids
     return if issue_ids.empty?
 
-    head_sha = ValidateCleanGitState.call(project_path: review.fetch(:project_path))
+    ValidateCleanGitState.call(project_path: review_context.fetch(:project_path))
     Database.connection.transaction(savepoint: true) do
-      update_review(head_sha)
+      update_review
       work_cycle_id = create_work_cycle
       link_inputs(work_cycle_id, issue_ids)
       work_cycle_id
@@ -40,11 +40,12 @@ class StartImplementationWorkCycle
     @review ||= Database.connection[:reviews].where(id: review_id).first
   end
 
-  def update_review(head_sha)
-    Database.connection[:reviews].where(id: review_id).update(
-      starting_commit_sha: review.fetch(:starting_commit_sha) || head_sha,
-      state: 'worker_implementation'
-    )
+  def review_context
+    @review_context ||= LoadReviewContext.call(review: review)
+  end
+
+  def update_review
+    Database.connection[:reviews].where(id: review_id).update(state: 'worker_implementation')
   end
 
   def create_work_cycle

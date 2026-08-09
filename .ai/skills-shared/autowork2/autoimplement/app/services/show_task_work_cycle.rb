@@ -14,8 +14,8 @@ class ShowTaskWorkCycle
       role: work_cycle.fetch(:role),
       action: work_cycle.fetch(:action),
       task_path: task.fetch(:task_path),
-      project_path: task.fetch(:project_path),
-      branch_name: task.fetch(:branch_name),
+      project_path: task_context.fetch(:project_path),
+      branch_name: task_context.fetch(:branch_name),
       starting_commit_sha: task.fetch(:starting_commit_sha),
       super_review_agent: task.fetch(:super_review_agent),
       scope: scope,
@@ -36,6 +36,10 @@ class ShowTaskWorkCycle
 
   def task
     @task ||= connection[:tasks].where(id: work_cycle.fetch(:task_id)).first
+  end
+
+  def task_context
+    @task_context ||= LoadTaskContext.call(task: task)
   end
 
   def scope

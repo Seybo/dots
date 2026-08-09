@@ -31,7 +31,7 @@ class WaitWorkCycle
 
   def complete_implementation
     CommitWorkCycle.call(
-      project_path: review.fetch(:project_path),
+      project_path: review_context.fetch(:project_path),
       message: "Work cycle #{work_cycle.fetch(:id)}"
     )
     StoreWorkCycleCompletion.call(
@@ -40,10 +40,7 @@ class WaitWorkCycle
     )
     File.delete(result_path)
     output = "Worker implementation completed (Cycle #{work_cycle.fetch(:id)})."
-    next_action = ResumeReview.call(
-      project_path: review.fetch(:project_path),
-      branch_name: review.fetch(:branch_name)
-    )
+    next_action = ResumeReview.call(task_id: review.fetch(:task_id))
     "#{output}\n#{next_action}"
   end
 
@@ -69,13 +66,14 @@ class WaitWorkCycle
   end
 
   def resume_review
-    ResumeReview.call(
-      project_path: review.fetch(:project_path),
-      branch_name: review.fetch(:branch_name)
-    )
+    ResumeReview.call(task_id: review.fetch(:task_id))
   end
 
   def review
     @review ||= Database.connection[:reviews].where(id: work_cycle.fetch(:review_id)).first
+  end
+
+  def review_context
+    @review_context ||= LoadReviewContext.call(review: review)
   end
 end

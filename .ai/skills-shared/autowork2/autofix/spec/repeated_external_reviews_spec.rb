@@ -10,10 +10,12 @@ RSpec.describe 'Repeated external Reviews' do
   let(:db) { Database.connection }
   let(:root_path) { Dir.mktmpdir('autofix-repeated-reviews-spec') }
   let(:project_path) { File.join(root_path, 'project') }
+  let(:task_path) { File.join(root_path, 'tasks', '0036-task') }
   let(:json_path) { File.join(root_path, 'local-review.json') }
 
   before do
     setup_repository
+    setup_task
   end
 
   after do
@@ -37,7 +39,11 @@ RSpec.describe 'Repeated external Reviews' do
     first_head_sha = git!('rev-parse', 'HEAD').strip
 
     write_local_review(['Original issue.'])
-    HandleLocalReview.call(json_path: json_path, project_path: File.realpath(project_path))
+    HandleLocalReview.call(
+      json_path: json_path,
+      project_path: File.realpath(project_path),
+      task_path: task_path
+    )
     second_review = db[:reviews].order(:id).last
     second_issue_id = review_issue_ids(second_review.fetch(:id)).first
     db[:reported_issues].where(id: second_issue_id).update(decision: 'approved')
@@ -77,13 +83,41 @@ RSpec.describe 'Repeated external Reviews' do
 
   def store_first_review
     StoreReview.call(
-      project_path: File.realpath(project_path),
+      task_context: task_context,
       source: 'local',
-      branch_name: 'feature',
-      base_ref: 'main',
-      base_commit_sha: git!('rev-parse', 'main').strip,
+      starting_commit_sha: git!('rev-parse', 'HEAD').strip,
       issue_data: [{ source_id: nil, body: 'Original issue.' }]
     )
+  end
+
+  def setup_task
+    FileUtils.mkdir_p(task_path)
+    File.write(File.join(task_path, 'task.md'), "# Context\n")
+    File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: Start\n")
+    File.write(
+      File.join(task_path, 'config.json'),
+      JSON.generate(
+        'branch' => {
+          'name' => 'feature',
+          'original_base_ref' => 'main',
+          'original_base_commit_sha' => git!('rev-parse', 'main').strip,
+          'active_base_ref' => 'main',
+          'active_base_commit_sha' => git!('rev-parse', 'main').strip
+        }
+      )
+    )
+    db[:tasks].insert(
+      created_at: Time.now,
+      task_path: File.realpath(task_path),
+      project_path: File.realpath(project_path),
+      starting_commit_sha: git!('rev-parse', 'HEAD').strip,
+      state: 'final_checks_passed',
+      super_review_agent: 'claude'
+    )
+  end
+
+  def task_context
+    LoadCompletedTask.call(task_path: task_path, project_path: project_path)
   end
 
   def commit_first_implementation(work_cycle_id)

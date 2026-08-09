@@ -9,7 +9,6 @@ RSpec.describe StoreTaskWorkCycleCompletion do
       created_at: Time.now,
       task_path: '/tasks/28',
       project_path: '/project',
-      branch_name: 'feature',
       starting_commit_sha: 'starting-sha',
       state: 'initialized'
     )

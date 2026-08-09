@@ -5,23 +5,26 @@ require 'json'
 class HandleLocalReview
   include ServiceObject
 
-  arguments :json_path, :project_path
+  arguments :json_path, :project_path, :task_path
 
   def call
+    task_context
     return 'No issues found.' if issue_data.empty?
 
     review_id = StoreReview.call(
-      project_path: project_path,
+      task_context: task_context,
       source: 'local',
-      branch_name: review_input.fetch('branch_name'),
-      base_ref: review_input.fetch('base_ref'),
-      base_commit_sha: review_input.fetch('base_commit_sha'),
+      starting_commit_sha: ValidateCleanGitState.call(project_path: project_path),
       issue_data: issue_data
     )
     RenderIssue.call(issue: FindNextReviewIssue.call(review_id: review_id))
   end
 
   private
+
+  def task_context
+    @task_context ||= LoadCompletedTask.call(task_path: task_path, project_path: project_path)
+  end
 
   def issue_data
     issue_bodies.map { |body| { source_id: nil, body: body } }

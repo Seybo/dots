@@ -12,6 +12,7 @@ class ValidateTaskFiles
 
     validate_file('task.md')
     validate_file('steps.md')
+    validate_file('config.json')
     validate_steps
     canonical_task_path
   end

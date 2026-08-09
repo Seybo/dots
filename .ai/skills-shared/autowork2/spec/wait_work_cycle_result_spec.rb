@@ -10,16 +10,12 @@ RSpec.describe WaitWorkCycleResult do
   let(:result_dir) { Dir.mktmpdir('wait-work-cycle-result-spec') }
   let(:result_path) { File.join(result_dir, 'result.json') }
   let(:review_id) do
-    db[:reviews].insert(
-      created_at: Time.now,
+    ReviewFactory.insert(
       project_path: '/project',
-      number: 1,
-      source: 'local',
       branch_name: 'feature',
-      original_base_ref: 'origin/main',
-      original_base_commit_sha: 'base-sha',
-      active_base_ref: 'origin/main',
-      active_base_commit_sha: 'base-sha',
+      starting_commit_sha: 'starting-sha',
+      base_ref: 'origin/main',
+      base_commit_sha: 'base-sha',
       state: 'worker_implementation'
     )
   end

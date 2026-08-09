@@ -17,7 +17,7 @@ class ValidateReviewCommitSequence
 
   def actual_subjects
     capture!(
-      'git', '-C', review.fetch(:project_path), 'log', '--reverse', '--format=%s',
+      'git', '-C', review_context.fetch(:project_path), 'log', '--reverse', '--format=%s',
       "#{review.fetch(:starting_commit_sha)}..HEAD"
     ).lines(chomp: true)
   end
@@ -33,6 +33,10 @@ class ValidateReviewCommitSequence
 
   def review
     @review ||= Database.connection[:reviews].where(id: review_id).first
+  end
+
+  def review_context
+    @review_context ||= LoadReviewContext.call(review: review)
   end
 
   def capture!(*command)

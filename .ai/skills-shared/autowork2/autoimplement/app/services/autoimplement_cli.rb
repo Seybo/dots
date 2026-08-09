@@ -14,22 +14,27 @@ class AutoimplementCli
 
   def handle_command
     validate_arguments
+    return handle_task_command if %w[resume-task retry-task].include?(cli_args.first)
+    return handle_rebase_command if %w[rebase-task continue-task-rebase].include?(cli_args.first)
+    return handle_work_cycle_command if %w[show-work-cycle wait-work-cycle].include?(cli_args.first)
+
+    handle_primary_command
+  end
+
+  def handle_primary_command
     case cli_args.first
     when 'initialize-task' then initialize_task
-    when 'resume-task', 'retry-task' then handle_task_command
     when 'store-decision' then store_decision
     when 'squash-task' then squash_task
-    when 'show-work-cycle' then ShowTaskWorkCycle.call(work_cycle_id: cli_args.fetch(1))
-    when 'wait-work-cycle' then WaitTaskWorkCycle.call(work_cycle_id: cli_args.fetch(1))
     else raise ArgumentError, usage
     end
   end
 
   def validate_arguments
     is_valid = case cli_args.first
-               when 'initialize-task' then [2, 3].include?(cli_args.length)
+               when 'initialize-task', 'rebase-task' then [2, 3].include?(cli_args.length)
                when 'store-decision' then cli_args.length == 3
-               when 'squash-task' then cli_args.length == 4
+               when 'squash-task', 'continue-task-rebase' then cli_args.length == 4
                else cli_args.length == 2
                end
     raise ArgumentError, usage unless is_valid
@@ -39,6 +44,18 @@ class AutoimplementCli
     return ResumeTask.call(task_id: cli_args.fetch(1)) if cli_args.first == 'resume-task'
 
     RetryTaskWorkCycle.call(task_id: cli_args.fetch(1))
+  end
+
+  def handle_rebase_command
+    return rebase_task if cli_args.first == 'rebase-task'
+
+    continue_task_rebase
+  end
+
+  def handle_work_cycle_command
+    return ShowTaskWorkCycle.call(work_cycle_id: cli_args.fetch(1)) if cli_args.first == 'show-work-cycle'
+
+    WaitTaskWorkCycle.call(work_cycle_id: cli_args.fetch(1))
   end
 
   def store_decision
@@ -53,6 +70,23 @@ class AutoimplementCli
     )
   end
 
+  def rebase_task
+    RebaseTask.call(
+      task_path: cli_args.fetch(1),
+      project_path: ResolveProjectPath.call,
+      base_ref: cli_args[2]
+    )
+  end
+
+  def continue_task_rebase
+    ContinueTaskRebase.call(
+      task_path: cli_args.fetch(1),
+      project_path: ResolveProjectPath.call,
+      target_base_ref: cli_args.fetch(2),
+      target_base_commit_sha: cli_args.fetch(3)
+    )
+  end
+
   def initialize_task
     arguments = { task_path: cli_args.fetch(1) }
     arguments[:super_review_agent] = cli_args.fetch(2) if cli_args.length == 3
@@ -64,7 +98,9 @@ class AutoimplementCli
     'Usage: autoimplement [initialize-task <canonical-task-path> [super-review-agent] | ' \
       'resume-task <task-id> | ' \
       'retry-task <task-id> | store-decision <issue-id> <decision> | ' \
-      'squash-task <task-id> <canonical-project-path> <subject> | show-work-cycle <id> | ' \
-      'wait-work-cycle <id>]'
+      'squash-task <task-id> <canonical-project-path> <subject> | ' \
+      'rebase-task <canonical-task-path> [base-ref] | ' \
+      'continue-task-rebase <canonical-task-path> <target-ref> <target-sha> | ' \
+      'show-work-cycle <id> | wait-work-cycle <id>]'
   end
 end

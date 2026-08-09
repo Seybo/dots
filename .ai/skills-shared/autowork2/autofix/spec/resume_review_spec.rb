@@ -23,8 +23,8 @@ RSpec.describe ResumeReview do
     FileUtils.remove_entry(project_path)
   end
 
-  it 'reports when the branch has no incomplete Review' do
-    expect(described_class.call(project_path: project_path, branch_name: 'feature')).
+  it 'reports when the Task has no incomplete Review' do
+    expect(resume).
       to eq('No incomplete Review.')
   end
 
@@ -32,7 +32,7 @@ RSpec.describe ResumeReview do
     review_id = store_review(['Pending issue.'])
     issue_id = review_issue_ids(review_id).first
 
-    expect(described_class.call(project_path: project_path, branch_name: 'feature')).
+    expect(resume).
       to eq("Issue: #{issue_id}\n\n> Pending issue.")
   end
 
@@ -42,7 +42,7 @@ RSpec.describe ResumeReview do
     db[:reported_issues].where(id: issue_ids.first).update(decision: 'approved')
     db[:reported_issues].where(id: issue_ids.last).update(decision: 'skipped')
 
-    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    output = resume
     work_cycle = db[:work_cycles].first
 
     expect(output).to eq("AutoFixCycle #{work_cycle.fetch(:id)}\nAutoFixRole worker")
@@ -54,7 +54,7 @@ RSpec.describe ResumeReview do
     issue_id = review_issue_ids(review_id).first
     db[:reported_issues].where(id: issue_id).update(decision: 'skipped')
 
-    expect(described_class.call(project_path: project_path, branch_name: 'feature')).
+    expect(resume).
       to eq('No unresolved issues.')
     expect(db[:reviews].where(id: review_id).first).to include(
       state: 'completed',
@@ -69,7 +69,7 @@ RSpec.describe ResumeReview do
     db[:reported_issues].where(id: issue_id).update(decision: 'approved')
     work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
 
-    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    output = resume
 
     expect(output).to eq("WaitWorkCycle #{work_cycle_id}")
     expect(db[:work_cycles].count).to eq(1)
@@ -78,7 +78,7 @@ RSpec.describe ResumeReview do
   it 'creates and exposes a missing Reviewer review Work Cycle' do
     review_id, _implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
 
-    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    output = resume
     review_work_cycle = db[:work_cycles].order(:id).last
 
     expect(output).to eq("AutoFixCycle #{review_work_cycle.fetch(:id)}\nAutoFixRole reviewer")
@@ -99,7 +99,7 @@ RSpec.describe ResumeReview do
     db[:work_cycles].where(id: later_implementation_id).update(completed_at: Time.now)
     db[:reviews].where(id: review_id).update(state: 'reviewer_review')
 
-    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    output = resume
     next_reviewer_work_cycle = db[:work_cycles].order(:id).last
 
     expect(output).to eq(
@@ -120,7 +120,7 @@ RSpec.describe ResumeReview do
     review_id, _implementation_work_cycle_id = complete_implementation(review_state: 'reviewer_review')
     review_work_cycle_id = StartReviewerReviewWorkCycle.call(review_id: review_id)
 
-    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    output = resume
 
     expect(output).to eq("WaitWorkCycle #{review_work_cycle_id}")
     expect(db[:work_cycles].count).to eq(2)
@@ -130,8 +130,8 @@ RSpec.describe ResumeReview do
     _review_id, _reviewer_work_cycle_id = complete_reviewer_review(reported_issues: ['Reviewer-reported issue.'])
     reported_issue = db[:reported_issues].where(source: 'reviewer').first
 
-    first_output = described_class.call(project_path: project_path, branch_name: 'feature')
-    second_output = described_class.call(project_path: project_path, branch_name: 'feature')
+    first_output = resume
+    second_output = resume
 
     expect(first_output).to eq("Issue: #{reported_issue.fetch(:id)}\n\n> Reviewer-reported issue.")
     expect(second_output).to eq(first_output)
@@ -146,7 +146,7 @@ RSpec.describe ResumeReview do
     reported_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
     db[:reported_issues].where(id: reported_issue_id).update(decision: 'skipped')
 
-    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    output = resume
     worker_work_cycle = db[:work_cycles].order(:id).last
 
     expect(output).to eq("AutoFixCycle #{worker_work_cycle.fetch(:id)}\nAutoFixRole worker")
@@ -164,13 +164,13 @@ RSpec.describe ResumeReview do
     File.write(File.join(project_path, 'tracked.txt'), "changed\n")
 
     expect do
-      described_class.call(project_path: project_path, branch_name: 'feature')
+      resume
     end.to raise_error(RuntimeError, /Working tree is not clean/)
     expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_issues_assessment')
     expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(0)
 
     git!('restore', 'tracked.txt')
-    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    output = resume
     worker_work_cycle = db[:work_cycles].order(:id).last
 
     expect(output).to eq("AutoFixCycle #{worker_work_cycle.fetch(:id)}\nAutoFixRole worker")
@@ -190,7 +190,7 @@ RSpec.describe ResumeReview do
     )
     db[:reported_issues].where(source: 'worker').update(decision: 'skipped')
 
-    expect(described_class.call(project_path: project_path, branch_name: 'feature')).
+    expect(resume).
       to eq('No unresolved issues.')
     expect(db[:reviews].where(id: review_id).first).to include(
       state: 'manager_review',
@@ -226,7 +226,7 @@ RSpec.describe ResumeReview do
     )
     db[:reported_issues].where(source: 'reviewer').update(decision: 'skipped')
 
-    expect(described_class.call(project_path: project_path, branch_name: 'feature')).
+    expect(resume).
       to eq('No unresolved issues.')
     expect(db[:reviews].where(id: review_id).get(:state)).to eq('manager_review')
     expect(db[:work_cycles].where(role: 'worker', action: 'review').count).to eq(1)
@@ -239,7 +239,7 @@ RSpec.describe ResumeReview do
     reported_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
     db[:reported_issues].where(id: reported_issue_id).update(decision: 'approved')
 
-    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    output = resume
     implementation_work_cycle = db[:work_cycles].order(:id).last
 
     expect(output).to eq(
@@ -257,7 +257,7 @@ RSpec.describe ResumeReview do
   it 'creates and exposes the final Worker review Work Cycle after Reviewer passes' do
     review_id, _reviewer_work_cycle_id = complete_reviewer_review(reported_issues: [])
 
-    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    output = resume
     review_work_cycle = db[:work_cycles].order(:id).last
 
     expect(output).to eq("AutoFixCycle #{review_work_cycle.fetch(:id)}\nAutoFixRole worker")
@@ -272,7 +272,7 @@ RSpec.describe ResumeReview do
     review_id, _reviewer_work_cycle_id = complete_reviewer_review(reported_issues: [])
     review_work_cycle_id = StartWorkerReviewWorkCycle.call(review_id: review_id)
 
-    output = described_class.call(project_path: project_path, branch_name: 'feature')
+    output = resume
 
     expect(output).to eq("WaitWorkCycle #{review_work_cycle_id}")
     expect(db[:work_cycles].count).to eq(3)
@@ -287,15 +287,19 @@ RSpec.describe ResumeReview do
       starting_commit_sha: git!('rev-parse', 'HEAD').strip
     )
 
-    first_output = described_class.call(project_path: project_path, branch_name: 'feature')
+    first_output = resume
     work_cycle = db[:work_cycles].first
-    second_output = described_class.call(project_path: project_path, branch_name: 'feature')
+    second_output = resume
 
     expected_output = "AutoFixCycle #{work_cycle.fetch(:id)}\nAutoFixRole manager"
     expect(first_output).to eq(expected_output)
     expect(second_output).to eq(expected_output)
     expect(work_cycle).to include(review_id: review_id, role: 'manager', action: 'review')
     expect(db[:work_cycles].count).to eq(1)
+  end
+
+  def resume
+    described_class.call(task_id: db[:tasks].get(:id) || -1)
   end
 
   def complete_implementation(review_state:)
@@ -345,7 +349,7 @@ RSpec.describe ResumeReview do
   end
 
   def store_review(issue_bodies)
-    StoreReview.call(
+    ReviewFactory.call(
       project_path: project_path,
       source: 'local',
       branch_name: 'feature',

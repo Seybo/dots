@@ -63,7 +63,7 @@ RSpec.describe StartManagerReviewWorkCycle do
   end
 
   def store_review
-    review_id = StoreReview.call(
+    review_id = ReviewFactory.call(
       project_path: project_path,
       source: 'local',
       branch_name: 'feature',

@@ -41,19 +41,15 @@ RSpec.describe FindNextReviewIssue do
   end
 
   def insert_review(number: 1, project_path: '/project')
-    db[:reviews].insert(
-      created_at: Time.now,
-      completed_at: nil,
+    ReviewFactory.insert(
       project_path: project_path,
-      number: number,
-      source: 'github',
       branch_name: 'feature',
-      starting_commit_sha: nil,
-      original_base_ref: 'origin/main',
-      original_base_commit_sha: 'base-sha',
-      active_base_ref: 'origin/main',
-      active_base_commit_sha: 'base-sha',
-      state: 'manager_issues_assessment'
+      starting_commit_sha: 'starting-sha',
+      base_ref: 'origin/main',
+      base_commit_sha: 'base-sha',
+      state: 'manager_issues_assessment',
+      number: number,
+      source: 'github'
     )
   end
 

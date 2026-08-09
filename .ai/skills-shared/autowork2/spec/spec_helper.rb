@@ -7,6 +7,7 @@ default_test_db_path = File.join(Dir.tmpdir, "autowork-test-#{Process.pid}.db")
 ENV['AUTOWORK_DB_PATH'] = ENV.fetch('AUTOWORK_TEST_DB_PATH', default_test_db_path)
 
 require_relative '../config/boot'
+require_relative 'support/review_factory'
 
 module SpecDatabase
   module_function

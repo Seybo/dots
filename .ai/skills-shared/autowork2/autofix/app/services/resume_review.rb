@@ -3,7 +3,7 @@
 class ResumeReview
   include ServiceObject
 
-  arguments :project_path, :branch_name
+  arguments :task_id
 
   def call
     return 'No incomplete Review.' if review.nil?
@@ -28,7 +28,7 @@ class ResumeReview
     return @review if defined?(@review)
 
     @review = Database.connection[:reviews].
-              where(project_path: project_path, branch_name: branch_name).
+              where(task_id: task_id).
               exclude(state: 'completed').
               order(:id).
               first

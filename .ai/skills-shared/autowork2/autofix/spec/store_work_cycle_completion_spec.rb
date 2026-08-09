@@ -169,19 +169,14 @@ RSpec.describe StoreWorkCycleCompletion do
   end
 
   def insert_review(state:, number: 1)
-    db[:reviews].insert(
-      created_at: Time.now,
-      completed_at: nil,
+    ReviewFactory.insert(
       project_path: '/project',
-      number: number,
-      source: 'local',
       branch_name: 'feature',
       starting_commit_sha: 'starting-sha',
-      original_base_ref: 'origin/main',
-      original_base_commit_sha: 'base-sha',
-      active_base_ref: 'origin/main',
-      active_base_commit_sha: 'base-sha',
-      state: state
+      base_ref: 'origin/main',
+      base_commit_sha: 'base-sha',
+      state: state,
+      number: number
     )
   end
 

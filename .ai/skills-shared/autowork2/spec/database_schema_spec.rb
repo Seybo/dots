@@ -7,6 +7,8 @@ RSpec.describe 'database schema' do
   let(:db) { Database.connection }
   let(:initial_schema_version) { 20_260_729_115_455 }
   let(:final_checks_schema_version) { 20_260_807_190_000 }
+  let(:final_review_schema_version) { 20_260_808_120_000 }
+  let(:review_task_schema_version) { 20_260_809_120_000 }
 
   it 'uses the shared runtime database path' do
     expect(Database.default_path).to eq(Database.root.join('db', 'autowork.db'))
@@ -99,58 +101,54 @@ RSpec.describe 'database schema' do
     )
   end
 
-  it 'creates Reviews with required metadata and nullable lifecycle values' do
+  it 'creates Task-owned Reviews with lifecycle metadata and a distinct starting boundary' do
     expect(columns(:reviews)).to eq(
-      %i[
-        id created_at completed_at project_path number source branch_name starting_commit_sha original_base_ref
-        original_base_commit_sha active_base_ref active_base_commit_sha state
-      ]
+      %i[id created_at completed_at number source starting_commit_sha state task_id]
     )
     expect_generated_id_and_created_at(:reviews)
 
-    required = %i[
-      project_path number source branch_name original_base_ref original_base_commit_sha active_base_ref
-      active_base_commit_sha state
-    ]
-    required.each { |name| expect(column(:reviews, name)).to include(allow_null: false) }
-    %i[completed_at starting_commit_sha].each do |name|
-      expect(column(:reviews, name)).to include(allow_null: true)
+    %i[number source starting_commit_sha state task_id].each do |name|
+      expect(column(:reviews, name)).to include(allow_null: false)
     end
+    expect(column(:reviews, :completed_at)).to include(allow_null: true)
   end
 
-  it 'enforces Review source, state, and project-scoped number' do
-    db[:reviews].insert(review_attributes)
+  it 'enforces Review source, state, and Task-scoped number' do
+    task_id = insert_task
+    db[:reviews].insert(review_attributes(task_id: task_id))
 
-    expect { db[:reviews].insert(review_attributes(number: 1)) }.
+    expect { db[:reviews].insert(review_attributes(task_id: task_id, number: 1)) }.
       to raise_error(Sequel::UniqueConstraintViolation)
+    db[:reviews].where(task_id: task_id).update(state: 'completed', completed_at: timestamp)
+
     %w[email autowork].each do |source|
-      expect { db[:reviews].insert(review_attributes(number: 2, source: source)) }.
+      expect { db[:reviews].insert(review_attributes(task_id: task_id, number: 2, source: source)) }.
         to raise_error(Sequel::CheckConstraintViolation)
     end
-    expect { db[:reviews].insert(review_attributes(number: 2, state: 'running')) }.
+    expect { db[:reviews].insert(review_attributes(task_id: task_id, number: 2, state: 'running')) }.
       to raise_error(Sequel::CheckConstraintViolation)
-    expect do
-      db[:reviews].insert(review_attributes(project_path: '/other-project'))
-    end.not_to raise_error
+
+    other_task_id = insert_task(task_path: '/tasks/2', project_path: '/other-project')
+    expect { db[:reviews].insert(review_attributes(task_id: other_task_id)) }.not_to raise_error
   end
 
-  it 'allows only one active Review per project' do
-    review_id = db[:reviews].insert(review_attributes)
+  it 'allows only one active Review per Task' do
+    task_id = insert_task
+    review_id = db[:reviews].insert(review_attributes(task_id: task_id))
 
-    expect { db[:reviews].insert(review_attributes(number: 2)) }.
+    expect { db[:reviews].insert(review_attributes(task_id: task_id, number: 2)) }.
       to raise_error(Sequel::UniqueConstraintViolation)
 
     db[:reviews].where(id: review_id).update(state: 'completed', completed_at: timestamp)
 
-    expect { db[:reviews].insert(review_attributes(number: 2)) }.not_to raise_error
-    expect do
-      db[:reviews].insert(review_attributes(project_path: '/other-project'))
-    end.not_to raise_error
+    expect { db[:reviews].insert(review_attributes(task_id: task_id, number: 2)) }.not_to raise_error
+    other_task_id = insert_task(task_path: '/tasks/2', project_path: '/other-project')
+    expect { db[:reviews].insert(review_attributes(task_id: other_task_id)) }.not_to raise_error
 
     index_sql = db[:sqlite_master].
-                where(type: 'index', name: 'reviews_one_active_per_project_index').
+                where(type: 'index', name: 'reviews_one_active_per_task_index').
                 get(:sql)
-    expect(index_sql).to match(/CREATE UNIQUE INDEX.*project_path.*WHERE.*state.*completed/i)
+    expect(index_sql).to match(/CREATE UNIQUE INDEX.*task_id.*WHERE.*state.*completed/i)
   end
 
   it 'creates Review issue relationships with foreign keys and unique pairs' do
@@ -159,7 +157,8 @@ RSpec.describe 'database schema' do
     )
     expect_generated_id_and_created_at(:review_issues)
 
-    review_id = db[:reviews].insert(review_attributes)
+    task_id = insert_task
+    review_id = db[:reviews].insert(review_attributes(task_id: task_id))
     issue_id = db[:reported_issues].insert(issue_attributes)
     attributes = relationship_attributes(review_id: review_id, reported_issue_id: issue_id)
     db[:review_issues].insert(attributes)
@@ -170,12 +169,12 @@ RSpec.describe 'database schema' do
       to raise_error(Sequel::ForeignKeyConstraintViolation)
   end
 
-  it 'creates Tasks with required identity and Git metadata' do
+  it 'creates Tasks with required identity and starting boundary' do
     expect(columns(:tasks)).to eq(
-      %i[id created_at task_path project_path branch_name starting_commit_sha state super_review_agent]
+      %i[id created_at task_path project_path starting_commit_sha state super_review_agent]
     )
     expect_generated_id_and_created_at(:tasks)
-    %i[task_path project_path branch_name starting_commit_sha state super_review_agent].each do |name|
+    %i[task_path project_path starting_commit_sha state super_review_agent].each do |name|
       expect(column(:tasks, name)).to include(allow_null: false)
     end
 
@@ -258,8 +257,8 @@ RSpec.describe 'database schema' do
   end
 
   it 'enforces Work Cycle ownership, roles, actions, and foreign keys' do
-    review_id = db[:reviews].insert(review_attributes)
-    task_id = db[:tasks].insert(task_attributes)
+    task_id = insert_task
+    review_id = db[:reviews].insert(review_attributes(task_id: task_id))
     review_work_cycle_id = db[:work_cycles].insert(work_cycle_attributes(review_id: review_id))
     task_work_cycle_id = db[:work_cycles].insert(
       work_cycle_attributes(task_id: task_id, step_number: 1)
@@ -288,8 +287,8 @@ RSpec.describe 'database schema' do
   end
 
   it 'allows positive or whole-task scope only for Task-owned Worker implementation Work Cycles' do
-    review_id = db[:reviews].insert(review_attributes)
-    task_id = db[:tasks].insert(task_attributes)
+    task_id = insert_task
+    review_id = db[:reviews].insert(review_attributes(task_id: task_id))
 
     expect do
       db[:work_cycles].insert(work_cycle_attributes(task_id: task_id, step_number: 1))
@@ -367,7 +366,7 @@ RSpec.describe 'database schema' do
 
         expect { Sequel::Migrator.run(legacy_db, migrations_path) }.not_to raise_error
         expect(legacy_db.table_exists?(:tasks)).to be(false)
-        expect(legacy_db[:schema_migrations].count).to eq(3)
+        expect(legacy_db[:schema_migrations].count).to eq(5)
 
         expect do
           Sequel::Migrator.run(legacy_db, migrations_path, target: initial_schema_version)
@@ -386,15 +385,15 @@ RSpec.describe 'database schema' do
       begin
         Database.configure_connection(migration_db)
         Sequel::Migrator.run(migration_db, migrations_path, target: initial_schema_version)
-        task_id = migration_db[:tasks].insert(task_attributes)
+        task_id = migration_db[:tasks].insert(legacy_task_attributes)
         work_cycle_id = migration_db[:work_cycles].insert(
           work_cycle_attributes(task_id: task_id, step_number: 1)
         )
 
-        Sequel::Migrator.run(migration_db, migrations_path)
+        Sequel::Migrator.run(migration_db, migrations_path, target: final_review_schema_version)
 
         expect(migration_db[:tasks].where(id: task_id).first).to include(
-          task_attributes.merge(super_review_agent: 'claude')
+          legacy_task_attributes.merge(super_review_agent: 'claude')
         )
         expect(migration_db[:work_cycles].where(id: work_cycle_id).get(:task_id)).to eq(task_id)
         expect(migration_db.indexes(:tasks)).to include(
@@ -402,7 +401,7 @@ RSpec.describe 'database schema' do
           tasks_one_active_per_project_index: include(unique: true, columns: [:project_path])
         )
         final_task_id = migration_db[:tasks].insert(
-          task_attributes(
+          legacy_task_attributes(
             task_path: '/tasks/2',
             project_path: '/final-checks-project',
             state: 'final_checks_passed'
@@ -424,16 +423,54 @@ RSpec.describe 'database schema' do
 
         Sequel::Migrator.run(migration_db, migrations_path, target: initial_schema_version)
 
-        expect(migration_db[:tasks].where(id: task_id).first).to include(task_attributes)
+        expect(migration_db[:tasks].where(id: task_id).first).to include(legacy_task_attributes)
         expect do
           migration_db[:tasks].insert(
-            task_attributes(
+            legacy_task_attributes(
               task_path: '/tasks/3',
               project_path: '/rolled-back-project',
               state: 'final_checks_passed'
             )
           )
         end.to raise_error(Sequel::CheckConstraintViolation)
+      ensure
+        migration_db.disconnect
+      end
+    end
+  end
+
+  it 'removes duplicated Git metadata and restores its empty schema on rollback' do
+    Dir.mktmpdir('git-metadata-migration-spec') do |dir|
+      migration_db = Sequel.sqlite(File.join(dir, 'migration.db'))
+
+      begin
+        Sequel::Migrator.run(migration_db, migrations_path, target: review_task_schema_version)
+        expect(migration_db[:tasks].columns).to include(:branch_name)
+        expect(migration_db[:reviews].columns).to include(
+          :project_path,
+          :branch_name,
+          :original_base_ref,
+          :original_base_commit_sha,
+          :active_base_ref,
+          :active_base_commit_sha
+        )
+
+        Sequel::Migrator.run(migration_db, migrations_path)
+        expect(migration_db[:tasks].columns).not_to include(:branch_name)
+        expect(migration_db[:reviews].columns).to eq(
+          %i[id created_at completed_at number source starting_commit_sha state task_id]
+        )
+
+        Sequel::Migrator.run(migration_db, migrations_path, target: review_task_schema_version)
+        expect(migration_db[:tasks].columns).to include(:branch_name)
+        expect(migration_db[:reviews].columns).to include(
+          :project_path,
+          :branch_name,
+          :original_base_ref,
+          :original_base_commit_sha,
+          :active_base_ref,
+          :active_base_commit_sha
+        )
       ensure
         migration_db.disconnect
       end
@@ -501,17 +538,20 @@ RSpec.describe 'database schema' do
     {
       created_at: timestamp,
       completed_at: nil,
-      project_path: '/project',
       number: 1,
       source: 'github',
-      branch_name: 'feature',
-      starting_commit_sha: nil,
-      original_base_ref: 'origin/main',
-      original_base_commit_sha: 'base-sha',
-      active_base_ref: 'origin/main',
-      active_base_commit_sha: 'base-sha',
-      state: 'manager_issues_assessment'
+      starting_commit_sha: 'review-starting-sha',
+      state: 'manager_issues_assessment',
+      task_id: 1
     }.merge(overrides)
+  end
+
+  def insert_task(overrides = {})
+    db[:tasks].insert(task_attributes(overrides))
+  end
+
+  def legacy_task_attributes(overrides = {})
+    task_attributes(overrides).merge(branch_name: 'feature')
   end
 
   def task_attributes(overrides = {})
@@ -519,7 +559,6 @@ RSpec.describe 'database schema' do
       created_at: timestamp,
       task_path: '/tasks/1',
       project_path: '/project',
-      branch_name: 'feature',
       starting_commit_sha: 'starting-sha',
       state: 'initialized'
     }.merge(overrides)

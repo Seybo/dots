@@ -9,7 +9,6 @@ RSpec.describe RunTaskFinalChecks do
       created_at: Time.now,
       task_path: '/tasks/1',
       project_path: '/project',
-      branch_name: 'feature',
       starting_commit_sha: 'starting-sha',
       state: 'manager_review'
     )

@@ -6,16 +6,15 @@ require 'tmpdir'
 require_relative '../../spec/spec_helper'
 
 RSpec.describe SquashTask do
-  let(:db) { Database.connection }
   let(:project_path) { Dir.mktmpdir('autoimplement-squash-task-spec') }
   let(:other_path) { Dir.mktmpdir('autoimplement-squash-other-spec') }
+  let(:task_path) { Dir.mktmpdir('autoimplement-squash-task-files-spec') }
   let(:starting_commit_sha) { git!('rev-parse', 'HEAD').strip }
   let(:task_id) do
     db[:tasks].insert(
       created_at: Time.now,
-      task_path: '/tasks/0035-complete-autoimplement-manager-review',
+      task_path: task_path,
       project_path: project_path,
-      branch_name: 'feature',
       starting_commit_sha: starting_commit_sha,
       state: 'final_checks_passed'
     )
@@ -28,11 +27,24 @@ RSpec.describe SquashTask do
     File.write(File.join(project_path, 'tracked.txt'), "initial\n")
     git!('add', 'tracked.txt')
     git!('commit', '-q', '-m', 'Initial commit')
+    File.write(
+      File.join(task_path, 'config.json'),
+      JSON.generate(
+        'branch' => {
+          'name' => git!('branch', '--show-current').strip,
+          'original_base_ref' => 'origin/main',
+          'original_base_commit_sha' => starting_commit_sha,
+          'active_base_ref' => 'origin/main',
+          'active_base_commit_sha' => starting_commit_sha
+        }
+      )
+    )
   end
 
   after do
     FileUtils.remove_entry(project_path)
     FileUtils.remove_entry(other_path)
+    FileUtils.remove_entry(task_path)
   end
 
   it 'squashes the actual completed Task range with the supplied subject' do
@@ -133,6 +145,10 @@ RSpec.describe SquashTask do
 
   def task
     db[:tasks].where(id: task_id).first
+  end
+
+  def db
+    Database.connection
   end
 
   def git!(*arguments)

@@ -27,15 +27,24 @@ Supported invocations:
 /skill:autoimplement --super-review-agent claude|codex
 /skill:autoimplement <task_id> --super-review-agent claude|codex
 /skill:autoimplement <project-or-session> [task_id] --super-review-agent claude|codex
+/skill:autoimplement --rebase-base
+/skill:autoimplement --rebase-base <base-ref>
 ```
 
-Accept at most one `--retry` flag and at most one `--super-review-agent
-claude|codex` pair in any position alongside an otherwise valid invocation.
+Treat `--rebase-base [<base-ref>]` as a separate explicit operation. Require the
+flag exactly once with zero or one following value and reject every other
+argument or control on that invocation. Resolve the Task normally, then follow
+**Rebase initialized Task** without initializing or resuming it.
+
+For normal workflow invocations, accept at most one `--retry` flag and at most
+one `--super-review-agent claude|codex` pair in any position alongside an
+otherwise valid invocation.
 Treat `--retry` as confirmation that the previous participant or inline Manager execution has stopped.
 Reject duplicate `--retry` flags. Reject duplicate `--super-review-agent` flags,
 a missing agent value, and every value except exact `claude` or `codex`.
-Before Task resolution, remove `--retry` and remove the flag and its value before
-applying the existing Task argument parser. Reject `--base`, every other option,
+Before Task resolution on a normal invocation, remove `--retry` and
+remove the flag and its value before applying the existing Task argument parser. Reject
+`--base`, every other option,
 and every extra argument. Do not add status, doctor, pause, limit, lock, or
 timeout options. Do not expose a root `/autowork2` command.
 
@@ -62,9 +71,10 @@ registered project configuration in
 workspace, Task-folder, and protected-branch resolution. Do not invoke or port
 legacy Autowork's Ruby `ProjectRegistry` or `TaskResolver`.
 
-Before parsing Task selectors, extract and validate `--retry` and
-`--super-review-agent` as described above. Remove the accepted controls, then
-parse the remaining arguments as follows:
+Before parsing Task selectors, detect and validate the separate `--rebase-base`
+operation or extract and validate normal `--retry` and `--super-review-agent`
+controls as described above. Remove the accepted control arguments, then parse
+the remaining Task selector arguments as follows:
 
 1. With no arguments, infer the registered project and workspace from the
    current checkout. Infer a Task ID only from an `sc-<digits>` branch segment.
@@ -113,12 +123,59 @@ operator to run `/workit <task_id>`, approve the plan, and invoke
 
 Run `git -C <canonical-checkout> branch --show-current` and require a non-empty
 branch. Refuse `main` and `master`, except for project `env` and registered
-projects whose key starts with `my_`. Do not create, switch, rename, rebase, or
-push a branch.
+projects whose key starts with `my_`. Do not create, switch, rename, or push a
+branch. Rebase only through the explicit **Rebase initialized Task** operation
+below. Never offer or perform that operation for a local-provider Task working
+on `main` or `master`.
 
 During isolated-database development, the operator must not run Autoimplement
 while an Autofix Review is active for the same project. Do not query the
 separate Autofix database to enforce this temporary rule.
+
+## Rebase initialized Task
+
+Treat `--rebase-base [<base-ref>]` as an explicit Shortcut-Task operation. Never
+run it for a local-provider Task, initialize or resume normal orchestration, or
+contact a participant.
+
+After normal project and Task resolution, run from the canonical checkout:
+
+```text
+/Volumes/dev/bin/skills/autoimplement rebase-task <canonical-task-path>
+```
+
+When a base ref was supplied, preserve it exactly and append it as the final
+argument. Ruby requires the persisted Task to remain `initialized`, a clean
+configured checkout, no incomplete Work Cycle, no existing Git rebase, and
+ancestral active-base and Task-start boundaries. It fetches `origin`, resolves
+the selected ref once, rebases without switching or pushing, and updates only
+the Task starting boundary and active config fields after complete success.
+
+When successful output contains no conflict control lines, append one blank line
+and `Resolved conflicts: none.`, return the combined output, and stop. Do not run
+`resume-task`.
+
+A conflict handoff contains exactly:
+
+```text
+AutoImplementRebaseConflict <task-id>
+RebaseTargetRef <target-ref>
+RebaseTargetCommit <full-target-sha>
+```
+
+Read and follow
+[`../../components/rebase-conflict-resolution.md`](../../components/rebase-conflict-resolution.md)
+completely. It owns conflict inspection, direct versus ambiguous resolution,
+chronological reporting, failure behavior, and manual abort/restart policy.
+For this caller, run only this continuation command after resolving each current
+set of conflicts:
+
+```text
+/Volumes/dev/bin/skills/autoimplement continue-task-rebase <canonical-task-path> <target-ref> <full-target-sha>
+```
+
+The original explicit operation named by the shared policy is
+`/skill:autoimplement --rebase-base [<base-ref>]`.
 
 ## Initialize or resume
 

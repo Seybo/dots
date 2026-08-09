@@ -163,38 +163,10 @@ and select the matching ordinal workspace. Applied to `/workit`:
      git -C <code-working-directory> branch --show-current
      ```
    - **Treat `main` and `master` as protected except for the `env` project (`/Users/inseybo/.dots`) and registered projects whose project key starts with `my_`.** If the current branch is protected, stop before editing and switch to a task branch.
-   - For registered workspace tasks whose registry entry has `task_provider: shortcut`, follow the branch setup rules from [`taskit` step 8: Set up the development branch](../taskit/SKILL.md#set-up-the-development-branch-task_provider-shortcut-projects-shortcut-mode-only): fetch the Shortcut story, generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from the returned story `name`, verify whether it already exists, and create it when safe. Do not use the task folder suffix as the branch slug; existing task folders can have local/draft slugs that differ from Shortcut's Git Helper slug.
-   - For `task_provider: local` projects, never fetch Shortcut stories or create/switch Shortcut branches.
-   - If `base_ref` is present for a registered workspace Shortcut task:
-     - require a clean worktree before any checkout/branch creation:
-       ```bash
-       git -C <code-root>/<workspace> status --short
-       ```
-       If dirty, stop and ask the user to clean/commit/stash manually; do not stash automatically.
-     - fetch remote refs so remote base branches are available:
-       ```bash
-       git -C <code-root>/<workspace> fetch origin
-       ```
-     - verify the exact base ref resolves to a commit:
-       ```bash
-       git -C <code-root>/<workspace> rev-parse --verify --quiet <base_ref>^{commit}
-       ```
-       If it does not resolve, stop and ask for a valid full branch/ref.
-     - if the generated task branch does not exist, create it from the exact base ref without configuring the base as Git upstream/tracking branch:
-       ```bash
-       git -C <code-root>/<workspace> checkout --no-track -b <branch-name> <base_ref>
-       ```
-       `--no-track` is required because when `<base_ref>` is a remote branch, Git may otherwise set the task branch's upstream to the parent branch. The parent/base must stay in `/autowork` config, not Git upstream.
-       Report that `<branch-name>` was created from `<base_ref>`.
-     - if the generated task branch already exists and the current branch is not that branch, stop and ask before switching. When running as `/autowork` preflight, stop and report the needed branch decision instead of switching.
-     - if the generated task branch already exists and the current branch is that branch, verify the base ref is already contained in the task branch:
-       ```bash
-       git -C <code-root>/<workspace> merge-base --is-ancestor <base_ref> HEAD
-       ```
-       If this fails, the parent/base branch likely advanced or the branch was created from a different base. Stop and ask for explicit rebase or base-change instructions; do not rebase automatically.
-   - If `base_ref` is not present and a task branch already exists, ask the user whether to switch to it unless the current branch already contains `sc-{task_id}` as a path segment. When running as `/autowork` preflight, stop and report the needed branch decision instead of continuing on the wrong branch.
-   - If `base_ref` is not present and the generated task branch does not exist, create it from the current HEAD using the existing taskit branch rules.
-   - For a `task_provider: local` task, use the currently checked-out branch as-is after applying the protected-branch rules above. Do not infer, create, rename, or switch branches. When running as `/autowork` preflight, stop if the current branch is protected.
+   - Read and follow [`../components/task-branch-config.md`](../components/task-branch-config.md) completely before branch/config setup.
+   - For registered workspace tasks whose registry entry has `task_provider: shortcut`, fetch the Shortcut story and generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from its current `name`. Do not use the task folder suffix. Apply the shared component's **Shortcut Task branch setup** rules with the resolved Task folder, selected workspace, generated branch name, and optional exact `base_ref`.
+   - For `task_provider: local`, never fetch Shortcut stories or create/switch branches. Apply the shared component's **Local Task setup** rules immediately before planning and Autoimplement initialization.
+   - When running as `/autowork` preflight, stop and report any required existing-branch decision instead of switching.
 
 7. **Create or load the steps plan before implementation:**
    - before writing or updating `steps.md`, inspect existing implementation patterns relevant to the task:
@@ -255,6 +227,5 @@ and select the matching ordinal workspace. Applied to `/workit`:
 ## Important Notes
 
 - Do not auto-use this skill without the explicit `/workit` command, except for `/autowork` invoking `/workit ... create-steps-only` as its documented preflight
-- Do not create or modify task folders here except for creating/updating the selected task's `steps.md` implementation plan
 - Do not modify `task.md` content unless explicitly asked
 - The task folder must already exist; if it doesn't, suggest the user run `/taskit` first

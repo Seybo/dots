@@ -13,7 +13,6 @@ RSpec.describe RetryTaskWorkCycle do
       created_at: Time.now,
       task_path: File.join(project_path, 'task'),
       project_path: project_path,
-      branch_name: 'feature',
       starting_commit_sha: git!('rev-parse', 'HEAD').strip,
       state: 'initialized'
     )

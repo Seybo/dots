@@ -13,6 +13,7 @@ RSpec.describe 'ValidateTaskFiles' do
     FileUtils.mkdir_p(task_path)
     File.write(File.join(task_path, 'task.md'), "# Context\n")
     File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: Start\n")
+    File.write(File.join(task_path, 'config.json'), "{}\n")
   end
 
   after do
@@ -35,6 +36,13 @@ RSpec.describe 'ValidateTaskFiles' do
 
     expect { service_class.call(task_path: task_path) }.
       to raise_error("Missing authored Task file: #{File.join(File.realpath(task_path), 'steps.md')}")
+  end
+
+  it 'requires config.json' do
+    FileUtils.rm_f(File.join(task_path, 'config.json'))
+
+    expect { service_class.call(task_path: task_path) }.
+      to raise_error("Missing authored Task file: #{File.join(File.realpath(task_path), 'config.json')}")
   end
 
   it 'requires a canonical step heading' do

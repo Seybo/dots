@@ -5,6 +5,9 @@ require_relative '../../spec/spec_helper'
 RSpec.describe 'Autoimplement skill contract' do
   let(:skill_path) { File.expand_path('../SKILL.md', __dir__) }
   let(:skill) { File.read(skill_path) }
+  let(:conflict_policy) do
+    File.read(File.expand_path('../../../components/rebase-conflict-resolution.md', __dir__))
+  end
 
   it 'accepts one explicit retry flag through normal Task resolution' do
     expect(skill).to include('/skill:autoimplement --retry')
@@ -20,6 +23,22 @@ RSpec.describe 'Autoimplement skill contract' do
     expect(skill).to match(/remove the flag and its value before\s+applying the existing Task argument parser/)
     expect(skill).to include('initialize-task <canonical-task-path> <claude|codex>')
     expect(skill).to match(/Pass the selection only to `initialize-task`/)
+  end
+
+  it 'runs explicit initialized-Task rebases without normal orchestration' do
+    expect(skill).to include('/skill:autoimplement --rebase-base <base-ref>')
+    expect(skill).to include('rebase-task <canonical-task-path>')
+    expect(skill).to include(
+      'continue-task-rebase <canonical-task-path> <target-ref> <full-target-sha>'
+    )
+    expect(skill).to include('AutoImplementRebaseConflict <task-id>')
+    expect(skill).to include('Task starting boundary and active config fields')
+    expect(skill).to match(/local-provider Task/i)
+    expect(skill).to include('../../components/rebase-conflict-resolution.md')
+    expect(conflict_policy).to include('`git rebase --abort` manually')
+    expect(conflict_policy).to match(
+      /Never switch\s+branches, push, start a Work Cycle.*resume\s+normal orchestration automatically/m
+    )
   end
 
   it 'asks Ruby to authorize retry before participant handoff' do

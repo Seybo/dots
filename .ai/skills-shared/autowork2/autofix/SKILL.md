@@ -2,7 +2,7 @@
 name: autofix
 description: >-
   Import and decide reported issues from the current GitHub pull request or a
-  local review copied to the clipboard, or explicitly rebase an active Review.
+  local review copied to the clipboard, or explicitly rebase its completed Task.
   Command-only skill.
 disable-model-invocation: true
 ---
@@ -19,9 +19,7 @@ Supported invocations:
 
 ```text
 /skill:autofix
-/skill:autofix --base <ref>
-/skill:autofix --local
-/skill:autofix --local --base <ref>
+/skill:autofix --local --task <task-id>
 /skill:autofix --rebase-base
 /skill:autofix --rebase-base <base-ref>
 ```
@@ -49,93 +47,84 @@ required; never alter the helper output before parsing it.
 Do not prefix normal progress, successful completion, no-issue or
 no-unresolved-issue results, participant messages, or Manager machine-control
 lines such as `Issue: <id>`, `AutoFixCycle <id>`, `AutoFixRole <role>`,
-`WaitWorkCycle <id>`, `AutoFixSquash <id>`, `RebaseConflict <id>`,
+`WaitWorkCycle <id>`, `AutoFixSquash <id>`, `AutoFixRebaseConflict <id>`,
 `RebaseTargetRef <ref>`, and `RebaseTargetCommit <sha>`. Continue to retain,
 parse, remove, or route those control lines exactly as specified below.
 
-## Rebase active Review
+## Task resolution
 
-Treat `--rebase-base` as a separate explicit operation. Accept either no value
-or one exact base ref after it. Reject combinations with `--local`, `--base`, or
-any other argument. Do not enter **Resume**, collect a source, or continue normal
-Review orchestration during this operation.
+Before **Resume** or **Rebase completed Task**, read and follow
+[`../../components/task-resolution.md`](../../components/task-resolution.md)
+completely.
 
-1. Run `git branch --show-current` and retain the exact branch name.
+- For a Shortcut project, infer the Task ID from the current `sc-<digits>`
+  branch segment and resolve exactly one Task folder.
+- For a local-provider project, require `--local --task <task-id>` and resolve
+  that explicit numeric Task selector. Never infer a local Task from
+  `main`/`master` or the newest Task.
+- Retain the canonical Task folder path. Ruby verifies that it belongs to the
+  current checkout and configured branch and that Autoimplement reached
+  terminal `final_checks_passed` state.
+
+Reject missing, duplicate, or unsupported arguments before **Resume**. The only
+normal source forms are no arguments for GitHub and `--local --task <task-id>`
+for local review. `--rebase-base` is Shortcut-only and uses the same inferred
+Task; never offer or invoke it for a local-provider Task.
+
+## Rebase completed Task
+
+Treat `--rebase-base` as a separate explicit operation for the resolved
+Shortcut Task. Accept either no value or one exact base ref after it. Reject
+combinations with `--local`, `--base`, `--task`, or any other argument. This
+operation is valid before Review import and while one Review remains incomplete.
+Do not enter **Resume**, collect a source, or continue normal Review
+orchestration during or after it.
+
+1. Resolve the canonical Task folder through **Task resolution**.
 2. With no supplied base ref, run:
 
    ```text
-   /Volumes/dev/bin/skills/autofix rebase-review <branch>
+   /Volumes/dev/bin/skills/autofix rebase-task <canonical-task-path>
    ```
 
    With a supplied base ref, preserve it exactly and run:
 
    ```text
-   /Volumes/dev/bin/skills/autofix rebase-review <branch> <base-ref>
+   /Volumes/dev/bin/skills/autofix rebase-task <canonical-task-path> <base-ref>
    ```
 
-3. If the helper returns successful Review rebase output without conflict
-   control lines, append one blank line and this exact final line, then return
-   the combined output and stop:
+3. If the helper returns successful Task rebase output without conflict control
+   lines, append one blank line and this exact final line, then return the
+   combined output and stop:
 
    ```text
    Resolved conflicts: none.
    ```
 
+   The helper output identifies the Task, an active Review when present, old
+   and new active refs and full SHAs, remapped Task and optional Review starting
+   SHAs, and confirms that no push occurred. Do not reopen Autoimplement, replay
+   Task Work Cycles, rerun final reviews, or expose Work Cycle commit SHAs.
 4. A conflict handoff contains exactly these Manager control lines:
 
    ```text
-   RebaseConflict <review-id>
+   AutoFixRebaseConflict <task-id>
    RebaseTargetRef <target-ref>
    RebaseTargetCommit <full-target-sha>
    ```
 
-   Retain the branch, Review ID, exact target ref, and full target SHA for this
-   invocation. Do not display the control lines and do not persist them.
-5. For every currently unmerged file in the authoritative checkout:
-   - inspect its unmerged diff, base/ours/theirs stages, relevant surrounding
-     code, and affected behavior
-   - treat each conflict occurrence as a separate resolution, including when
-     the same path conflicts again while replaying a later commit
-   - when the intended result is unambiguous, edit the file directly and retain
-     the path, a short description of the conflict, and a short description of
-     the applied resolution
-   - when the intended result is ambiguous, begin the complete Manager turn
-     with `[MM_NTF]`, show the conflicting code and relevant context, recommend
-     one resolution, and ask the operator one precise question before editing
-     that conflict; after the answer, apply it
-     and retain the same short conflict and resolution descriptions
-6. After every current conflict is resolved, run only:
+5. Read and follow
+   [`../../components/rebase-conflict-resolution.md`](../../components/rebase-conflict-resolution.md)
+   completely. For this caller, retain the canonical Task path with the shared
+   control data and run only this continuation command after resolving each
+   current set of conflicts:
 
    ```text
-   /Volumes/dev/bin/skills/autofix continue-review-rebase <branch> <target-ref> <full-target-sha>
+   /Volumes/dev/bin/skills/autofix continue-task-rebase <canonical-task-path> <target-ref> <full-target-sha>
    ```
 
-   Ruby stages the resolutions and continues the native rebase. Manager must
-   not run `git add`, `git rebase`, or write Review metadata directly.
-7. If continuation returns another conflict handoff, repeat steps 4-6 and keep
-   all prior resolution descriptions in chronological order.
-8. After continuation returns successful Review rebase output, append one blank
-   line followed by this section and return the combined output:
-
-   ```text
-   Resolved conflicts:
-   - `<path>`: <short conflict description>; <short applied resolution>
-   ```
-
-   Include one list item for every resolved conflict occurrence, whether
-   Manager resolved it directly or the operator decided it.
-
-Surface any non-conflict helper failure content unchanged and stop, adding the
-Manager notification prefix first when the failure requires operator direction.
-Preserve an in-progress rebase on conflict or failure. Do not switch branches,
-push, start a Work Cycle, invoke normal `resume`, or expose interim Work Cycle
-commit SHAs.
-
-There is no persisted continuation or recovery state. If conflict resolution is
-interrupted, begin the recovery turn with `[MM_NTF]`, tell the operator to run
-`git rebase --abort` manually, and invoke `--rebase-base` again from the
-beginning. Do not continue an interrupted rebase outside this invocation; manual
-`git rebase --continue` is unsupported.
+   The original explicit operation named by the shared policy is
+   `/skill:autofix --rebase-base [<base-ref>]`.
 
 ## Resume
 
@@ -145,7 +134,7 @@ Before collecting a GitHub or local source:
 2. Run:
 
    ```text
-   /Volumes/dev/bin/skills/autofix resume <branch>
+   /Volumes/dev/bin/skills/autofix resume <canonical-task-path>
    ```
 
 3. Continue to source collection only when stdout is exactly
@@ -165,8 +154,7 @@ With no source argument:
 1. Use the branch name retained during resume.
 2. Run `gh pr view --json number,baseRefName` for the current pull request.
 3. Run `git fetch origin`.
-4. Select the supplied `--base <ref>` when present. Otherwise select
-   `origin/<baseRefName>` from the pull request.
+4. Select exactly `origin/<baseRefName>` from the pull request.
 5. Run `git rev-parse <base-ref>^{commit}` and retain the full base commit SHA.
 6. Run the following command with the pull request number, preserving all pages:
 
@@ -195,7 +183,7 @@ With no source argument:
 10. Run:
 
     ```text
-    /Volumes/dev/bin/skills/autofix import-github-review /tmp/autofix-github-review.json
+    /Volumes/dev/bin/skills/autofix import-github-review /tmp/autofix-github-review.json <canonical-task-path>
     ```
 
 11. Delete `/tmp/autofix-github-review.json` after the helper returns, including
@@ -210,40 +198,28 @@ settling the imported Review.
 
 ## Local
 
-With `--local`:
+With `--local --task <task-id>`:
 
-1. Use the branch name retained during resume.
-2. Run `git fetch origin`.
-3. Select the supplied `--base <ref>` when present. Otherwise run
-   `git rev-parse --verify --quiet origin/main^{commit}` and select `origin/main`
-   when it succeeds; if it fails, run the same command for `origin/master` and
-   select `origin/master`.
-4. Run `git rev-parse <base-ref>^{commit}` and retain the full base commit SHA.
-5. Read `app/prompts/extract_issues_from_clipboard.md` from this skill directory.
-6. Run `pbpaste` directly and treat its complete output as the review.
-7. Follow the prompt to extract the Reported Issue bodies.
-8. Write this object to `/tmp/autofix-local-review.json`:
+1. Read `app/prompts/extract_issues_from_clipboard.md` from this skill directory.
+2. Run `pbpaste` directly and treat its complete output as the review.
+3. Follow the prompt to extract the Reported Issue bodies.
+4. Write this object to `/tmp/autofix-local-review.json`:
 
    ```json
-   {
-     "branch_name": "<branch>",
-     "base_ref": "<base ref>",
-     "base_commit_sha": "<full base commit SHA>",
-     "issues": ["<issue body>"]
-   }
+   {"issues": ["<issue body>"]}
    ```
 
-9. Run:
+5. Run:
 
    ```text
-   /Volumes/dev/bin/skills/autofix import-local-review /tmp/autofix-local-review.json
+   /Volumes/dev/bin/skills/autofix import-local-review /tmp/autofix-local-review.json <canonical-task-path>
    ```
 
-10. Delete `/tmp/autofix-local-review.json` after the helper returns, including
-    when it fails.
-11. Follow **Issue assessment** when helper stdout contains an `Issue: <id>`
-    block. Return any other stdout unchanged. Surface failures after deleting
-    the file.
+6. Delete `/tmp/autofix-local-review.json` after the helper returns, including
+   when it fails.
+7. Follow **Issue assessment** when helper stdout contains an `Issue: <id>`
+   block. Return any other stdout unchanged. Surface failures after deleting
+   the file.
 
 Do not add special handling for empty clipboard text. Do not store the original
 clipboard review.

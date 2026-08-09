@@ -203,42 +203,8 @@ creates project roots or code checkouts.
        ```
      - Do not use the task folder suffix, `# Story details` local name, draft name, or any other local task title for the branch slug. Local task folders can drift from Shortcut titles; the branch slug must match Shortcut's Git Helper name.
      - Do NOT call `mcp__shortcut__stories-get-branch-name` — the MCP returns incorrect names (triple dashes, truncation).
-   - Check the current branch in the selected workspace with `git -C <code-root>/<workspace> branch --show-current`.
-     - If the current branch contains `sc-{story_id}` as a path segment, treat branch setup as already done and do not create or switch branches.
-     - If the current branch differs from the generated branch name, report both the current branch and generated branch name.
-   - If `base_ref` is present:
-     - require a clean worktree before any checkout/branch creation:
-       ```bash
-       git -C <code-root>/<workspace> status --short
-       ```
-       If dirty, stop and ask the user to clean/commit/stash manually; do not stash automatically.
-     - fetch remote refs so remote base branches are available:
-       ```bash
-       git -C <code-root>/<workspace> fetch origin
-       ```
-     - verify the exact base ref resolves to a commit:
-       ```bash
-       git -C <code-root>/<workspace> rev-parse --verify --quiet <base_ref>^{commit}
-       ```
-       If it does not resolve, stop and ask for a valid full branch/ref.
-   - Verify whether the generated branch already exists in the selected checkout:
-     ```bash
-     git -C <code-root>/<workspace> rev-parse --verify --quiet <branch-name>
-     ```
-   - If the generated branch exists (exit 0):
-     - If the current branch is not the generated branch, stop and ask the user how to proceed; do not switch silently.
-     - If the current branch is the generated branch and `base_ref` is present, verify the base ref is contained in the task branch:
-       ```bash
-       git -C <code-root>/<workspace> merge-base --is-ancestor <base_ref> HEAD
-       ```
-       If that fails, stop and ask for explicit rebase or base-change instructions; do not rebase automatically.
-   - If the generated branch does not exist (exit 1), create and check it out with exactly one of these forms — `-C` flag required, no `cd`, no bare `git`:
-     ```bash
-     git -C <code-root>/<workspace> checkout --no-track -b <branch-name> <base_ref>
-     git -C <code-root>/<workspace> checkout -b <branch-name>
-     ```
-     Use the first form when `base_ref` is present; use the second form only when `base_ref` is absent. `--no-track` is required for explicit bases because when `<base_ref>` is a remote branch, Git may otherwise set the new task branch's upstream to the parent branch. The parent/base must stay in task/autowork config, not Git upstream.
-   - Report the selected checkout, branch name, and base ref (when present) alongside the created paths from step 7.
+   - Read and follow [`../components/task-branch-config.md`](../components/task-branch-config.md) completely using the resolved Task folder, selected workspace, generated branch name, and optional exact `base_ref`.
+   - Apply only its **Shortcut Task branch setup** rules. This step does not record local-provider Git metadata.
 
 9. **Offer Workit continuation:**
    - run this step only after all applicable Taskit work completes successfully
@@ -386,7 +352,7 @@ Do not update `task.md` contents in this mode unless the user explicitly asks fo
 - Local task IDs use zero-padded 4-digit IDs (`0001`, `0002`, ...). To choose the next local ID, scan first-level task folders under `/Volumes/dev/_tasks/<project>/` matching `^\d{4}-`, then use one greater than the highest existing local ID; if none exist, start at `0001`. Ignore `draftNN` folders and Shortcut story ID folders when assigning local IDs.
 - If the generated folder already exists, stop and ask the user how to proceed rather than overwriting anything
 - Do not register projects automatically; create a missing task root only for an already registered project
-- Do not add extra files
+- Do not add extra files except `config.json` when this Shortcut branch-setup step owns its creation
 - Do not add extra sections to `task.md`
 - For implementation-oriented tasks, later planning should use TDD where it makes sense, with specs focused on edge cases, boundaries, regressions, and acceptance criteria rather than only happy paths
 - Do not auto-use this skill without an explicit `/taskit` command or an exact bare `taskit` reply to an active Grillme or Draftit continuation offer

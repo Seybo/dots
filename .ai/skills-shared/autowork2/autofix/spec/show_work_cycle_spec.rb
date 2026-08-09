@@ -25,7 +25,7 @@ RSpec.describe ShowWorkCycle do
   end
 
   it 'returns source-neutral Work Cycle and Review context as JSON' do
-    review_id = StoreReview.call(
+    review_id = ReviewFactory.call(
       project_path: project_path,
       source: 'local',
       branch_name: 'feature',
@@ -150,7 +150,7 @@ RSpec.describe ShowWorkCycle do
   end
 
   it 'returns every issue and decision for a Manager review' do
-    review_id = StoreReview.call(
+    review_id = ReviewFactory.call(
       project_path: project_path,
       source: 'local',
       branch_name: 'feature',
@@ -194,7 +194,7 @@ RSpec.describe ShowWorkCycle do
   end
 
   def start_review_sequence
-    review_id = StoreReview.call(
+    review_id = ReviewFactory.call(
       project_path: project_path,
       source: 'local',
       branch_name: 'feature',
