@@ -77,7 +77,8 @@ Then write `task.md` from the requested context. After creation, let the user ch
    - require the result to match `^[a-z][a-z0-9-]*$`; if useful context cannot produce a valid slug, ask for clearer context rather than accepting a name
 
 4. **Write useful task content:**
-   - use the derived task slug unchanged as the concise task title
+   - use the derived task slug as the source for the concise task title
+   - store the title in `# Story details`; do not render the slug as a heading inside `# Context`
    - lead `# Context` with the user/product problem, not implementation details
    - include expected behavior and acceptance criteria when context supports them
    - do not add implementation planning; `/workit` creates `steps.md` later
@@ -86,12 +87,15 @@ Then write `task.md` from the requested context. After creation, let the user ch
 5. **Use the correct task structure:**
    - local-only draft:
      ```md
-     # Context
+     # Story details
 
-     ## {task slug}
+     Name: {task slug with `-` replaced by spaces}
+
+     # Context
 
      {draft content}
      ```
+     The missing `Epic:` keeps this local-only. Taskit uses `Name:` for local conversion and does not need a visible task-title heading inside `# Context`.
    - Shortcut-ready draft:
      ```md
      # Story details
