@@ -108,6 +108,7 @@ RSpec.describe 'Autofix Task rebasing' do
       source: 'local',
       body: 'Settled issue.',
       decision: 'skipped',
+      decision_reason: 'Skipped in spec.',
       project_path: File.realpath(project_path)
     )
     db[:review_issues].insert(

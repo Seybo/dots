@@ -137,7 +137,12 @@ RSpec.describe 'StartTaskImplementationWorkCycle' do
     )
     issue_decisions.each do |decision|
       issue_id = StoreIssue.call(project_path: project_path, source: 'reviewer', body: 'Review issue.')
-      db[:reported_issues].where(id: issue_id).update(decision: decision) unless decision.nil?
+      unless decision.nil?
+        db[:reported_issues].where(id: issue_id).update(
+          decision: decision,
+          decision_reason: "#{decision.capitalize} in spec."
+        )
+      end
       db[:work_cycle_reported_issues].insert(
         created_at: Time.now,
         work_cycle_id: work_cycle_id,

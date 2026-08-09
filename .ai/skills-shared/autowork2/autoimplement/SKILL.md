@@ -454,32 +454,42 @@ If the operator asks for details, begin with `[MM_NTF]`, answer without recordin
 a decision, and request the still-needed decision.
 
 For an `Unclear` recommendation, ask one precise question and persist nothing.
-Treat the next reply as clarification, including `yes` or `go`; reassess the
-same issue and request a separate clear decision. Only an explicit `fix` or
-`skip` in that clarification reply is also a decision.
+Treat the next reply as clarification, including `yes` or `go`, and reassess the
+same issue. Follow the shared decision-reason policy: when the clarification
+makes Fix or Skip unambiguous and supplies its factual basis, apply its
+understanding and agreement rules; otherwise ask one precise decision question.
 
 ## Decisions
+
+Read and follow
+[`../../components/reported-issue-decision-reasons.md`](../../components/reported-issue-decision-reasons.md)
+completely. It owns reason retention, acceptance, contrary decisions, safe
+helper arguments, and exact stored output. Use the mappings below to identify
+the requested outcome; persist it only when the shared policy has a reason.
 
 Use the currently assessed issue ID for the operator's next clear decision:
 
 - `fix`, `approve`, or `approved` → `approved`
 - `skip`, `ignore`, `reject`, or `invalid` → `skipped`
-- `yes` or `go` accepts the current recommendation: Fix becomes `approved` and
-  Skip becomes `skipped`
-- `yes` or `go` for Unclear is clarification only and persists nothing
+- any unambiguous affirmative response to the current recommendation—including
+  `go`, `yes`, `ok`, `okay`, `accept`, `approved`, or equivalent clear language—
+  accepts it: Fix becomes `approved` and Skip becomes `skipped`
+- `yes` or `go` answering an Unclear question is clarification; reassess it and
+  apply the shared policy before deciding whether anything can be persisted
 - questions, details requests, clarifications, and unrelated messages are not
   decisions
 
 For genuine ambiguity, begin with `[MM_NTF]`, name the Reported Issue ID, and
 ask one precise question without persisting anything.
 
-For one clear decision, run exactly one command:
+For one clear decision with its required reason, run exactly one command:
 
 ```text
-/Volumes/dev/bin/skills/autoimplement store-decision <id> <approved|skipped>
+/Volumes/dev/bin/skills/autoimplement store-decision <id> <approved|skipped> <shell-escaped-reason>
 ```
 
-Process decision-command stdout through **Continue helper output**, retaining
+Preserve the helper's exact stored `Decision:` and `Reason:` lines. Process the
+remaining decision-command stdout through **Continue helper output**, retaining
 accepted-step or completed Work Cycle output before its next control. Process
 only one decision per operator reply. Do not refetch Task input, run Worker
 classification, or start debate.

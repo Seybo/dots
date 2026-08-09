@@ -63,7 +63,7 @@ RSpec.describe StartReviewerReviewWorkCycle do
       ]
     )
     issue_ids = db[:review_issues].where(review_id: review_id).order(:id).select_map(:reported_issue_id)
-    db[:reported_issues].where(id: issue_ids).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_ids).update(decision: 'approved', decision_reason: 'Approved in spec.')
     implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
     db[:work_cycles].where(id: implementation_work_cycle_id).update(
       completed_at: Time.now

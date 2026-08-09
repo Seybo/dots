@@ -8,6 +8,9 @@ RSpec.describe 'Autoimplement skill contract' do
   let(:conflict_policy) do
     File.read(File.expand_path('../../../components/rebase-conflict-resolution.md', __dir__))
   end
+  let(:decision_policy) do
+    File.read(File.expand_path('../../../components/reported-issue-decision-reasons.md', __dir__))
+  end
 
   it 'accepts one explicit retry flag through normal Task resolution' do
     expect(skill).to include('/skill:autoimplement --retry')
@@ -118,6 +121,22 @@ RSpec.describe 'Autoimplement skill contract' do
     expect(skill).to include('Task <task-id>: <folder slug as words>')
     expect(skill).to include('`no`, `skip`, or `leave`')
     expect(skill).to match(/Do not persist the question, answer, pending state, or squash result/)
+  end
+
+  it 'collects exact reasons through the shared Reported Issue decision policy' do
+    expect(skill).to include('../../components/reported-issue-decision-reasons.md')
+    expect(skill).to include(
+      'store-decision <id> <approved|skipped> <shell-escaped-reason>'
+    )
+    expect(decision_policy).to match(/store the\s+exact displayed\s+recommendation reason unchanged/i)
+    expect(decision_policy).to match(/asks\s+one concise follow-up question and persists nothing/)
+    expect(decision_policy).to include('Decision: <approved|skipped>')
+    expect(decision_policy).to include('Reason: <exact stored reason>')
+    expect(decision_policy).to match(/unambiguous affirmative.*accepts Manager's recommendation/im)
+    expect(decision_policy).to match(/paraphrase.*confirm.*understood/m)
+    expect(decision_policy).to match(/cannot understand.*persists nothing/m)
+    expect(decision_policy).to match(/disagrees.*explicitly.*persists nothing.*confirmation/m)
+    expect(decision_policy).to match(/Unclear.*persists nothing.*apply the operator-reasoning rules/m)
   end
 
   it 'keeps omitted recovery and reconciliation behavior unavailable' do

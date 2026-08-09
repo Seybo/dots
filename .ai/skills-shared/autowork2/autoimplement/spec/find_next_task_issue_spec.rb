@@ -25,7 +25,7 @@ RSpec.describe FindNextTaskIssue do
       work_cycle_id: review_work_cycle_id,
       body: 'Decided issue.'
     )
-    db[:reported_issues].where(id: decided_issue_id).update(decision: 'skipped')
+    db[:reported_issues].where(id: decided_issue_id).update(decision: 'skipped', decision_reason: 'Skipped in spec.')
     first_issue_id = insert_produced_issue(
       work_cycle_id: review_work_cycle_id,
       body: 'First undecided issue.'
@@ -48,7 +48,7 @@ RSpec.describe FindNextTaskIssue do
     )
     review_work_cycle_id = insert_review_work_cycle
     issue_id = insert_produced_issue(work_cycle_id: review_work_cycle_id, body: 'Decided issue.')
-    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
 
     expect(described_class.call(review_work_cycle_id: review_work_cycle_id)).to be_nil
   end

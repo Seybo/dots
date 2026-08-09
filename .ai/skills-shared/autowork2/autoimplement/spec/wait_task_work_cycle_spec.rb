@@ -551,7 +551,10 @@ RSpec.describe WaitTaskWorkCycle do
 
   def insert_produced_issue(work_cycle_id, decision:, source: 'reviewer')
     issue_id = StoreIssue.call(project_path: project_path, source: source, body: 'Approved correction.')
-    db[:reported_issues].where(id: issue_id).update(decision: decision)
+    db[:reported_issues].where(id: issue_id).update(
+      decision: decision,
+      decision_reason: "#{decision.capitalize} in spec."
+    )
     db[:work_cycle_reported_issues].insert(
       created_at: Time.now,
       work_cycle_id: work_cycle_id,

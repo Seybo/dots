@@ -74,13 +74,19 @@ RSpec.describe 'AutoimplementCli' do
     expect(RetryTaskWorkCycle).to have_received(:call).with(task_id: '7')
   end
 
-  it 'stores one Task Reported Issue decision' do
+  it 'stores one Task Reported Issue decision with its exact reason' do
+    reason = 'The value is lost; punctuation remains.'
+
     expect do
-      service_class.call(cli_args: %w[store-decision 4 approved])
+      service_class.call(cli_args: ['store-decision', '4', 'approved', reason])
     end.to output("Decision: approved\n").to_stdout
 
     expect(MigrateDatabase).to have_received(:call)
-    expect(HandleTaskDecision).to have_received(:call).with(issue_id: '4', decision: 'approved')
+    expect(HandleTaskDecision).to have_received(:call).with(
+      issue_id: '4',
+      decision: 'approved',
+      reason: reason
+    )
   end
 
   it 'squashes one completed Task with an explicit checkout and subject' do
@@ -157,7 +163,8 @@ RSpec.describe 'AutoimplementCli' do
       ['wait-work-cycle'],
       ['store-decision'],
       %w[store-decision 4],
-      %w[store-decision 4 approved extra],
+      %w[store-decision 4 approved],
+      %w[store-decision 4 approved reason extra],
       ['squash-task'],
       %w[squash-task 7 /project],
       %w[squash-task 7 /project subject extra],
@@ -171,7 +178,7 @@ RSpec.describe 'AutoimplementCli' do
           ArgumentError,
           'Usage: autoimplement [initialize-task <canonical-task-path> [super-review-agent] | ' \
           'resume-task <task-id> | ' \
-          'retry-task <task-id> | store-decision <issue-id> <decision> | ' \
+          'retry-task <task-id> | store-decision <issue-id> <decision> <reason> | ' \
           'squash-task <task-id> <canonical-project-path> <subject> | ' \
           'rebase-task <canonical-task-path> [base-ref] | ' \
           'continue-task-rebase <canonical-task-path> <target-ref> <target-sha> | ' \

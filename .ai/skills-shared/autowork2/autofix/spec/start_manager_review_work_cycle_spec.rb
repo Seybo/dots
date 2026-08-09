@@ -25,14 +25,14 @@ RSpec.describe StartManagerReviewWorkCycle do
   it 'creates a Manager review Work Cycle with every Review issue as input' do
     review_id = store_review
     issue_ids = db[:review_issues].where(review_id: review_id).order(:id).select_map(:reported_issue_id)
-    db[:reported_issues].where(id: issue_ids.first).update(decision: 'approved')
-    db[:reported_issues].where(id: issue_ids.last).update(decision: 'skipped')
+    db[:reported_issues].where(id: issue_ids.first).update(decision: 'approved', decision_reason: 'Approved in spec.')
+    db[:reported_issues].where(id: issue_ids.last).update(decision: 'skipped', decision_reason: 'Skipped in spec.')
     manager_issue_id = StoreIssue.call(
       project_path: project_path,
       source: 'manager',
       body: 'Earlier Manager issue.'
     )
-    db[:reported_issues].where(id: manager_issue_id).update(decision: 'skipped')
+    db[:reported_issues].where(id: manager_issue_id).update(decision: 'skipped', decision_reason: 'Skipped in spec.')
     db[:review_issues].insert(
       created_at: Time.now,
       review_id: review_id,

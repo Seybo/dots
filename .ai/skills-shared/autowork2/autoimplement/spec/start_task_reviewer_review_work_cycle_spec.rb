@@ -28,7 +28,7 @@ RSpec.describe StartTaskReviewerReviewWorkCycle do
       source: 'reviewer',
       body: 'Approved correction.'
     )
-    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     db[:work_cycle_inputs].insert(
       created_at: Time.now,
       work_cycle_id: implementation_id,
@@ -57,7 +57,7 @@ RSpec.describe StartTaskReviewerReviewWorkCycle do
       source: 'reviewer',
       body: 'Approved whole-task correction.'
     )
-    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     implementation_id = insert_implementation(step_number: nil)
     db[:work_cycles].where(id: implementation_id).update(completed_at: Time.now)
     db[:work_cycle_inputs].insert(

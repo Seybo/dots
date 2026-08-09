@@ -366,21 +366,31 @@ its assessment from current code and context.
 
 For an `Unclear` recommendation, ask the prompt's one precise question,
 preferring a yes-or-no question when possible, and persist nothing. Treat the
-operator's next reply as clarification, including `yes` or `go`; use it to
-reassess the same issue and request a separate clear decision, again beginning
-the complete Manager turn with `[MM_NTF]`. Only an explicit `fix` or `skip` in
-that clarification reply is also a decision.
+operator's next reply as clarification, including `yes` or `go`, and reassess
+the same issue. Follow the shared decision-reason policy: when the clarification
+makes Fix or Skip unambiguous and supplies its factual basis, apply its
+understanding and agreement rules; otherwise begin with `[MM_NTF]` and ask one
+precise decision question.
 
 ## Decisions
+
+Read and follow
+[`../../components/reported-issue-decision-reasons.md`](../../components/reported-issue-decision-reasons.md)
+completely. It owns reason retention, acceptance, contrary decisions, safe
+helper arguments, and exact stored output. Use the mappings below to identify
+the requested outcome; persist it only when the shared policy has a reason.
 
 Use the currently assessed issue ID for the operator's next clear decision:
 
 - Treat `fix`, `approve`, and `approved` as `approved`.
 - Treat `skip`, `ignore`, `reject`, and `invalid` as `skipped`.
-- Treat `yes` or `go` as accepting Manager's current recommendation: `Fix`
-  becomes `approved`, and `Skip` becomes `skipped`.
-- An `Unclear` recommendation has no decision to accept. Treat `yes` or `go` as
-  an answer to its clarification question and persist nothing.
+- Treat any unambiguous affirmative response to Manager's current
+  recommendation—including `go`, `yes`, `ok`, `okay`, `accept`, `approved`, or
+  equivalent clear language—as accepting it: `Fix` becomes `approved`, and
+  `Skip` becomes `skipped`.
+- An `Unclear` recommendation has no initial decision to accept. Treat `yes` or
+  `go` as clarification, reassess it, and apply the shared policy before deciding
+  whether anything can be persisted.
 - A question, details request, clarification, or unrelated message is not a
   decision.
 - For genuine decision ambiguity, begin the complete Manager turn with
@@ -388,11 +398,13 @@ Use the currently assessed issue ID for the operator's next clear decision:
   Do not run `store-decision`, persist escalation state,
   or create a Work Cycle until the operator gives a clear decision.
 
-For a decision, run:
+For a decision with its required reason, run:
 
 ```text
-/Volumes/dev/bin/skills/autofix store-decision <id> <approved|skipped>
+/Volumes/dev/bin/skills/autofix store-decision <id> <approved|skipped> <shell-escaped-reason>
 ```
+
+Preserve the helper's exact stored `Decision:` and `Reason:` lines.
 
 When stdout contains an `AutoFixCycle <id>` line, follow **Work Cycle handoff**.
 When it contains an `AutoFixSquash <review-id>` line, follow **Optional squash**.

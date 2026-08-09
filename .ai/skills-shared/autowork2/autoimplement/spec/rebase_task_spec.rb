@@ -46,7 +46,10 @@ RSpec.describe 'Autoimplement Task rebasing' do
     add_task_commit('feature.txt', "feature\n")
     work_cycle_id = insert_work_cycle(completed_at: Time.now)
     issue_id = insert_issue
-    decision = db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    decision = db[:reported_issues].where(id: issue_id).update(
+      decision: 'approved',
+      decision_reason: 'Approved in spec.'
+    )
     target_sha = advance_main
 
     RebaseTask.call(task_path: task_path, project_path: project_path)

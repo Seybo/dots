@@ -65,7 +65,11 @@ RSpec.describe WaitWorkCycle do
       )
     )
     reported_issue = db[:reported_issues].where(source: 'reviewer').first
-    HandleDecision.call(issue_id: reported_issue.fetch(:id), decision: 'approved')
+    HandleDecision.call(
+      issue_id: reported_issue.fetch(:id),
+      decision: 'approved',
+      reason: 'Approved in spec.'
+    )
     later_work_cycle = db[:work_cycles].order(:id).last
     allow(Database).to receive(:readonly_connection).and_return(db)
     context = JSON.parse(ShowWorkCycle.call(work_cycle_id: later_work_cycle.fetch(:id)))
@@ -301,7 +305,7 @@ RSpec.describe WaitWorkCycle do
       )
     )
     worker_issue_id = db[:reported_issues].where(source: 'worker').get(:id)
-    db[:reported_issues].where(id: worker_issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: worker_issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     second_implementation_id = StartImplementationWorkCycle.call(review_id: review_id)
     StoreWorkCycleCompletion.call(
       work_cycle_id: second_implementation_id,
@@ -319,7 +323,11 @@ RSpec.describe WaitWorkCycle do
 
     described_class.call(work_cycle_id: second_reviewer_work_cycle_id)
     reviewer_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
-    HandleDecision.call(issue_id: reviewer_issue_id, decision: 'approved')
+    HandleDecision.call(
+      issue_id: reviewer_issue_id,
+      decision: 'approved',
+      reason: 'Approved in spec.'
+    )
     third_implementation_id = db[:work_cycles].where(action: 'implementation').order(:id).last.fetch(:id)
     StoreWorkCycleCompletion.call(
       work_cycle_id: third_implementation_id,
@@ -453,7 +461,7 @@ RSpec.describe WaitWorkCycle do
   def start_implementation
     review_id = store_review
     issue_id = db[:review_issues].where(review_id: review_id).get(:reported_issue_id)
-    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     [review_id, StartImplementationWorkCycle.call(review_id: review_id)]
   end
 

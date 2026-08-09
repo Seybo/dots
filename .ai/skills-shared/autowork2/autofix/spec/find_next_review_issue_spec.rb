@@ -60,7 +60,8 @@ RSpec.describe FindNextReviewIssue do
       source: 'github',
       source_id: source_id.to_s,
       body: "Issue #{source_id}.",
-      decision: decision
+      decision: decision,
+      decision_reason: decision && "#{decision.capitalize} in spec."
     )
   end
 

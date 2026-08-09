@@ -3,11 +3,15 @@
 class HandleDecision
   include ServiceObject
 
-  arguments :issue_id, :decision
+  arguments :issue_id, :decision, :reason
 
   def call
-    StoreDecision.call(issue_id: issue_id, decision: decision)
-    RenderDecision.call(decision: decision, next_action: resume_review)
+    issue = StoreDecision.call(issue_id: issue_id, decision: decision, reason: reason)
+    RenderDecision.call(
+      decision: issue.fetch(:decision),
+      reason: issue.fetch(:decision_reason),
+      next_action: resume_review
+    )
   end
 
   private

@@ -37,11 +37,20 @@ RSpec.describe HandleTaskDecision do
   end
 
   it 'stores the decision and resumes the Task that produced the issue' do
-    output = described_class.call(issue_id: issue_id, decision: 'skipped')
+    output = described_class.call(
+      issue_id: issue_id,
+      decision: 'skipped',
+      reason: 'No defect is present.'
+    )
 
-    expect(db[:reported_issues].where(id: issue_id).get(:decision)).to eq('skipped')
+    expect(db[:reported_issues].where(id: issue_id).first).to include(
+      decision: 'skipped',
+      decision_reason: 'No defect is present.'
+    )
     expect(ResumeTask).to have_received(:call).with(task_id: task_id)
-    expect(output).to eq("Decision: skipped\n\nStep 1 accepted.")
+    expect(output).to eq(
+      "Decision: skipped\nReason: No defect is present.\n\nStep 1 accepted."
+    )
   end
 
   it 'uses the same decision path for Manager findings' do
@@ -64,9 +73,16 @@ RSpec.describe HandleTaskDecision do
       reported_issue_id: manager_issue_id
     )
 
-    described_class.call(issue_id: manager_issue_id, decision: 'approved')
+    described_class.call(
+      issue_id: manager_issue_id,
+      decision: 'approved',
+      reason: 'Manager confirmed the defect.'
+    )
 
-    expect(db[:reported_issues].where(id: manager_issue_id).get(:decision)).to eq('approved')
+    expect(db[:reported_issues].where(id: manager_issue_id).first).to include(
+      decision: 'approved',
+      decision_reason: 'Manager confirmed the defect.'
+    )
     expect(ResumeTask).to have_received(:call).with(task_id: task_id)
   end
 end

@@ -36,7 +36,8 @@ class StoreIssue
       source: source,
       source_id: source_id&.to_s,
       body: body,
-      decision: nil
+      decision: nil,
+      decision_reason: nil
     }
   end
 end

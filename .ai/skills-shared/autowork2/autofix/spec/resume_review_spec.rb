@@ -39,8 +39,8 @@ RSpec.describe ResumeReview do
   it 'creates and exposes a missing implementation Work Cycle for a classified Review' do
     review_id = store_review(['Approved issue.', 'Skipped issue.'])
     issue_ids = review_issue_ids(review_id)
-    db[:reported_issues].where(id: issue_ids.first).update(decision: 'approved')
-    db[:reported_issues].where(id: issue_ids.last).update(decision: 'skipped')
+    db[:reported_issues].where(id: issue_ids.first).update(decision: 'approved', decision_reason: 'Approved in spec.')
+    db[:reported_issues].where(id: issue_ids.last).update(decision: 'skipped', decision_reason: 'Skipped in spec.')
 
     output = resume
     work_cycle = db[:work_cycles].first
@@ -52,7 +52,7 @@ RSpec.describe ResumeReview do
   it 'completes an all-skipped imported Review during resume' do
     review_id = store_review(['Skipped issue.'])
     issue_id = review_issue_ids(review_id).first
-    db[:reported_issues].where(id: issue_id).update(decision: 'skipped')
+    db[:reported_issues].where(id: issue_id).update(decision: 'skipped', decision_reason: 'Skipped in spec.')
 
     expect(resume).
       to eq('No unresolved issues.')
@@ -66,7 +66,7 @@ RSpec.describe ResumeReview do
   it 'waits for an existing incomplete implementation Work Cycle without redispatching it' do
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first
-    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
 
     output = resume
@@ -94,7 +94,7 @@ RSpec.describe ResumeReview do
       reported_issues: ['Reviewer-reported issue.']
     )
     reported_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
-    db[:reported_issues].where(id: reported_issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: reported_issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     later_implementation_id = StartImplementationWorkCycle.call(review_id: review_id)
     db[:work_cycles].where(id: later_implementation_id).update(completed_at: Time.now)
     db[:reviews].where(id: review_id).update(state: 'reviewer_review')
@@ -144,7 +144,7 @@ RSpec.describe ResumeReview do
       reported_issues: ['Reviewer-reported issue.']
     )
     reported_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
-    db[:reported_issues].where(id: reported_issue_id).update(decision: 'skipped')
+    db[:reported_issues].where(id: reported_issue_id).update(decision: 'skipped', decision_reason: 'Skipped in spec.')
 
     output = resume
     worker_work_cycle = db[:work_cycles].order(:id).last
@@ -160,7 +160,7 @@ RSpec.describe ResumeReview do
       reported_issues: ['Reviewer-reported issue.']
     )
     reported_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
-    db[:reported_issues].where(id: reported_issue_id).update(decision: 'skipped')
+    db[:reported_issues].where(id: reported_issue_id).update(decision: 'skipped', decision_reason: 'Skipped in spec.')
     File.write(File.join(project_path, 'tracked.txt'), "changed\n")
 
     expect do
@@ -188,7 +188,7 @@ RSpec.describe ResumeReview do
         reported_issues: ['Worker-reported issue.']
       )
     )
-    db[:reported_issues].where(source: 'worker').update(decision: 'skipped')
+    db[:reported_issues].where(source: 'worker').update(decision: 'skipped', decision_reason: 'Skipped in spec.')
 
     expect(resume).
       to eq('No unresolved issues.')
@@ -211,7 +211,7 @@ RSpec.describe ResumeReview do
       )
     )
     worker_issue_id = db[:reported_issues].where(source: 'worker').get(:id)
-    db[:reported_issues].where(id: worker_issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: worker_issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
     db[:work_cycles].where(id: implementation_work_cycle_id).update(completed_at: Time.now)
     db[:reviews].where(id: review_id).update(state: 'reviewer_review')
@@ -224,7 +224,7 @@ RSpec.describe ResumeReview do
         reported_issues: ['Reviewer-reported issue.']
       )
     )
-    db[:reported_issues].where(source: 'reviewer').update(decision: 'skipped')
+    db[:reported_issues].where(source: 'reviewer').update(decision: 'skipped', decision_reason: 'Skipped in spec.')
 
     expect(resume).
       to eq('No unresolved issues.')
@@ -237,7 +237,7 @@ RSpec.describe ResumeReview do
       reported_issues: ['Reviewer-reported issue.']
     )
     reported_issue_id = db[:reported_issues].where(source: 'reviewer').get(:id)
-    db[:reported_issues].where(id: reported_issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: reported_issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
 
     output = resume
     implementation_work_cycle = db[:work_cycles].order(:id).last
@@ -281,7 +281,7 @@ RSpec.describe ResumeReview do
   it 'creates and re-exposes the same incomplete Manager review Work Cycle' do
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first
-    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     db[:reviews].where(id: review_id).update(
       state: 'manager_review',
       starting_commit_sha: git!('rev-parse', 'HEAD').strip
@@ -305,7 +305,7 @@ RSpec.describe ResumeReview do
   def complete_implementation(review_state:)
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first
-    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
     db[:work_cycles].where(id: implementation_work_cycle_id).update(
       completed_at: Time.now

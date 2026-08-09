@@ -15,7 +15,8 @@ RSpec.describe StoreIssue do
       source: 'github',
       source_id: '1',
       body: 'Fix the write order.',
-      decision: nil
+      decision: nil,
+      decision_reason: nil
     )
     expect(issue.fetch(:created_at)).to be_a(Time)
   end
@@ -47,7 +48,10 @@ RSpec.describe StoreIssue do
 
   it 'does not change a decided issue' do
     id = store_issue
-    reported_issues.where(id: id).update(decision: 'approved')
+    reported_issues.where(id: id).update(
+      decision: 'approved',
+      decision_reason: 'The issue is valid.'
+    )
     original = reported_issues.where(id: id).first
 
     store_issue(body: 'Changed body')

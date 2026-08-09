@@ -97,7 +97,7 @@ RSpec.describe SquashReview do
       issue_data: [{ source_id: nil, body: 'Approved issue.' }]
     )
     issue_id = db[:review_issues].where(review_id: review_id).get(:reported_issue_id)
-    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
     starting_commit_sha = review(review_id).fetch(:starting_commit_sha)
     File.write(File.join(project_path, 'tracked.txt'), "implemented\n")

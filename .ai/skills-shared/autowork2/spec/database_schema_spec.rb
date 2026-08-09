@@ -25,7 +25,7 @@ RSpec.describe 'database schema' do
 
   it 'creates reported issues with generated IDs and creation times' do
     expect(columns(:reported_issues)).to eq(
-      %i[id created_at project_path source source_id body decision]
+      %i[id created_at project_path source source_id body decision decision_reason]
     )
     expect(column(:reported_issues, :id)).to include(primary_key: true, auto_increment: true)
     expect(column(:reported_issues, :created_at)).to include(allow_null: false)
@@ -43,6 +43,7 @@ RSpec.describe 'database schema' do
     end
     expect(column(:reported_issues, :source_id)).to include(allow_null: true)
     expect(column(:reported_issues, :decision)).to include(allow_null: true)
+    expect(column(:reported_issues, :decision_reason)).to include(allow_null: true)
     expect { db[:reported_issues].insert(issue_attributes.except(:created_at)) }.
       to raise_error(Sequel::NotNullConstraintViolation)
   end
@@ -80,12 +81,30 @@ RSpec.describe 'database schema' do
     end
   end
 
-  it 'allows only known decisions' do
-    expect { db[:reported_issues].insert(issue_attributes(decision: 'rejected')) }.
-      to raise_error(Sequel::CheckConstraintViolation)
+  it 'requires decisions and non-empty reasons together' do
+    expect { db[:reported_issues].insert(issue_attributes) }.not_to raise_error
+    expect do
+      db[:reported_issues].insert(
+        issue_attributes(source_id: '2', decision: 'approved', decision_reason: 'Confirmed defect.')
+      )
+    end.not_to raise_error
+    expect do
+      db[:reported_issues].insert(
+        issue_attributes(source_id: '3', decision: 'skipped', decision_reason: 'Not reproducible.')
+      )
+    end.not_to raise_error
 
-    expect { db[:reported_issues].insert(issue_attributes(decision: 'approved')) }.not_to raise_error
-    expect { db[:reported_issues].insert(issue_attributes(source_id: '2', decision: 'skipped')) }.not_to raise_error
+    [
+      { decision: 'rejected', decision_reason: 'Unknown outcome.' },
+      { decision: 'approved', decision_reason: nil },
+      { decision: nil, decision_reason: 'Unexpected reason.' },
+      { decision: 'skipped', decision_reason: '' },
+      { decision: 'skipped', decision_reason: " \n\t" },
+    ].each_with_index do |attributes, index|
+      expect do
+        db[:reported_issues].insert(issue_attributes({ source_id: (index + 4).to_s }.merge(attributes)))
+      end.to raise_error(Sequel::CheckConstraintViolation)
+    end
   end
 
   it 'adds the reported issue identity and queue indexes' do
@@ -366,7 +385,7 @@ RSpec.describe 'database schema' do
 
         expect { Sequel::Migrator.run(legacy_db, migrations_path) }.not_to raise_error
         expect(legacy_db.table_exists?(:tasks)).to be(false)
-        expect(legacy_db[:schema_migrations].count).to eq(5)
+        expect(legacy_db[:schema_migrations].count).to eq(6)
 
         expect do
           Sequel::Migrator.run(legacy_db, migrations_path, target: initial_schema_version)
@@ -530,7 +549,8 @@ RSpec.describe 'database schema' do
       source: 'github',
       source_id: '1',
       body: 'Fix the write order.',
-      decision: nil
+      decision: nil,
+      decision_reason: nil
     }.merge(overrides)
   end
 

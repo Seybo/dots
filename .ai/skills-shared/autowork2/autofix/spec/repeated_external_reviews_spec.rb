@@ -25,7 +25,7 @@ RSpec.describe 'Repeated external Reviews' do
   it 'keeps completed Review history intact and dispatches only the next Review issue' do
     first_review_id = store_first_review
     first_issue_id = review_issue_ids(first_review_id).first
-    db[:reported_issues].where(id: first_issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: first_issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     first_implementation_id = StartImplementationWorkCycle.call(review_id: first_review_id)
     commit_first_implementation(first_implementation_id)
     complete_implementation(first_implementation_id)
@@ -33,7 +33,10 @@ RSpec.describe 'Repeated external Reviews' do
     first_reported_issue_id = db[:work_cycle_reported_issues].
                               where(work_cycle_id: first_reviewer_id).
                               get(:reported_issue_id)
-    db[:reported_issues].where(id: first_reported_issue_id).update(decision: 'skipped')
+    db[:reported_issues].where(id: first_reported_issue_id).update(
+      decision: 'skipped',
+      decision_reason: 'Skipped in spec.'
+    )
     db[:reviews].where(id: first_review_id).update(state: 'completed', completed_at: Time.now)
     first_history = history(first_review_id)
     first_head_sha = git!('rev-parse', 'HEAD').strip
@@ -46,7 +49,7 @@ RSpec.describe 'Repeated external Reviews' do
     )
     second_review = db[:reviews].order(:id).last
     second_issue_id = review_issue_ids(second_review.fetch(:id)).first
-    db[:reported_issues].where(id: second_issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: second_issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
 
     second_implementation_id = StartImplementationWorkCycle.call(review_id: second_review.fetch(:id))
 

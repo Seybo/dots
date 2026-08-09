@@ -66,7 +66,7 @@ RSpec.describe HandleGithubReview do
     handle
     first_review = reviews.first
     first_issue = reported_issues.first
-    reported_issues.where(id: first_issue.fetch(:id)).update(decision: 'skipped')
+    reported_issues.where(id: first_issue.fetch(:id)).update(decision: 'skipped', decision_reason: 'Skipped in spec.')
     complete_review(first_review)
     write_json(
       review_input(
@@ -81,7 +81,7 @@ RSpec.describe HandleGithubReview do
     expect(output).to eq("Issue: #{second_issue.fetch(:id)}\n\n> New issue.")
     expect(reviews.order(:id).select_map(%i[task_id number])).to eq([[task_id, 1], [task_id, 2]])
     expect(reported_issues.where(id: first_issue.fetch(:id)).first).
-      to eq(first_issue.merge(decision: 'skipped'))
+      to eq(first_issue.merge(decision: 'skipped', decision_reason: 'Skipped in spec.'))
     expect(review_issues.where(review_id: second_review.fetch(:id)).select_map(:reported_issue_id)).
       to eq([second_issue.fetch(:id)])
   end

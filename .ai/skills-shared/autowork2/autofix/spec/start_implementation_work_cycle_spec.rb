@@ -26,8 +26,8 @@ RSpec.describe StartImplementationWorkCycle do
   it 'creates one Worker implementation Work Cycle with approved inputs' do
     review_id = store_review(['Approved issue.', 'Skipped issue.'])
     issue_ids = review_issue_ids(review_id)
-    db[:reported_issues].where(id: issue_ids.first).update(decision: 'approved')
-    db[:reported_issues].where(id: issue_ids.last).update(decision: 'skipped')
+    db[:reported_issues].where(id: issue_ids.first).update(decision: 'approved', decision_reason: 'Approved in spec.')
+    db[:reported_issues].where(id: issue_ids.last).update(decision: 'skipped', decision_reason: 'Skipped in spec.')
 
     work_cycle_id = described_class.call(review_id: review_id)
 
@@ -49,8 +49,14 @@ RSpec.describe StartImplementationWorkCycle do
   it 'creates the same implementation Work Cycle for approved review-reported issues' do
     review_id, _first_implementation_id, _, reported_issue_ids =
       store_reported_issue_sequence(role: 'reviewer', bodies: ['First issue.', 'Skipped issue.', 'Last issue.'])
-    db[:reported_issues].where(id: reported_issue_ids.values_at(0, 2)).update(decision: 'approved')
-    db[:reported_issues].where(id: reported_issue_ids[1]).update(decision: 'skipped')
+    db[:reported_issues].where(id: reported_issue_ids.values_at(0, 2)).update(
+      decision: 'approved',
+      decision_reason: 'Approved in spec.'
+    )
+    db[:reported_issues].where(id: reported_issue_ids[1]).update(
+      decision: 'skipped',
+      decision_reason: 'Skipped in spec.'
+    )
     review_before = db[:reviews].where(id: review_id).first
 
     work_cycle_id = described_class.call(review_id: review_id)
@@ -72,7 +78,10 @@ RSpec.describe StartImplementationWorkCycle do
   it 'uses the same implementation path for a Worker-reported issue' do
     review_id, _first_implementation_id, _, reported_issue_ids =
       store_reported_issue_sequence(role: 'worker', bodies: ['Worker-reported issue.'])
-    db[:reported_issues].where(id: reported_issue_ids).update(decision: 'approved')
+    db[:reported_issues].where(id: reported_issue_ids).update(
+      decision: 'approved',
+      decision_reason: 'Approved in spec.'
+    )
 
     work_cycle_id = described_class.call(review_id: review_id)
 
@@ -85,7 +94,7 @@ RSpec.describe StartImplementationWorkCycle do
   it 'keeps approved inputs eligible after they were inputs to a review Work Cycle' do
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first
-    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     review_work_cycle_id = insert_work_cycle(review_id: review_id, role: 'worker', action: 'review')
     db[:work_cycle_inputs].insert(
       created_at: Time.now,
@@ -102,7 +111,7 @@ RSpec.describe StartImplementationWorkCycle do
   it 'returns nil without checking Git when no approved undispatched issue exists' do
     review_id = store_review(['Skipped issue.'])
     issue_id = review_issue_ids(review_id).first
-    db[:reported_issues].where(id: issue_id).update(decision: 'skipped')
+    db[:reported_issues].where(id: issue_id).update(decision: 'skipped', decision_reason: 'Skipped in spec.')
     File.write(File.join(project_path, 'tracked.txt'), "changed\n")
 
     expect(described_class.call(review_id: review_id)).to be_nil
@@ -116,7 +125,7 @@ RSpec.describe StartImplementationWorkCycle do
   it 'does not dispatch an approved issue twice' do
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first
-    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     work_cycle_id = described_class.call(review_id: review_id)
     db[:reviews].where(id: review_id).update(state: 'manager_issues_assessment')
 
@@ -129,7 +138,7 @@ RSpec.describe StartImplementationWorkCycle do
   it 'leaves the Review unchanged when the working tree is dirty' do
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first
-    db[:reported_issues].where(id: issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     File.write(File.join(project_path, 'tracked.txt'), "changed\n")
 
     expect { described_class.call(review_id: review_id) }.
@@ -146,7 +155,7 @@ RSpec.describe StartImplementationWorkCycle do
   def store_reported_issue_sequence(role:, bodies:)
     review_id = store_review(['Original issue.'])
     original_issue_id = review_issue_ids(review_id).first
-    db[:reported_issues].where(id: original_issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: original_issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     implementation_work_cycle_id = described_class.call(review_id: review_id)
     db[:work_cycles].where(id: implementation_work_cycle_id).update(
       completed_at: Time.now

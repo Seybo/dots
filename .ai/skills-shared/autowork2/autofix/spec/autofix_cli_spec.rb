@@ -122,7 +122,7 @@ RSpec.describe AutofixCli do
   it 'shows participant-facing Work Cycle JSON' do
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first
-    reported_issues.where(id: issue_id).update(decision: 'approved')
+    reported_issues.where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
     expected_output = ShowWorkCycle.call(work_cycle_id: work_cycle_id)
     allow(MigrateDatabase).to receive(:call)
@@ -136,7 +136,7 @@ RSpec.describe AutofixCli do
   it 'waits for and commits a completed implementation Work Cycle' do
     review_id = store_review(['Approved issue.'])
     issue_id = review_issue_ids(review_id).first
-    reported_issues.where(id: issue_id).update(decision: 'approved')
+    reported_issues.where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
     File.write(File.join(project_path, 'tracked.txt'), "implemented\n")
     result_path = "/tmp/autofix-work-cycle-#{work_cycle_id}.json"
@@ -172,16 +172,24 @@ RSpec.describe AutofixCli do
   it 'stores a decision and displays the next issue from the same Review' do
     unrelated_review_id = store_review(['Unrelated issue.'])
     unrelated_issue_id = review_issue_ids(unrelated_review_id).first
-    reported_issues.where(id: unrelated_issue_id).update(decision: 'skipped')
+    reported_issues.where(id: unrelated_issue_id).update(decision: 'skipped', decision_reason: 'Skipped in spec.')
     reviews.where(id: unrelated_review_id).update(state: 'completed', completed_at: Time.now)
     review_id = store_review(['First issue.', 'Second issue.'])
     issue_ids = review_issue_ids(review_id)
 
+    reason = 'The first issue is valid; punctuation remains.'
     expect do
-      described_class.call(cli_args: ['store-decision', issue_ids.first.to_s, 'approved'])
-    end.to output("Decision: approved\n\nIssue: #{issue_ids.last}\n\n> Second issue.\n").to_stdout
+      described_class.call(
+        cli_args: ['store-decision', issue_ids.first.to_s, 'approved', reason]
+      )
+    end.to output(
+      "Decision: approved\nReason: #{reason}\n\nIssue: #{issue_ids.last}\n\n> Second issue.\n"
+    ).to_stdout
 
-    expect(reported_issues.where(id: issue_ids.first).get(:decision)).to eq('approved')
+    expect(reported_issues.where(id: issue_ids.first).first).to include(
+      decision: 'approved',
+      decision_reason: reason
+    )
   end
 
   it 'completes an all-skipped Review without creating a Work Cycle' do
@@ -189,8 +197,12 @@ RSpec.describe AutofixCli do
     issue_id = review_issue_ids(review_id).first
 
     expect do
-      described_class.call(cli_args: ['store-decision', issue_id.to_s, 'skipped'])
-    end.to output("Decision: skipped\n\nNo unresolved issues.\n").to_stdout
+      described_class.call(
+        cli_args: ['store-decision', issue_id.to_s, 'skipped', 'No defect is present.']
+      )
+    end.to output(
+      "Decision: skipped\nReason: No defect is present.\n\nNo unresolved issues.\n"
+    ).to_stdout
 
     expect(reviews.where(id: review_id).first).to include(state: 'completed')
     expect(reviews.where(id: review_id).get(:completed_at)).not_to be_nil
@@ -203,10 +215,15 @@ RSpec.describe AutofixCli do
     File.write(File.join(project_path, 'tracked.txt'), "changed\n")
 
     expect do
-      described_class.call(cli_args: ['store-decision', issue_id.to_s, 'approved'])
+      described_class.call(
+        cli_args: ['store-decision', issue_id.to_s, 'approved', 'The issue is valid.']
+      )
     end.to raise_error(RuntimeError, /Working tree is not clean/)
 
-    expect(reported_issues.where(id: issue_id).get(:decision)).to eq('approved')
+    expect(reported_issues.where(id: issue_id).first).to include(
+      decision: 'approved',
+      decision_reason: 'The issue is valid.'
+    )
     expect(reviews.where(id: review_id).first).to include(
       state: 'manager_issues_assessment',
       starting_commit_sha: head_sha
@@ -217,7 +234,7 @@ RSpec.describe AutofixCli do
   it 'settles skipped Reviewer issues and starts the final Worker review' do
     review_id = store_review(['Original issue.'])
     original_issue_id = review_issue_ids(review_id).first
-    reported_issues.where(id: original_issue_id).update(decision: 'approved')
+    reported_issues.where(id: original_issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
     db[:work_cycles].where(id: implementation_work_cycle_id).update(
       completed_at: Time.now
@@ -241,13 +258,20 @@ RSpec.describe AutofixCli do
     original_head = git!('rev-parse', 'HEAD').strip
 
     expect do
-      described_class.call(cli_args: ['store-decision', reported_issue_ids.first.to_s, 'skipped'])
+      described_class.call(
+        cli_args: ['store-decision', reported_issue_ids.first.to_s, 'skipped', 'Not a defect.']
+      )
     end.to output(
-      "Decision: skipped\n\nIssue: #{reported_issue_ids.last}\n\n> Second issue.\n"
+      "Decision: skipped\nReason: Not a defect.\n\n" \
+      "Issue: #{reported_issue_ids.last}\n\n> Second issue.\n"
     ).to_stdout
     expect do
-      described_class.call(cli_args: ['store-decision', reported_issue_ids.last.to_s, 'skipped'])
-    end.to output(/Decision: skipped\n\nAutoFixCycle \d+\nAutoFixRole worker\n/).to_stdout
+      described_class.call(
+        cli_args: ['store-decision', reported_issue_ids.last.to_s, 'skipped', 'Also not a defect.']
+      )
+    end.to output(
+      /Decision: skipped\nReason: Also not a defect\.\n\nAutoFixCycle \d+\nAutoFixRole worker\n/
+    ).to_stdout
 
     expect(reported_issues.where(id: reported_issue_ids).select_map(:decision)).to eq(%w[skipped skipped])
     expect(reviews.where(id: review_id).first).to include(
@@ -262,7 +286,7 @@ RSpec.describe AutofixCli do
   it 'moves all-skipped Worker issues directly to Manager review' do
     review_id = store_review(['Original issue.'])
     original_issue_id = review_issue_ids(review_id).first
-    reported_issues.where(id: original_issue_id).update(decision: 'approved')
+    reported_issues.where(id: original_issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
     db[:work_cycles].where(id: implementation_work_cycle_id).update(completed_at: Time.now)
     reviews.where(id: review_id).update(state: 'reviewer_review')
@@ -283,8 +307,12 @@ RSpec.describe AutofixCli do
     reported_issue_id = reported_issues.where(source: 'worker').get(:id)
 
     expect do
-      described_class.call(cli_args: ['store-decision', reported_issue_id.to_s, 'skipped'])
-    end.to output("Decision: skipped\n\nNo unresolved issues.\n").to_stdout
+      described_class.call(
+        cli_args: ['store-decision', reported_issue_id.to_s, 'skipped', 'No defect is present.']
+      )
+    end.to output(
+      "Decision: skipped\nReason: No defect is present.\n\nNo unresolved issues.\n"
+    ).to_stdout
 
     expect(reviews.where(id: review_id).first).to include(
       state: 'manager_review',
@@ -298,11 +326,20 @@ RSpec.describe AutofixCli do
     issue_ids = review_issue_ids(review_id)
 
     expect do
-      described_class.call(cli_args: ['store-decision', issue_ids.first.to_s, 'approved'])
-    end.to output("Decision: approved\n\nIssue: #{issue_ids.last}\n\n> Skipped issue.\n").to_stdout
+      described_class.call(
+        cli_args: ['store-decision', issue_ids.first.to_s, 'approved', 'The issue is valid.']
+      )
+    end.to output(
+      "Decision: approved\nReason: The issue is valid.\n\n" \
+      "Issue: #{issue_ids.last}\n\n> Skipped issue.\n"
+    ).to_stdout
     expect do
-      described_class.call(cli_args: ['store-decision', issue_ids.last.to_s, 'skipped'])
-    end.to output(/Decision: skipped\n\nAutoFixCycle \d+\nAutoFixRole worker\n/).to_stdout
+      described_class.call(
+        cli_args: ['store-decision', issue_ids.last.to_s, 'skipped', 'No defect is present.']
+      )
+    end.to output(
+      /Decision: skipped\nReason: No defect is present\.\n\nAutoFixCycle \d+\nAutoFixRole worker\n/
+    ).to_stdout
 
     expect(reviews.where(id: review_id).first).to include(
       state: 'worker_implementation',
@@ -310,6 +347,19 @@ RSpec.describe AutofixCli do
       starting_commit_sha: git!('rev-parse', 'HEAD').strip
     )
     expect(db[:work_cycles].count).to eq(1)
+  end
+
+  it 'rejects a decision without exactly one reason argument' do
+    [
+      %w[store-decision 1 approved],
+      %w[store-decision 1 approved reason extra],
+    ].each do |cli_args|
+      expect { described_class.call(cli_args: cli_args) }.
+        to raise_error(
+          ArgumentError,
+          /store-decision <issue-id> <decision> <reason>/
+        )
+    end
   end
 
   def reported_issues

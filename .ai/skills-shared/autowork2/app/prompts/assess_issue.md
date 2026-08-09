@@ -23,10 +23,11 @@ TLDR:
 
 > <one or two simple sentences explaining the concern>
 
-Recommendation: Fix — <brief reason>
+Recommendation: Fix — <one concise, factual, self-contained sentence>
 ```
 
-Use `Recommendation: Skip — <brief reason>` when appropriate.
+Use `Recommendation: Skip — <one concise, factual, self-contained sentence>`
+when appropriate.
 
 When one missing fact prevents a responsible recommendation, return:
 
@@ -51,6 +52,8 @@ Question: <one precise question, preferably answerable with yes or no>
 - Recommend `Fix` when the concern is concrete, relevant, and unresolved in current code.
 - Recommend `Skip` when the concern is invalid, already satisfied, obsolete, or otherwise requires no change.
 - Recommend `Unclear` only when one missing fact prevents choosing `Fix` or `Skip`.
+- The Fix or Skip reason becomes the durable decision reason when the operator accepts the recommendation. Make it factual and understandable later without the current conversation.
+- Do not add a category, tag, score, or future prompt lesson to the reason.
 - Include the complete original stored issue body first. Preserve its text and Markdown, prefixing every line with `>` so it renders as one quote block.
 - Use simple language in the TLDR. State what could go wrong and why the recommendation follows. Format the TLDR as a second Markdown quote block and prefix every TLDR line with `>`.
 - Prefer a yes-or-no question when it can resolve an Unclear recommendation. Use an open question only when a yes-or-no answer cannot supply the missing fact.

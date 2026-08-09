@@ -341,7 +341,10 @@ RSpec.describe 'ShowTaskWorkCycle' do
 
   def insert_issue(body:, decision:, source: 'reviewer')
     issue_id = StoreIssue.call(project_path: '/project', source: source, body: body)
-    db[:reported_issues].where(id: issue_id).update(decision: decision)
+    db[:reported_issues].where(id: issue_id).update(
+      decision: decision,
+      decision_reason: decision && "#{decision.capitalize} in spec."
+    )
     issue_id
   end
 end

@@ -33,8 +33,8 @@ class AutoimplementCli
   def validate_arguments
     is_valid = case cli_args.first
                when 'initialize-task', 'rebase-task' then [2, 3].include?(cli_args.length)
-               when 'store-decision' then cli_args.length == 3
-               when 'squash-task', 'continue-task-rebase' then cli_args.length == 4
+               when 'store-decision', 'squash-task', 'continue-task-rebase'
+                 cli_args.length == 4
                else cli_args.length == 2
                end
     raise ArgumentError, usage unless is_valid
@@ -59,7 +59,11 @@ class AutoimplementCli
   end
 
   def store_decision
-    HandleTaskDecision.call(issue_id: cli_args.fetch(1), decision: cli_args.fetch(2))
+    HandleTaskDecision.call(
+      issue_id: cli_args.fetch(1),
+      decision: cli_args.fetch(2),
+      reason: cli_args.fetch(3)
+    )
   end
 
   def squash_task
@@ -97,7 +101,7 @@ class AutoimplementCli
   def usage
     'Usage: autoimplement [initialize-task <canonical-task-path> [super-review-agent] | ' \
       'resume-task <task-id> | ' \
-      'retry-task <task-id> | store-decision <issue-id> <decision> | ' \
+      'retry-task <task-id> | store-decision <issue-id> <decision> <reason> | ' \
       'squash-task <task-id> <canonical-project-path> <subject> | ' \
       'rebase-task <canonical-task-path> [base-ref] | ' \
       'continue-task-rebase <canonical-task-path> <target-ref> <target-sha> | ' \

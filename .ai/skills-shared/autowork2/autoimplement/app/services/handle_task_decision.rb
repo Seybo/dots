@@ -3,12 +3,13 @@
 class HandleTaskDecision
   include ServiceObject
 
-  arguments :issue_id, :decision
+  arguments :issue_id, :decision, :reason
 
   def call
-    StoreDecision.call(issue_id: issue_id, decision: decision)
+    issue = StoreDecision.call(issue_id: issue_id, decision: decision, reason: reason)
     RenderDecision.call(
-      decision: decision,
+      decision: issue.fetch(:decision),
+      reason: issue.fetch(:decision_reason),
       next_action: ResumeTask.call(task_id: work_cycle.fetch(:task_id))
     )
   end

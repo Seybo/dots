@@ -60,7 +60,13 @@ class AutofixCli
   end
 
   def handle_decision
-    HandleDecision.call(issue_id: cli_args.fetch(1), decision: cli_args.fetch(2))
+    raise ArgumentError, usage unless cli_args.length == 4
+
+    HandleDecision.call(
+      issue_id: cli_args.fetch(1),
+      decision: cli_args.fetch(2),
+      reason: cli_args.fetch(3)
+    )
   end
 
   def handle_resume
@@ -104,7 +110,8 @@ class AutofixCli
   def usage
     'Usage: autofix [import-github-review <json-path> <task-path> | ' \
       'import-local-review <json-path> <task-path> | ' \
-      'store-decision <issue-id> <decision> | resume <task-path> | rebase-task <task-path> [<base-ref>] | ' \
+      'store-decision <issue-id> <decision> <reason> | resume <task-path> | ' \
+      'rebase-task <task-path> [<base-ref>] | ' \
       'continue-task-rebase <task-path> <target-ref> <target-sha> | squash-review <review-id> | ' \
       'show-work-cycle <id> | wait-work-cycle <id>]'
   end

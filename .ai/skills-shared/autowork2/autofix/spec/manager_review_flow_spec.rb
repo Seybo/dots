@@ -25,7 +25,11 @@ RSpec.describe 'Manager review flow' do
   it 'finalizes directly when every Manager issue is skipped' do
     review_id, manager_work_cycle_id, manager_issue_id = complete_manager_review_with_issue
 
-    output = HandleDecision.call(issue_id: manager_issue_id, decision: 'skipped')
+    output = HandleDecision.call(
+      issue_id: manager_issue_id,
+      decision: 'skipped',
+      reason: 'No defect is present.'
+    )
     review = db[:reviews].where(id: review_id).first
 
     expect(output).to include(
@@ -46,11 +50,16 @@ RSpec.describe 'Manager review flow' do
   it 'implements an approved Manager issue and returns through fresh Reviewer and Manager review' do
     review_id, first_manager_work_cycle_id, manager_issue_id = complete_manager_review_with_issue
 
-    output = HandleDecision.call(issue_id: manager_issue_id, decision: 'approved')
+    output = HandleDecision.call(
+      issue_id: manager_issue_id,
+      decision: 'approved',
+      reason: 'Manager confirmed the defect.'
+    )
     implementation_work_cycle = db[:work_cycles].order(:id).last
 
     expect(output).to eq(
-      "Decision: approved\n\nAutoFixCycle #{implementation_work_cycle.fetch(:id)}\nAutoFixRole worker"
+      "Decision: approved\nReason: Manager confirmed the defect.\n\n" \
+      "AutoFixCycle #{implementation_work_cycle.fetch(:id)}\nAutoFixRole worker"
     )
     File.write(File.join(project_path, 'tracked.txt'), "corrected\n")
     git!('add', 'tracked.txt')
@@ -94,7 +103,7 @@ RSpec.describe 'Manager review flow' do
       issue_data: [{ source_id: nil, body: 'Original issue.' }]
     )
     original_issue_id = db[:review_issues].where(review_id: review_id).get(:reported_issue_id)
-    db[:reported_issues].where(id: original_issue_id).update(decision: 'approved')
+    db[:reported_issues].where(id: original_issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     implementation_work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
     File.write(File.join(project_path, 'tracked.txt'), "implemented\n")
     git!('add', 'tracked.txt')
