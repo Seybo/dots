@@ -4,7 +4,7 @@ description: >-
   Start work on an existing task folder under /Volumes/dev/_tasks.
   Reads the task's task.md and proceeds with the work it describes.
   Can infer the project and task/story ID from the current git branch.
-  Supports create-steps-only mode for /autowork preflight.
+  Supports a plan-only create-steps-only mode.
   Command-only skill. In Pi, invoke via /skill:workit; /workit is also
   accepted where that alias is exposed.
 ---
@@ -58,13 +58,13 @@ Examples:
 /workit 0003 step 1
 ```
 
-Do not auto-use this skill from a general "work on this task" request. Wait for the explicit slash command. Exception: `/autowork` may invoke `/workit ... create-steps-only` as its documented preflight subroutine after the user explicitly invokes `/autowork`.
+Do not auto-use this skill from a general "work on this task" request. Wait for the explicit slash command.
 
 ## What it does
 
 Locate an existing task folder under the selected project, read its `task.md`, create a `steps.md` implementation plan first, and then proceed with the work described in it.
 
-In `create-steps-only` mode, create or update `steps.md` using the normal planning rules, then stop. Do not implement any step, do not edit production code, do not stage, and do not commit. This mode exists so `/autowork` can ensure a task has a plan before the autonomous commit/review loop starts.
+In `create-steps-only` mode, create or update `steps.md` using the normal planning rules, then stop. Do not implement any step, do not edit production code, do not stage, and do not commit. This is ordinary plan-only Workit behavior.
 
 In `step <step_number>` mode, `steps.md` must already exist and must contain parseable headings like `## Step 1: ...`. Execute only the requested step and stop. Do not create/update the plan in step mode except to report that it is missing, stale, ambiguous, or impossible to follow.
 
@@ -158,7 +158,7 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - do not modify `task.md` unless the user asks you to
 
 6. **Verify/setup the development branch before implementation or create-steps-only planning:**
-   - before making any production code, docs, bin, config, schema, or spec changes in the code working directory, and before returning from `create_steps_only_mode` for `/autowork`, check the current branch with:
+   - before making any production code, docs, bin, config, schema, or spec changes in the code working directory, and before returning from `create_steps_only_mode`, check the current branch with:
      ```bash
      git -C <code-working-directory> branch --show-current
      ```
@@ -166,7 +166,6 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - Read and follow [`../components/task-branch-config.md`](../components/task-branch-config.md) completely before branch/config setup.
    - For registered workspace tasks whose registry entry has `task_provider: shortcut`, fetch the Shortcut story and generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from its current `name`. Do not use the task folder suffix. Apply the shared component's **Shortcut Task branch setup** rules with the resolved Task folder, selected workspace, generated branch name, and optional exact `base_ref`.
    - For `task_provider: local`, never fetch Shortcut stories or create/switch branches. Apply the shared component's **Local Task setup** rules immediately before planning and Autoimplement initialization.
-   - When running as `/autowork` preflight, stop and report any required existing-branch decision instead of switching.
 
 7. **Create or load the steps plan before implementation:**
    - before writing or updating `steps.md`, inspect existing implementation patterns relevant to the task:
@@ -226,6 +225,6 @@ and select the matching ordinal workspace. Applied to `/workit`:
 
 ## Important Notes
 
-- Do not auto-use this skill without the explicit `/workit` command, except for `/autowork` invoking `/workit ... create-steps-only` as its documented preflight
+- Do not auto-use this skill without the explicit `/workit` command
 - Do not modify `task.md` content unless explicitly asked
 - The task folder must already exist; if it doesn't, suggest the user run `/taskit` first

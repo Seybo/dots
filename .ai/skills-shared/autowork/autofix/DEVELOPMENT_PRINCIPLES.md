@@ -2,17 +2,16 @@
 
 ## Purpose of this file
 
-This file records the Autofix-specific development principles agreed before
-building `autofix`, the eventual replacement for `addressit`.
+This file records the Autofix-specific development principles for the active
+imported Review workflow.
 
 Follow the shared principles in `~/.ai/rules/development-principles.md`. This file
 adds only context that cannot be reliably inferred from Autofix code, tests,
 comments, or task instructions. Runtime behavior belongs in code. Non-obvious
 implementation reasons should be recorded beside the relevant code.
 
-The existing `addressit` skill remains in use while `autofix` is developed.
-Autofix starts clean and does not need to read, migrate, or resume Addressit
-state.
+Autofix owns imported GitHub and local Review work. Addressit is a separate
+workflow; Autofix does not read, migrate, or resume Addressit state.
 
 ## Primary context
 

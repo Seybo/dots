@@ -7,6 +7,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 - `github`, `gh`, `pr`, `pull request`, `review PR`, `review my branch`, `look at diff`, `code review` → `/skill:super-review`
 - `fix super-review`, `address super-review findings`, `apply review fixes` → `/skill:claude-super-fix`
 - `review comments`, `address comments`, `inline comments`, `review id` → `/skill:addressit`
+- `import review`, `fix imported review`, `reported issues`, `autofix` → `/skill:autofix`
 - `stale branches`, `merged branches`, `delete branches` → `/skill:delete-merged-branches`
 
 ## Shortcut / tasks
@@ -17,7 +18,8 @@ Use this file to map vague user wording to likely capabilities. The exact source
 - `draft task`, `save this for later`, `capture context` → `/skill:draftit`
 - `start task`, `work on task` → `/skill:workit`
 - `summarize task`, `task summary`, `PR text from task`, `PR description from task` → `/skill:sumit`
-- `autonomous task`, `orchestrate task`, `run task workflow automatically` → `/skill:autowork`
+- `task status`, `autowork status`, `current task workflow state` → `/skill:autowork --status`
+- `autonomous task`, `orchestrate task`, `run task workflow automatically` → `/skill:autoimplement`
 
 ## Local dev environment / dotfiles
 

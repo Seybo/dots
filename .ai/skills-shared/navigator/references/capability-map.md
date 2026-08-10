@@ -24,7 +24,8 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `/skill:draftit` — save selected conversation context into a draft task folder.
 - `/skill:workit` — start work from an existing task folder.
 - `/skill:sumit` — summarize a task file into PR-description text with reviewer gotchas and copy it to the clipboard.
-- `/skill:autowork` — orchestrate an existing task plan across agent-manager, agent-worker, and agent-reviewer panes, with selectable Claude/Codex review.
+- `/skill:autowork --status` — show the current read-only Autoimplement and Autofix status for one Task.
+- `/skill:autoimplement` — autonomously implement, review, correct, and complete one authored Task.
 
 ## Local dev environment / dotfiles
 

@@ -3,10 +3,12 @@
 class AutoimplementCli
   include ServiceObject
 
+  READ_ONLY_COMMANDS = %w[show-task-status show-work-cycle].freeze
+
   arguments :cli_args
 
   def call
-    MigrateDatabase.call unless cli_args.first == 'show-work-cycle'
+    MigrateDatabase.call unless READ_ONLY_COMMANDS.include?(cli_args.first)
     puts handle_command
   end
 
@@ -17,6 +19,7 @@ class AutoimplementCli
     return handle_task_command if %w[resume-task retry-task].include?(cli_args.first)
     return handle_rebase_command if %w[rebase-task continue-task-rebase].include?(cli_args.first)
     return handle_work_cycle_command if %w[show-work-cycle wait-work-cycle].include?(cli_args.first)
+    return show_task_status if cli_args.first == 'show-task-status'
 
     handle_primary_command
   end
@@ -56,6 +59,14 @@ class AutoimplementCli
     return ShowTaskWorkCycle.call(work_cycle_id: cli_args.fetch(1)) if cli_args.first == 'show-work-cycle'
 
     WaitTaskWorkCycle.call(work_cycle_id: cli_args.fetch(1))
+  end
+
+  def show_task_status
+    status = LoadTaskStatus.call(
+      connection: Database.readonly_connection,
+      task_path: cli_args.fetch(1)
+    )
+    RenderTaskStatus.call(status: status)
   end
 
   def store_decision
@@ -105,6 +116,7 @@ class AutoimplementCli
       'squash-task <task-id> <canonical-project-path> <subject> | ' \
       'rebase-task <canonical-task-path> [base-ref] | ' \
       'continue-task-rebase <canonical-task-path> <target-ref> <target-sha> | ' \
+      'show-task-status <canonical-task-path> | ' \
       'show-work-cycle <id> | wait-work-cycle <id>]'
   end
 end

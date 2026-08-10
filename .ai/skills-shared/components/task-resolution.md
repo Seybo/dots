@@ -2,7 +2,8 @@
 
 Single source of truth for resolving a task project, task ID, and code checkout.
 Used by task-workflow skills including `draftit`, `taskit`, `workit`, `sumit`,
-`autowork`, `addressit`, and PR-description/review tooling.
+`autowork`, `autoimplement`, `autofix`, `addressit`, and PR-description/review
+tooling.
 
 Runtime files:
 
@@ -92,19 +93,25 @@ which is matched as a folder prefix:
 
 ```text
 /workit 0001
-/autowork 0001
+/autoimplement 0001
+/autowork --status --task 0001
+/autofix --local --task 0001
 ```
+
+`/autowork` is read-only Task status. `/autoimplement` owns autonomous Task
+implementation. `/autofix` owns imported GitHub or local Review work.
 
 When the project can be inferred from the current direct checkout, the project
 name is not needed. Branch inference remains a convenience only for branches
 with an `sc-<digits>` segment. Do not infer a local task from an arbitrary
 branch name.
 
-When a workflow needs task context but the current branch has no inferable task
-ID, use the workflow's explicit task-selector fallback (normally
-`--task <digits>`). Resolve that selector exactly like any other task identifier:
-require one matching task folder and its `task.md`; never guess from the branch
-name or from the newest task.
+When a workflow needs task context but the current branch has no inferable Task
+ID, use that workflow's explicit selector: Autoimplement accepts a positional
+numeric Task ID, while Autowork status and local Autofix use `--task <digits>`.
+Resolve the selector exactly like any other Task identifier: require one
+matching Task folder and its `task.md`; never guess from the branch name or from
+the newest Task.
 
 ## Local task branch rules
 

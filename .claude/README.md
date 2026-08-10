@@ -94,4 +94,4 @@ Do not add global rules for situations a skill or hook already covers. Keep alwa
 
 ## Big skills use progressive disclosure
 
-`super-review` and `autowork` keep a short `SKILL.md` spine plus `references/*.md` files read only at the phase that needs them. Follow the same pattern for any skill whose SKILL.md grows past ~200 lines.
+`super-review` keeps a short `SKILL.md` spine plus `references/*.md` files read only at the phase that needs them. Follow the same pattern for any skill whose SKILL.md grows past ~200 lines.

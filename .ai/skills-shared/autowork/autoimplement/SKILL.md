@@ -46,7 +46,7 @@ Before Task resolution on a normal invocation, remove `--retry` and
 remove the flag and its value before applying the existing Task argument parser. Reject
 `--base`, every other option,
 and every extra argument. Do not add status, doctor, pause, limit, lock, or
-timeout options. Do not expose a root `/autowork` command.
+timeout options. Do not expose status through `/autoimplement`; the root `/autowork` command owns status.
 
 ## Operator attention notifications
 

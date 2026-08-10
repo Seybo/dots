@@ -9,6 +9,8 @@ require_relative '../app/services/autoimplement_cli'
 RSpec.describe 'AutoimplementCli' do
   let(:service_class) { Object.const_get(:AutoimplementCli) }
   let(:task_path) { '/tasks/0025-create-autoimplement-work' }
+  let(:readonly_connection) { instance_double(Sequel::Database) }
+  let(:task_status) { { task_id: '0025' } }
   let(:task) do
     {
       id: 7,
@@ -22,6 +24,9 @@ RSpec.describe 'AutoimplementCli' do
 
   before do
     allow(MigrateDatabase).to receive(:call)
+    allow(Database).to receive(:readonly_connection).and_return(readonly_connection)
+    allow(LoadTaskStatus).to receive(:call).and_return(task_status)
+    allow(RenderTaskStatus).to receive(:call).and_return('Task: 0025')
     allow(InitializeTask).to receive(:call).and_return(task)
     allow(RenderTask).to receive(:call).and_return('Task: 7')
     allow(ResumeTask).to receive(:call).and_return('AutoImplementCycle 12')
@@ -141,6 +146,19 @@ RSpec.describe 'AutoimplementCli' do
     expect(ShowTaskWorkCycle).to have_received(:call).with(work_cycle_id: '12')
   end
 
+  it 'shows one Task status through the read-only connection without running migrations' do
+    expect do
+      service_class.call(cli_args: ['show-task-status', task_path])
+    end.to output("Task: 0025\n").to_stdout
+
+    expect(MigrateDatabase).not_to have_received(:call)
+    expect(LoadTaskStatus).to have_received(:call).with(
+      connection: readonly_connection,
+      task_path: task_path
+    )
+    expect(RenderTaskStatus).to have_received(:call).with(status: task_status)
+  end
+
   it 'waits for one Work Cycle result' do
     expect do
       service_class.call(cli_args: %w[wait-work-cycle 12])
@@ -160,6 +178,8 @@ RSpec.describe 'AutoimplementCli' do
       ['retry-task'],
       %w[retry-task 7 extra],
       ['show-work-cycle'],
+      ['show-task-status'],
+      ['show-task-status', task_path, 'extra'],
       ['wait-work-cycle'],
       ['store-decision'],
       %w[store-decision 4],
@@ -182,6 +202,7 @@ RSpec.describe 'AutoimplementCli' do
           'squash-task <task-id> <canonical-project-path> <subject> | ' \
           'rebase-task <canonical-task-path> [base-ref] | ' \
           'continue-task-rebase <canonical-task-path> <target-ref> <target-sha> | ' \
+          'show-task-status <canonical-task-path> | ' \
           'show-work-cycle <id> | wait-work-cycle <id>]'
         )
     end
