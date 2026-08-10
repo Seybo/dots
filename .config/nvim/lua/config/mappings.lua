@@ -142,8 +142,8 @@ end
 vim.keymap.set('n', '<a-t><a-t>', open_or_switch_to_terminal, { desc = '[ Tabs ] Switch to terminal tab' })
 vim.keymap.set('n', '<a-t><a-c>', ':tabnew<CR>', { desc = '[ Tabs ] New tab' })
 vim.keymap.set('n', '<a-t><a-x>', ':tabclose<CR>', { desc = '[ Tabs ] Close tab' })
-vim.keymap.set('n', '<pageup>', ':tabprevious<CR>', { desc = '[ Tabs ] Prev tab' })
-vim.keymap.set('n', '<pagedown>', ':tabnext<CR>', { desc = '[ Tabs ] Next tab' })
+vim.keymap.set('n', '<a-u>', ':tabprevious<CR>', { desc = '[ Tabs ] Prev tab' })
+vim.keymap.set('n', '<a-m>', ':tabnext<CR>', { desc = '[ Tabs ] Next tab' })
 
 -- -- [[ Windows ]] -- --
 vim.keymap.set('n', 'sp', ':sp<CR>', { silent = true }) -- split horizontal
