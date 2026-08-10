@@ -7,6 +7,7 @@ Review these items and add useful ones to `capability-map.md` and/or `aliases.md
 
 ## Skills
 
+- Skill `/skill:autoimplement` — `~/.ai/skills-shared/autowork/autoimplement/SKILL.md`
 - Skill `/skill:guideit` — `~/.ai/skills-shared/guideit/SKILL.md`
 
 ## Prompt template commands

@@ -24,12 +24,12 @@ Language- and project-neutral rules for all agents unless a project's local inst
 
 ## Autofix Work Cycle messages
 
-- When the complete user message matches the case-sensitive pattern `^AutoFixCycle [0-9]+$`, immediately read and follow `~/.ai/skills-shared/autowork2/autofix/app/prompts/work_cycle.md` using the supplied Work Cycle ID.
+- When the complete user message matches the case-sensitive pattern `^AutoFixCycle [0-9]+$`, immediately read and follow `~/.ai/skills-shared/autowork/autofix/app/prompts/work_cycle.md` using the supplied Work Cycle ID.
 - Do not trigger the Autofix participant protocol when the message contains any other text or uses different capitalization.
 
 ## Autoimplement Work Cycle messages
 
-- When the complete user message matches the case-sensitive pattern `^AutoImplementCycle [0-9]+$`, immediately read and follow `~/.ai/skills-shared/autowork2/autoimplement/app/prompts/work_cycle.md` using the supplied Work Cycle ID.
+- When the complete user message matches the case-sensitive pattern `^AutoImplementCycle [0-9]+$`, immediately read and follow `~/.ai/skills-shared/autowork/autoimplement/app/prompts/work_cycle.md` using the supplied Work Cycle ID.
 - Do not trigger the Autoimplement participant protocol when the message contains any other text or uses different capitalization.
 
 ## Review state assumptions
