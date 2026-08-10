@@ -4,6 +4,10 @@ local drawing = require("hs.drawing")
 local styledtext = require("hs.styledtext")
 local timer = require("hs.timer")
 
+hs.hotkey.bind({ "ctrl" }, "=", function()
+  hs.eventtap.keyStrokes("=>")
+end)
+
 local activeMonitAlerts = {}
 
 local monitAlertStyle = {
