@@ -7,7 +7,10 @@ class RunTaskFinalChecks
 
   def call
     ensure_settled_manager_review
-    result = RunFinalChecks.call(project_path: task.fetch(:project_path))
+    result = RunFinalChecks.call(
+      project_path: task.fetch(:project_path),
+      starting_commit_sha: task.fetch(:starting_commit_sha)
+    )
     return result.fetch(:output) unless result.fetch(:is_passing)
 
     ValidateCleanGitState.call(project_path: task.fetch(:project_path))

@@ -177,6 +177,34 @@ set of conflicts:
 The original explicit operation named by the shared policy is
 `/skill:autoimplement --rebase-base [<base-ref>]`.
 
+## Repository final-check preflight
+
+For a normal invocation, after resolving and validating the canonical checkout
+but before invoking `initialize-task`, read
+`<canonical-checkout>/.autowork.yml`. Do not run this preflight for the separate
+rebase operation.
+
+When the file exists, Agent-manager reads it and loosely confirms that its
+`final_checks` directory-to-command mapping covers the authored Task's intended
+area. The repository owns the mapping and commands.
+
+When the file is missing:
+
+1. Stop before invoking a helper, creating workflow database state, or contacting
+   a participant.
+2. Agent-manager discovers established commands from repository evidence such as
+   `bin/check`, Gemfiles, package scripts, CI configuration, and documented test
+   commands.
+3. Propose exact `.autowork.yml` contents using only evidenced commands.
+4. Require operator approval before creating the file.
+5. After creation, require separate explicit approval to commit it as repository
+   setup.
+6. Require clean Git after that setup commit, then tell the operator to re-invoke
+   Autoimplement from the start.
+
+Ruby never discovers final-check commands. Add no strict Ruby validator, and use
+no root-`Gemfile` fallback when `.autowork.yml` is missing.
+
 ## Initialize or resume
 
 Invoke Ruby from the canonical resolved checkout, shell-escaping the canonical

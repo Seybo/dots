@@ -10,4 +10,5 @@ no_stow
 .ai/external-skills/
 .pi/agent/external_extensions
 ^/AGENTS\.md$
+^/\.autowork\.yml$
 refs

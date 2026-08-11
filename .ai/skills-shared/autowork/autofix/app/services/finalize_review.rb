@@ -6,7 +6,10 @@ class FinalizeReview
   arguments :review_id
 
   def call
-    result = RunFinalChecks.call(project_path: project_path)
+    result = RunFinalChecks.call(
+      project_path: project_path,
+      starting_commit_sha: review.fetch(:starting_commit_sha)
+    )
     output = result.fetch(:output)
     return output unless result.fetch(:is_passing)
 

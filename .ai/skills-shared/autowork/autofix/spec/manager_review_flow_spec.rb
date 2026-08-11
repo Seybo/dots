@@ -13,8 +13,9 @@ RSpec.describe 'Manager review flow' do
     git!('init', '-q')
     git!('config', 'user.email', 'autofix@example.com')
     git!('config', 'user.name', 'Autofix')
+    File.write(File.join(project_path, '.autowork.yml'), "final_checks:\n  \".\": []\n")
     File.write(File.join(project_path, 'tracked.txt'), "initial\n")
-    git!('add', 'tracked.txt')
+    git!('add', '.autowork.yml', 'tracked.txt')
     git!('commit', '-q', '-m', 'Initial commit')
   end
 
@@ -34,7 +35,7 @@ RSpec.describe 'Manager review flow' do
 
     expect(output).to include(
       'Final checks:',
-      'Skipped: no Gemfile.',
+      '- [.]: skipped (no configured commands)',
       'Review 1 completed locally.',
       'Push: not performed.',
       "AutoFixSquash #{review_id}"

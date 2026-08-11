@@ -16,9 +16,12 @@ RSpec.describe FinalizeReview do
     git!('init', '-q')
     git!('config', 'user.email', 'autofix@example.com')
     git!('config', 'user.name', 'Autofix')
-    File.write(File.join(project_path, 'Gemfile'), "source 'https://rubygems.org'\n")
+    File.write(
+      File.join(project_path, '.autowork.yml'),
+      "final_checks:\n  \".\":\n    - bundle exec rubocop\n    - bundle exec rspec\n"
+    )
     File.write(File.join(project_path, 'tracked.txt'), "initial\n")
-    git!('add', 'Gemfile', 'tracked.txt')
+    git!('add', '.autowork.yml', 'tracked.txt')
     git!('commit', '-q', '-m', 'Initial commit')
     write_fake_bundle
     ENV['PATH'] = "#{tool_path}:#{original_path}"
@@ -38,8 +41,8 @@ RSpec.describe FinalizeReview do
 
     expect(output).to include(
       'Final checks:',
-      '- bundle exec rubocop: passed (exit 0)',
-      '- bundle exec rspec: passed (exit 0)',
+      '- [.] bundle exec rubocop: passed (exit 0)',
+      '- [.] bundle exec rspec: passed (exit 0)',
       'Review 1 completed locally.',
       'Push: not performed.',
       "AutoFixSquash #{review_id}"
@@ -63,12 +66,12 @@ RSpec.describe FinalizeReview do
     output = described_class.call(review_id: review_id)
 
     expect(output).to include(
-      '- bundle exec rubocop: failed (exit 3)',
-      '- bundle exec rspec: passed (exit 0)',
-      "bundle exec rubocop stdout:\nrubocop failed stdout",
-      "bundle exec rubocop stderr:\nrubocop failed stderr",
-      "bundle exec rspec stdout:\nrspec stdout",
-      "bundle exec rspec stderr:\nrspec stderr"
+      '- [.] bundle exec rubocop: failed (exit 3)',
+      '- [.] bundle exec rspec: passed (exit 0)',
+      "[.] bundle exec rubocop stdout:\nrubocop failed stdout",
+      "[.] bundle exec rubocop stderr:\nrubocop failed stderr",
+      "[.] bundle exec rspec stdout:\nrspec stdout",
+      "[.] bundle exec rspec stderr:\nrspec stderr"
     )
     expect(File.readlines(command_log_path, chomp: true)).to eq(%w[rubocop rspec])
     expect_unfinalized(review_id, original_head)

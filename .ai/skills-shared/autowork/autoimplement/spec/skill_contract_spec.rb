@@ -139,6 +139,20 @@ RSpec.describe 'Autoimplement skill contract' do
     expect(decision_policy).to match(/Unclear.*persists nothing.*apply the operator-reasoning rules/m)
   end
 
+  it 'requires repository final-check preflight before initialization' do
+    preflight_index = skill.index('## Repository final-check preflight')
+    initialize_index = skill.index('## Initialize or resume')
+
+    expect(preflight_index).to be < initialize_index
+    expect(skill).to include('<canonical-checkout>/.autowork.yml')
+    expect(skill).to include('before invoking `initialize-task`')
+    expect(skill).to include('Agent-manager discovers established commands')
+    expect(skill).to include('Ruby never discovers final-check commands')
+    expect(skill).to include('separate explicit approval to commit')
+    expect(skill).to match(/re-invoke\s+Autoimplement from the start/)
+    expect(skill).to include('no root-`Gemfile` fallback')
+  end
+
   it 'keeps omitted recovery and reconciliation behavior unavailable' do
     expect(skill).to include('Do not suppress duplicate concerns')
     expect(skill).to include('Do not persist conversation transcripts')

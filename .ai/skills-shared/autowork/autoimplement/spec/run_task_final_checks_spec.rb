@@ -45,7 +45,10 @@ RSpec.describe RunTaskFinalChecks do
       "Push: not performed.\n" \
       "AutoImplementSquash #{task_id}"
     )
-    expect(RunFinalChecks).to have_received(:call).with(project_path: '/project')
+    expect(RunFinalChecks).to have_received(:call).with(
+      project_path: '/project',
+      starting_commit_sha: 'starting-sha'
+    )
     expect(ValidateCleanGitState).to have_received(:call).with(project_path: '/project')
     expect(db[:tasks].where(id: task_id).get(:state)).to eq('final_checks_passed')
     expect(CommitWorkCycle).not_to have_received(:call)
@@ -53,16 +56,16 @@ RSpec.describe RunTaskFinalChecks do
     expect(db[:reported_issues].count).to eq(0)
   end
 
-  it 'stores the same completion after the no-Gemfile skip' do
+  it 'stores the same completion after an explicit component skip' do
     allow(RunFinalChecks).to receive(:call).and_return(
-      output: "Final checks:\nSkipped: no Gemfile.",
+      output: "Final checks:\n- [.]: skipped (no configured commands)",
       is_passing: true
     )
 
     output = described_class.call(task_id: task_id)
 
     expect(output).to eq(
-      "Final checks:\nSkipped: no Gemfile.\n" \
+      "Final checks:\n- [.]: skipped (no configured commands)\n" \
       "Task #{task_id} completed locally.\n" \
       "Push: not performed.\n" \
       "AutoImplementSquash #{task_id}"

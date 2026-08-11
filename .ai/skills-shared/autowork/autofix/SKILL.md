@@ -147,6 +147,32 @@ Before collecting a GitHub or local source:
 6. Otherwise follow **Issue assessment** when stdout contains an `Issue: <id>`
    block. Return any other stdout unchanged and stop.
 
+## Repository final-check preflight
+
+After **Resume** returns exactly `No incomplete Review.` and before collecting a
+new Review source, read `<canonical-checkout>/.autowork.yml`.
+
+When the file exists, Agent-manager reads it and loosely confirms that its
+`final_checks` directory-to-command mapping is usable for the repository. The
+repository owns the mapping and commands.
+
+When the file is missing:
+
+1. Stop before source collection, Review import, new workflow database state, or
+   participant work.
+2. Agent-manager discovers established commands from repository evidence such as
+   `bin/check`, Gemfiles, package scripts, CI configuration, and documented test
+   commands.
+3. Propose exact `.autowork.yml` contents using only evidenced commands.
+4. Require operator approval before creating the file.
+5. After creation, require separate explicit approval to commit it as repository
+   setup.
+6. Require clean Git after that setup commit, then tell the operator to re-invoke
+   Autofix from the start.
+
+Ruby never discovers final-check commands. Add no strict Ruby validator, and use
+no root-`Gemfile` fallback when `.autowork.yml` is missing.
+
 ## GitHub
 
 With no source argument:

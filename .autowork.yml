@@ -1,0 +1,15 @@
+final_checks:
+  ".": []
+
+  .ai/skills-shared/autowork:
+    - bundle exec rubocop
+    - bundle exec rspec
+
+  .agents/skills/dots-check:
+    - ruby spec/scan_spec.rb
+
+  .agents/skills/dots-backup:
+    - ruby spec/dots_backup_spec.rb
+
+  .agents/skills/skills-manager:
+    - ruby spec/skills_manager_spec.rb

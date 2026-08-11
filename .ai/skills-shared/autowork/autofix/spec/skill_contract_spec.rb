@@ -61,6 +61,22 @@ RSpec.describe 'Autofix skill contract' do
     expect(decision_policy).to match(/Unclear.*persists nothing.*apply the operator-reasoning rules/m)
   end
 
+  it 'requires repository final-check preflight before importing a new Review' do
+    resume_index = skill.index('## Resume')
+    preflight_index = skill.index('## Repository final-check preflight')
+    github_index = skill.index('## GitHub')
+
+    expect(resume_index).to be < preflight_index
+    expect(preflight_index).to be < github_index
+    expect(skill).to include('<canonical-checkout>/.autowork.yml')
+    expect(skill).to match(/before collecting a\s+new Review source/)
+    expect(skill).to include('Agent-manager discovers established commands')
+    expect(skill).to include('Ruby never discovers final-check commands')
+    expect(skill).to include('separate explicit approval to commit')
+    expect(skill).to match(/re-invoke\s+Autofix from the start/)
+    expect(skill).to include('no root-`Gemfile` fallback')
+  end
+
   it 'uses the pull request base exactly and keeps local transport base-free' do
     expect(skill).to include('Select exactly `origin/<baseRefName>`')
     expect(skill).to include('{"issues": ["<issue body>"]}')

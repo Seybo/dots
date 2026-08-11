@@ -15,8 +15,9 @@ RSpec.describe WaitWorkCycle do
     git!('init', '-q')
     git!('config', 'user.email', 'autofix@example.com')
     git!('config', 'user.name', 'Autofix')
+    File.write(File.join(project_path, '.autowork.yml'), "final_checks:\n  \".\": []\n")
     File.write(File.join(project_path, 'tracked.txt'), "initial\n")
-    git!('add', 'tracked.txt')
+    git!('add', '.autowork.yml', 'tracked.txt')
     git!('commit', '-q', '-m', 'Initial commit')
   end
 
@@ -448,7 +449,7 @@ RSpec.describe WaitWorkCycle do
     expect(manager_output).to include(
       "Manager review completed (Cycle #{manager_work_cycle.fetch(:id)}). Reported issues:\n- None",
       'Final checks:',
-      'Skipped: no Gemfile.',
+      '- [.]: skipped (no configured commands)',
       'Review 1 completed locally.',
       'Push: not performed.',
       "AutoFixSquash #{review_id}"
