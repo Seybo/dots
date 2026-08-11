@@ -36,7 +36,7 @@ Language- and project-neutral rules for all agents unless a project's local inst
 
 - An unmerged PR's intermediate state is not a compatibility contract. Do not require compatibility for temporary commits, filenames, schemas, or behavior that never shipped; review the final branch against the merge base and deployed state.
 - Do not treat a compatibility issue based only on existing database state as a finding until the operator confirms that the affected database exists and matters. Ask how that state should be handled before proposing migration, cleanup, or compatibility work.
-- Do not promote a theoretical edge case into a finding without evidence from provider documentation, observed data, or a credible normal execution path. Record low-likelihood possibilities as theoretical and skip them unless their likelihood and impact justify action.
+- Apply the causal-proof, exploratory-candidate, and **Needs investigation** rules in `development-principles.md` before surfacing an actionable finding or using a concern to justify code changes.
 - Do not add uncalled public options, provider capabilities, abstractions, or tests for anticipated use. Before accepting new API surface, identify the production caller and acceptance criterion; otherwise remove it or record it as explicitly deferred tech debt.
 
 ## Dotfiles stow safety

@@ -45,6 +45,30 @@ Use these defaults unless project-specific instructions require otherwise.
 - Add edge-case handling when there is a credible execution path or observed need.
 - Choose the simplest solution that preserves required security, data integrity, and domain invariants.
 
+## Credible complexity and findings
+
+Apply this gate only when proposing production handling or an actionable review finding for an edge case, race, or failure mode. Ordinary implementation work needs no explicit assessment.
+
+Before adding complexity or surfacing a finding, establish the complete causal chain:
+
+1. A real supported action or system event triggers the case.
+2. The relevant operations can overlap on a realistic timescale, when overlap matters.
+3. A specific ordering, interleaving, or failure creates the harmful condition.
+4. Observed behavior, documented guarantees, the actual execution path, an established threat model, or an unavoidable failure mode permits that condition naturally.
+5. The case causes a concrete observable failure, data loss, security impact, or invariant violation.
+6. Likelihood and impact justify attention in the product's actual threat and failure model.
+7. The realistic risk justifies the implementation, maintenance, and correctness cost of handling it.
+
+All seven links are required, but a concise paragraph may combine them; fixed headings are optional. Static reasoning is sufficient when it proves the chain—a production incident is not required. Asynchrony, overlap, timing measurements, or harmful ordering alone do not prove the next link.
+
+Synthetic delays or injected faults may make a regression test deterministic only after a credible production mechanism is established. Instrumentation-only behavior, contrived interaction sequences, and unsupported failure assumptions do not justify production complexity. Rare cases remain valid when they have credible causes or material impact, including process interruption, disk or network failure, hostile input, security-boundary violations, or concurrency the real system permits.
+
+If any required link is missing, investigate it before proposing production handling or an actionable finding. Exploratory review stages may retain unverified concerns internally.
+
+When a potentially material security or data-loss risk has a credible trigger but a required link cannot be verified with available access, present it separately as **Needs investigation**. Name only the missing evidence and how to verify it; do not call it a defect, assign severity, or prescribe production handling.
+
+Prefer the simplest design that preserves required security, data integrity, and domain invariants.
+
 ## Naming
 
 - Use simple, concise, accurate names.
@@ -127,7 +151,7 @@ Language- and project-neutral rules for all agents unless a project's local inst
 
 - An unmerged PR's intermediate state is not a compatibility contract. Do not require compatibility for temporary commits, filenames, schemas, or behavior that never shipped; review the final branch against the merge base and deployed state.
 - Do not treat a compatibility issue based only on existing database state as a finding until the operator confirms that the affected database exists and matters. Ask how that state should be handled before proposing migration, cleanup, or compatibility work.
-- Do not promote a theoretical edge case into a finding without evidence from provider documentation, observed data, or a credible normal execution path. Record low-likelihood possibilities as theoretical and skip them unless their likelihood and impact justify action.
+- Apply the causal-proof, exploratory-candidate, and **Needs investigation** rules in `development-principles.md` before surfacing an actionable finding or using a concern to justify code changes.
 - Do not add uncalled public options, provider capabilities, abstractions, or tests for anticipated use. Before accepting new API surface, identify the production caller and acceptance criterion; otherwise remove it or record it as explicitly deferred tech debt.
 
 ## Dotfiles stow safety
