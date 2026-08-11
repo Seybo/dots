@@ -45,11 +45,12 @@ options = {
   unstaged: false,
   untracked: false,
   path: nil,
-  last_commits: nil
+  last_commits: nil,
+  file: nil
 }
 
 parser = OptionParser.new do |opts|
-  opts.banner = 'Usage: scan.rb [--all] [--unstaged] [--untracked] [--path GLOB] [--last-commits COUNT]'
+  opts.banner = 'Usage: scan.rb [--all] [--unstaged] [--untracked] [--path GLOB] [--last-commits COUNT] [--file PATH]'
   opts.on('--all', 'Scan all tracked files') { options[:all] = true }
   opts.on('--unstaged', 'Scan unstaged tracked changes, ignoring staged changes and HEAD fallback') { options[:unstaged] = true }
   opts.on('--untracked', 'Include untracked files') { options[:untracked] = true }
@@ -57,6 +58,7 @@ parser = OptionParser.new do |opts|
   opts.on('--last-commits COUNT', '--last COUNT', Integer, 'Scan changed lines in the last COUNT commits') do |count|
     options[:last_commits] = count
   end
+  opts.on('--file PATH', 'Scan one complete file without requiring Git') { |path| options[:file] = path }
   opts.on('-h', '--help', 'Show help') do
     puts opts
     exit 0
@@ -89,18 +91,32 @@ if options[:all] && options[:unstaged]
   exit EXIT_USAGE
 end
 
-unless system('git rev-parse --is-inside-work-tree > /dev/null 2>&1')
-  warn 'Error: not inside a git repository'
-  exit EXIT_USAGE
-end
+if options[:file]
+  if options[:all] || options[:unstaged] || options[:untracked] || options[:path] || options[:last_commits]
+    warn 'Error: --file cannot be combined with Git target options'
+    warn parser
+    exit EXIT_USAGE
+  end
 
-repo_root, ok = Open3.capture2('git rev-parse --show-toplevel')
-unless ok.success?
-  warn 'Error: failed to resolve git repository root'
-  exit EXIT_USAGE
-end
+  options[:file] = File.expand_path(options[:file])
+  unless File.file?(options[:file])
+    warn "Error: file not found: #{options[:file]}"
+    exit EXIT_USAGE
+  end
+else
+  unless system('git rev-parse --is-inside-work-tree > /dev/null 2>&1')
+    warn 'Error: not inside a git repository'
+    exit EXIT_USAGE
+  end
 
-Dir.chdir(repo_root.strip)
+  repo_root, ok = Open3.capture2('git rev-parse --show-toplevel')
+  unless ok.success?
+    warn 'Error: failed to resolve git repository root'
+    exit EXIT_USAGE
+  end
+
+  Dir.chdir(repo_root.strip)
+end
 
 def capture(cmd)
   stdout, status = Open3.capture2(cmd)
@@ -270,7 +286,7 @@ def scan_targets(targets)
     lines = target.lines
     content = nil
 
-    if target.source == :worktree
+    if target.source == :worktree || target.source == :file
       next unless File.file?(path)
 
       begin
@@ -279,7 +295,7 @@ def scan_targets(targets)
         next
       end
 
-      if size > MAX_FILE_BYTES
+      if target.source == :worktree && size > MAX_FILE_BYTES
         warn "Skipping #{path} (size > #{MAX_FILE_BYTES} bytes)"
         next
       end
@@ -387,7 +403,11 @@ if options[:last_commits]
   exit 1
 end
 
-targets = collect_targets(options)
+targets = if options[:file]
+            { options[:file] => Target.new(:full, :file) }
+          else
+            collect_targets(options)
+          end
 if targets.empty?
   puts 'No files to scan (diff is empty).'
   exit 0

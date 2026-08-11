@@ -285,4 +285,42 @@ class ScanSpec < Minitest::Test
       refute_match(/github_token/, stdout)
     end
   end
+
+  def test_file_option_scans_an_arbitrary_file_outside_git
+    Dir.mktmpdir("dots-check-file-") do |dir|
+      token = ["ghp_", "1234567890abcdef", "12345678"].join
+      path = File.join(dir, "session.jsonl")
+      File.write(path, "token #{token}\n")
+
+      stdout, _stderr, status = run_scan(dir, "--file", path)
+      assert_equal 1, status.exitstatus
+      assert_match(/github_token/, stdout)
+      refute_includes stdout, token
+    end
+  end
+
+  def test_file_option_scans_files_larger_than_the_git_target_limit
+    Dir.mktmpdir("dots-check-file-") do |dir|
+      token = ["ghp_", "1234567890abcdef", "12345678"].join
+      path = File.join(dir, "large-session.jsonl")
+      File.write(path, "safe line\n" * 110_000)
+      File.open(path, "a") { |file| file.puts "token #{token}" }
+
+      stdout, stderr, status = run_scan(dir, "--file", path)
+      assert_equal 1, status.exitstatus
+      assert_match(/github_token/, stdout)
+      refute_match(/Skipping/, stderr)
+    end
+  end
+
+  def test_file_option_rejects_git_target_options
+    Dir.mktmpdir("dots-check-file-") do |dir|
+      path = File.join(dir, "session.jsonl")
+      File.write(path, "safe\n")
+
+      _stdout, stderr, status = run_scan(dir, "--file", path, "--all")
+      assert_equal 2, status.exitstatus
+      assert_match(/--file cannot be combined/, stderr)
+    end
+  end
 end

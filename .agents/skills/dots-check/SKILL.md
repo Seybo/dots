@@ -1,6 +1,6 @@
 ---
 name: dots-check
-description: Scan dotfiles changes for secrets or sensitive data before publishing. Uses Ruby, git diffs, regexes, and entropy heuristics. Defaults to staged changes, then unstaged changes, then the last commit; supports full, untracked, and last-N-commit scans.
+description: Scan dotfiles changes or one arbitrary file for secrets or sensitive data before publishing. Uses Ruby, git diffs, regexes, and entropy heuristics. Defaults to staged changes, then unstaged changes, then the last commit; supports full, untracked, last-N-commit, and direct-file scans.
 ---
 
 # Dots Check
@@ -40,6 +40,9 @@ No extra repo-detection guard is needed: if this skill is available, you're alre
 ./.agents/skills/dots-check/scripts/scan.rb --last-commits 5
 # Short alias
 ./.agents/skills/dots-check/scripts/scan.rb --last 5
+
+# Scan one complete file without requiring a Git repository
+./.agents/skills/dots-check/scripts/scan.rb --file /path/to/session.jsonl
 ```
 
 ## Invocation
@@ -101,6 +104,7 @@ Do not report a scanner behavior change as complete unless the relevant spec was
 - Default behavior is: scan staged changes; if there are none, scan unstaged changes; if there are none, scan `HEAD`.
 - `--unstaged` scans only unstaged tracked changes, ignoring staged changes and avoiding the `HEAD` fallback. Combine it with `--untracked` to scan the whole uncommitted working tree.
 - `--last-commits N` / `--last N` scans changed lines in each of the last `N` commits; it can be combined with `--path`, but not with `--all`, `--unstaged`, or `--untracked`.
+- `--file PATH` scans one complete text file without requiring Git and is not subject to the 1 MB Git-target limit. It cannot be combined with Git target options.
 - Keep output short to save model tokens. The scanner redacts matched secrets, absolute local user/volume paths, and truncates snippets.
 - The scanner prints the files it checks before reporting findings.
 - False positives happen; prefer auditing each finding rather than suppressing by default.
