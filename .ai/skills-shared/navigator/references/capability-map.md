@@ -23,6 +23,8 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `/skill:taskit` — create task folders under `/Volumes/dev/_tasks`, or create a Shortcut story from `task.md`.
 - `/skill:draftit` — save selected conversation context into a draft task folder.
 - `/skill:workit` — start work from an existing task folder.
+- `/skill:guideit` — walk through a completed Workit step's unstaged changes and stage approved work with permission.
+- `/skill:handit` — pass an active Pi task session to mobile discussion, then reconcile its return in the original session.
 - `/skill:sumit` — summarize a task file into PR-description text with reviewer gotchas and copy it to the clipboard.
 - `/skill:autowork --status` — show the current read-only Autoimplement and Autofix status for one Task.
 - `/skill:autoimplement` — autonomously implement, review, correct, and complete one authored Task.

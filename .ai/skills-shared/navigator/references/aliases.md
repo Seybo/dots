@@ -17,6 +17,8 @@ Use this file to map vague user wording to likely capabilities. The exact source
 - `create task`, `task folder`, `task.md`, `shortcut story from task` → `/skill:taskit`
 - `draft task`, `save this for later`, `capture context` → `/skill:draftit`
 - `start task`, `work on task` → `/skill:workit`
+- `guide changes`, `review unstaged changes`, `mobile-friendly change review` → `/skill:guideit`
+- `hand off session`, `mobile discussion`, `pass to phone`, `receive mobile notes` → `/skill:handit`
 - `summarize task`, `task summary`, `PR text from task`, `PR description from task` → `/skill:sumit`
 - `task status`, `autowork status`, `current task workflow state` → `/skill:autowork --status`
 - `autonomous task`, `orchestrate task`, `run task workflow automatically` → `/skill:autoimplement`
