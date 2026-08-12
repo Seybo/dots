@@ -1,0 +1,57 @@
+# Hunk theme for the adjusted local Everforest hard light environment.
+# UI and syntax colors use the local palette in
+# themes/everforest-hard-light/pi.json and claude.json, derived from:
+# https://github.com/sainnhe/everforest/blob/master/palette.md
+# Syntax highlighting inherits Hunk's bundled Everforest light theme.
+
+theme = "custom"
+
+[custom_theme]
+base = "everforest-light"
+label = "Everforest Hard Light"
+background = "#FFFDF6"
+panel = "#FFFBEF"
+panelAlt = "#F8F5E4"
+border = "#E8E5D5"
+accent = "#697801"
+accentMuted = "#F0F2D4"
+text = "#3D484D"
+muted = "#5C6A72"
+addedBg = "#F1F4D8"
+removedBg = "#FDECEA"
+movedAddedBg = "#F0F2D4"
+movedRemovedBg = "#F0F2D4"
+contextBg = "#FFFDF6"
+addedContentBg = "#F1F4D8"
+removedContentBg = "#FDECEA"
+contextContentBg = "#FFFDF6"
+addedSignColor = "#697801"
+removedSignColor = "#F85552"
+lineNumberBg = "#FFFDF6"
+lineNumberFg = "#939F91"
+selectedHunk = "#F0F2D4"
+badgeAdded = "#697801"
+badgeRemoved = "#F85552"
+badgeNeutral = "#5C6A72"
+fileNew = "#697801"
+fileDeleted = "#F85552"
+fileRenamed = "#DF69BA"
+fileModified = "#3A94C5"
+fileUntracked = "#267B5F"
+noteBorder = "#267B5F"
+noteBackground = "#F8F5E4"
+noteTitleBackground = "#FFFBEF"
+noteTitleText = "#3D484D"
+
+[custom_theme.syntax]
+default = "#3D484D"
+keyword = "#F85552"
+string = "#697801"
+comment = "#939F91"
+number = "#DF69BA"
+function = "#3A94C5"
+property = "#267B5F"
+type = "#267B5F"
+variable = "#3D484D"
+operator = "#F57D26"
+punctuation = "#5C6A72"

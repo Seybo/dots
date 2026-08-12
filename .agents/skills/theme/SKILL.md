@@ -1,6 +1,6 @@
 ---
 name: theme
-description: Create, update, and debug this dotfiles repo's environment themes across Ghostty, Neovim, Starship, fzf, tmux, Pi, Claude Code, Hermes, Lazygit, and Codex. Use when the user asks to add a theme, modify theme colors, switch/theme behavior, or investigate theme rendering issues.
+description: Create, update, and debug this dotfiles repo's environment themes across Ghostty, Neovim, Starship, fzf, tmux, Pi, Claude Code, Hermes, Lazygit, Codex, and Hunk. Use when the user asks to add a theme, modify theme colors, switch/theme behavior, or investigate theme rendering issues.
 ---
 
 # Theme Skill
@@ -18,6 +18,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
    - `.config/starship.toml`
    - `.tmux.conf`
    - `themes/active/tmux.conf` when tmux theming is involved
+   - `.config/hunk/config.toml` and `themes/active/hunk.toml` when Hunk theming is involved
    - `.pi/agent/settings.json` when Pi theming is involved
    - `~/.claude/themes/theme.json` symlink when Claude Code theming is involved
    - `~/Library/Application Support/lazygit/config.yml` symlink when Lazygit theming is involved
@@ -46,6 +47,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 - Lazygit should not get switcher-specific copy/settings logic. Bridge it with a symlink: `~/Library/Application Support/lazygit/config.yml -> ~/.dots/themes/active/lazygit.yml`.
 - Hermes Agent should not get switcher-specific copy/settings logic. Hermes calls themes "skins" and reads user skins from `~/.hermes/skins/`, so bridge it with a symlink: `~/.hermes/skins/env-active.yaml -> ~/.dots/themes/active/hermes.yaml`, then set `display.skin: env-active` once in `~/.hermes/config.yaml`.
 - Codex should not get switcher-specific logic. Bridge it through the Stow-managed `.codex/themes/env-active.tmTheme` symlink to `themes/active/codex.tmTheme`, then set `[tui] theme = "env-active"` once in `~/.codex/config.toml`.
+- Hunk should not get switcher-specific logic. Bridge `~/.config/hunk/config.toml` through the Stow-managed `.config/hunk/config.toml` link to `themes/active/hunk.toml`; Hunk reads that config when it starts.
 
 ## App integration map
 
@@ -59,6 +61,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 - Lazygit: `~/Library/Application Support/lazygit/config.yml` is a symlink to `~/.dots/themes/active/lazygit.yml`; Lazygit reads it on launch.
 - Hermes Agent: `~/.hermes/skins/env-active.yaml` is a symlink to `~/.dots/themes/active/hermes.yaml`; `~/.hermes/config.yaml` sets `display.skin: env-active`.
 - Codex: `.codex/themes/env-active.tmTheme` is Stow-managed into `~/.codex/themes/` and points to `~/.dots/themes/active/codex.tmTheme`; `~/.codex/config.toml` selects `[tui] theme = "env-active"`. Codex does not watch file changes, so restart it or open `/theme` and confirm `env-active` after switching.
+- Hunk: `.config/hunk/config.toml` is Stow-managed into `~/.config/hunk/` and points to `~/.dots/themes/active/hunk.toml`; restart Hunk after switching themes.
 - tmux is supported for tmux-aware themes. `.tmux.conf` quiet-sources `themes/active/tmux.conf` when present, so themes without tmux files remain safe. Add `tmux.conf` only when tmux styling is in scope for that theme.
 - Alacritty is retired. Do not add Alacritty theme files.
 - Zellij integration is frozen. Preserve the existing `.config/zellij/`, `themes/*/zellij.kdl`, `themes/active/zellij.kdl`, and legacy theme-switcher touch behavior, but do not add or update Zellij integrations; use tmux for current workspace work.
@@ -91,8 +94,9 @@ A standard modern theme should have a file for each current app integration:
 - `lazygit.yml`
 - `hermes.yaml`
 - `codex.tmTheme`
+- `hunk.toml`
 
-Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, `hermes.yaml`, or `codex.tmTheme` until they are modernized. Codex currently supports only `nordfox` and `everforest-hard-light`. Themes may also omit `tmux.conf`; tmux falls back to base styling when the active theme has no tmux file.
+Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, `hermes.yaml`, `codex.tmTheme`, or `hunk.toml` until they are modernized. Codex and Hunk currently support only `nordfox` and `everforest-hard-light`. Themes may also omit `tmux.conf`; tmux falls back to base styling when the active theme has no tmux file.
 
 ## Creating a new theme
 
@@ -127,6 +131,7 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, `hermes.yaml`, or
    - Starship updates on a new prompt render after active file changes.
    - tmux reloads the active theme with `tmux source-file ~/.tmux.conf`.
    - Codex requires a restart or reopening `/theme` and confirming `env-active`; it does not watch `.tmTheme` file changes.
+   - Hunk should be restarted so a new session reads the active `hunk.toml`.
 4. If editing a non-active theme, ask the user to switch to it for validation.
 
 ## File-specific rules
@@ -186,6 +191,13 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, `hermes.yaml`, or
 - The YAML `name` should be `env-active` for this unified active-theme flow.
 - Use Hermes' skin YAML shape: `name`, `description`, `colors`, optional `branding`, spinner settings, and `tool_prefix`.
 
+### `hunk.toml`
+
+- Hunk reads `~/.config/hunk/config.toml`, which is bridged to `themes/active/hunk.toml` through `.config/hunk/config.toml`.
+- Use Hunk's `theme = "custom"` and `[custom_theme]` TOML format. Inherit from a matching bundled theme, then override colors with the local adjusted palette.
+- Keep `themes/theme_switcher.rb` generic. Restart Hunk after switching themes.
+- Hunk support currently exists only for `nordfox` and `everforest-hard-light`.
+
 ### `codex.tmTheme`
 
 - Codex discovers custom syntax themes only under `~/.codex/themes/` and selects them by filename stem.
@@ -238,6 +250,7 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, `hermes.yaml`, or
 - Lazygit unchanged: verify `~/Library/Application Support/lazygit/config.yml` is a symlink to `~/.dots/themes/active/lazygit.yml`, active `lazygit.yml` exists and is valid YAML, then restart Lazygit.
 - Hermes unchanged: verify `~/.hermes/skins/env-active.yaml` is a symlink to `~/.dots/themes/active/hermes.yaml`, `~/.hermes/config.yaml` has `display.skin: env-active`, active `hermes.yaml` exists and is valid YAML, then restart Hermes or run `/skin env-active`.
 - Codex unchanged: verify `~/.codex/themes/env-active.tmTheme` resolves to `~/.dots/themes/active/codex.tmTheme`, `~/.codex/config.toml` has `[tui] theme = "env-active"`, and the active XML passes `plutil -lint`; then restart Codex or reopen `/theme` and confirm `env-active`.
+- Hunk unchanged: verify `~/.config/hunk/config.toml` resolves to `~/.dots/themes/active/hunk.toml`, validate the TOML, and restart Hunk.
 
 ## Validation commands
 
@@ -251,6 +264,7 @@ ruby -rjson -e 'JSON.parse(File.read(ARGV[0])); puts "ok"' themes/<name>/claude.
 ruby -ryaml -e 'YAML.load_file(ARGV[0]); puts "ok"' themes/<name>/lazygit.yml
 ruby -ryaml -e 'YAML.load_file(ARGV[0]); puts "ok"' themes/<name>/hermes.yaml
 plutil -lint themes/<name>/codex.tmTheme
+python3 -c 'import sys, tomllib; tomllib.load(open(sys.argv[1], "rb"))' themes/<name>/hunk.toml
 rg -n 'themes/active/tmux.conf|source-file' .tmux.conf
 rg -n 'themes/active|active-theme|colorscheme' .config/nvim/lua/plugins/theme.lua themes/<name>/nvim.lua
 ```
