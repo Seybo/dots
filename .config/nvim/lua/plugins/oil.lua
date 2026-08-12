@@ -19,9 +19,7 @@ return {
     {
       '<leader>fo',
       function()
-        local path = vim.api.nvim_buf_get_name(0)
-        local dir = path ~= '' and vim.fs.dirname(path) or vim.fn.getcwd()
-        vim.cmd('Oil --preview ' .. vim.fn.fnameescape(dir))
+        vim.cmd('Oil --preview')
       end,
       desc = '[ Oil ] Open current file directory',
     },
