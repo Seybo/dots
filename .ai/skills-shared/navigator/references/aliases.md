@@ -5,6 +5,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 ## GitHub / PRs
 
 - `github`, `gh`, `pr`, `pull request`, `review PR`, `review my branch`, `look at diff`, `code review` → `/skill:super-review`
+- `hunk`, `guided diff`, `explain current hunk`, `expit`, `expall` → `/skill:hunkit`
 - `fix super-review`, `address super-review findings`, `apply review fixes` → `/skill:claude-super-fix`
 - `review comments`, `address comments`, `inline comments`, `review id` → `/skill:addressit`
 - `import review`, `fix imported review`, `reported issues`, `autofix` → `/skill:autofix`
@@ -35,7 +36,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 
 ## Themes / UI
 
-- `theme`, `colors`, `ghostty`, `starship`, `fzf`, `zellij`, `lazygit`, `env-active` → `/skill:theme`
+- `theme`, `colors`, `ghostty`, `starship`, `fzf`, `tmux theme`, `zellij`, `lazygit`, `hunk theme`, `env-active` → `/skill:theme`
 
 ## Neovim / app help
 

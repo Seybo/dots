@@ -10,6 +10,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 ## GitHub / PRs / code review
 
 - `/skill:super-review` — default deep code-review workflow for PRs, branches, diffs, and uncommitted changes.
+- `/skill:hunkit` — launch Hunk in the existing right tmux pane and explain the focused hunk or a fixed diff walkthrough from the current Pi.
 - `/skill:claude-super-fix` — verify and apply real, in-scope fixes from a saved super-review report.
 - `/skill:addressit` — interactively fetch and address GitHub PR review comments one at a time.
 - `/skill:autofix` — import, decide, implement, and repeatedly review GitHub or local Reported Issues.
@@ -42,7 +43,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 
 ## Themes / UI environment
 
-- `/skill:theme` — create, update, and debug environment themes across Ghostty, Neovim, Starship, fzf, Zellij, Pi, Claude Code, and Lazygit.
+- `/skill:theme` — create, update, and debug environment themes across Ghostty, Neovim, Starship, fzf, tmux, Pi, Claude Code, Lazygit, and Hunk.
 
 ## Neovim / terminal app help
 
