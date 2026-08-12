@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo 'Usage: capture-pane <screen|history> <pane-id>' >&2
+}
+
+if [[ $# -ne 2 ]]; then
+  usage
+  exit 1
+fi
+
+capture_type="$1"
+pane_id="$2"
+
+case "$capture_type" in
+  screen|history)
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac
+
+pane_name="$(tmux display-message -p -t "$pane_id" -F '#{session_name}-#{window_index}-#{pane_index}')"
+timestamp="$(date '+%Y%m%dT%H%M%S')"
+capture_path="$HOME/tmux-captures/$capture_type-$pane_name-$timestamp.txt"
+
+capture_args=(-J -p -t "$pane_id")
+if [[ "$capture_type" == "history" ]]; then
+  capture_args=(-J -p -S - -t "$pane_id")
+fi
+
+tmux capture-pane "${capture_args[@]}" | sed 's/[[:blank:]]*$//' > "$capture_path"
+printf '%s' "$capture_path" | pbcopy
+tmux display-message "Captured $capture_type: $capture_path"
