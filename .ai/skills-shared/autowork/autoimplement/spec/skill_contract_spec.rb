@@ -148,7 +148,10 @@ RSpec.describe 'Autoimplement skill contract' do
     expect(skill).to include('before invoking `initialize-task`')
     expect(skill).to include('Agent-manager discovers established commands')
     expect(skill).to include('Ruby never discovers final-check commands')
-    expect(skill).to include('separate explicit approval to commit')
+    expect(skill).to include('git rev-parse --git-path info/exclude')
+    expect(skill).to include('`/.autowork.yml`')
+    expect(skill).to include('Do not stage or commit `.autowork.yml`')
+    expect(skill).to include('git check-ignore .autowork.yml')
     expect(skill).to match(/re-invoke\s+Autoimplement from the start/)
     expect(skill).to include('no root-`Gemfile` fallback')
   end

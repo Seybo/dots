@@ -197,10 +197,12 @@ When the file is missing:
    commands.
 3. Propose exact `.autowork.yml` contents using only evidenced commands.
 4. Require operator approval before creating the file.
-5. After creation, require separate explicit approval to commit it as repository
-   setup.
-6. Require clean Git after that setup commit, then tell the operator to re-invoke
-   Autoimplement from the start.
+5. After creation, add the exact repository-root pattern `/.autowork.yml` to the
+   local exclude file resolved by `git rev-parse --git-path info/exclude`, unless
+   that pattern is already present. Do not stage or commit `.autowork.yml`, and do
+   not add it to a tracked ignore file.
+6. Verify `git check-ignore .autowork.yml` succeeds and Git is otherwise clean,
+   then tell the operator to re-invoke Autoimplement from the start.
 
 Ruby never discovers final-check commands. Add no strict Ruby validator, and use
 no root-`Gemfile` fallback when `.autowork.yml` is missing.
