@@ -19,7 +19,16 @@ return {
     {
       '<leader>fo',
       function()
-        vim.cmd('Oil --preview')
+        local oil = require('oil')
+        oil.open(nil, nil, function()
+          -- Oil positions the cursor asynchronously; preview only after that scheduled jump.
+          vim.schedule(function()
+            local entry = oil.get_cursor_entry()
+            if entry and entry.id and entry.id ~= 0 then
+              oil.open_preview()
+            end
+          end)
+        end)
       end,
       desc = '[ Oil ] Open current file directory',
     },
