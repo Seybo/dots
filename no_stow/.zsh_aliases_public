@@ -176,12 +176,10 @@ _pi_require_shared_agents() {
 pi-p() {
   _pi_require_shared_agents "$HOME/.pi/personal" || return
   PI_CODING_AGENT_DIR="$HOME/.pi/personal" \
-  PI_CODING_AGENT_SESSION_DIR="$HOME/.pi/personal/agent/sessions" \
   _run_with_agent_attention pi "$@"
 }
 pi-w() {
   _pi_require_shared_agents "$HOME/.pi/work" || return
   PI_CODING_AGENT_DIR="$HOME/.pi/work" \
-  PI_CODING_AGENT_SESSION_DIR="$HOME/.pi/work/agent/sessions" \
   _run_with_agent_attention pi "$@"
 }

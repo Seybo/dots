@@ -139,7 +139,7 @@ lf() {
 if [ -n "$SSH_CONNECTION" ] && [ -z "$TMUX" ]; then
   exec tmux new-session -A -s base
 fi
-export PI_AGENT_SHAKACODE_SESSIONS_DIR=~/.pi/work/agent/sessions
+export PI_AGENT_SHAKACODE_SESSIONS_DIR=~/.pi/work/sessions
 export PATH="$HOME/.codex/bin:$HOME/.local/bin:$PATH"
 
 # bun completions
