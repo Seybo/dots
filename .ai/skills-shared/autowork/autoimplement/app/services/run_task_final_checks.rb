@@ -25,6 +25,9 @@ class RunTaskFinalChecks
     unless task.fetch(:state) == 'manager_review'
       raise "Task #{task.fetch(:id)} cannot run final checks from state #{task.fetch(:state)}"
     end
+    if task.fetch(:is_manager_review_required)
+      raise "Task #{task.fetch(:id)} requires its post-rebase Manager review"
+    end
 
     is_settled = !latest_manager_review.nil? &&
                  latest_manager_review == latest_completed_work_cycle &&

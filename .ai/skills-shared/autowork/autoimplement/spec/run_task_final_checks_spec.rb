@@ -83,6 +83,15 @@ RSpec.describe RunTaskFinalChecks do
     expect(ValidateCleanGitState).not_to have_received(:call)
   end
 
+  it 'refuses checks while a post-rebase Manager review is required' do
+    db[:tasks].where(id: task_id).update(is_manager_review_required: true)
+
+    expect { described_class.call(task_id: task_id) }.
+      to raise_error(RuntimeError, "Task #{task_id} requires its post-rebase Manager review")
+
+    expect(RunFinalChecks).not_to have_received(:call)
+  end
+
   it 'refuses checks without a completed Manager review' do
     db[:work_cycles].where(id: manager_work_cycle_id).delete
 

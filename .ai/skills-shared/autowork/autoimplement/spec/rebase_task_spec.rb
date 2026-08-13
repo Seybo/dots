@@ -33,7 +33,11 @@ RSpec.describe 'Autoimplement Task rebasing' do
       "Starting commit: #{base_sha} -> #{target_sha}\n" \
       'Push: not performed.'
     )
-    expect(task).to include(starting_commit_sha: target_sha, state: 'initialized')
+    expect(task).to include(
+      starting_commit_sha: target_sha,
+      state: 'initialized',
+      is_manager_review_required: false
+    )
     expect(branch_config).to include(
       'original_base_commit_sha' => base_sha,
       'active_base_ref' => 'origin/main',
@@ -164,20 +168,106 @@ RSpec.describe 'Autoimplement Task rebasing' do
     expect { rebase }.to raise_error(/merge-base --is-ancestor #{unrelated_sha}/)
   end
 
-  it 'rejects local-provider configuration and an existing Git rebase' do
-    write_config(
-      name: 'main',
-      original_ref: base_sha,
-      original_sha: base_sha,
-      active_ref: base_sha,
-      active_sha: base_sha
-    )
-    expect { rebase }.to raise_error('Local Tasks cannot be rebased')
+  it 'rebases a local-provider Task on main after failed final checks and preserves its workflow state' do
+    git!('checkout', '-q', 'main')
+    write_config(name: 'main', original_ref: base_sha, active_ref: base_sha)
+    add_task_commit('feature.txt', "feature\n")
+    db[:tasks].where(id: task_id).update(state: 'manager_review')
+    original_manager_review_id = insert_manager_review
+    target_sha = advance_main
 
-    write_config
+    expect { rebase }.to raise_error(/requires an explicit rebase target/)
+
+    output = RebaseTask.call(
+      task_path: task_path,
+      project_path: project_path,
+      base_ref: 'origin/main'
+    )
+
+    expect(output).to include(
+      "Task #{task_id} rebased.",
+      "Active base: #{base_sha} @ #{base_sha} -> origin/main @ #{target_sha}",
+      "Starting commit: #{base_sha} -> #{target_sha}"
+    )
+    expect(task).to include(
+      starting_commit_sha: target_sha,
+      state: 'manager_review',
+      is_manager_review_required: true
+    )
+    expect(db[:work_cycles].where(id: original_manager_review_id).get(:completed_at)).to be_a(Time)
+    expect(branch_config).to include(
+      'original_base_ref' => base_sha,
+      'original_base_commit_sha' => base_sha,
+      'active_base_ref' => 'origin/main',
+      'active_base_commit_sha' => target_sha
+    )
+
+    File.write(File.join(project_path, 'dirty.txt'), "dirty\n")
+    expect { ResumeTask.call(task_id: task_id) }.to raise_error(/Working tree is not clean/)
+    expect(task.fetch(:is_manager_review_required)).to be(true)
+    expect(db[:work_cycles].where(task_id: task_id, role: 'manager').count).to eq(1)
+    File.delete(File.join(project_path, 'dirty.txt'))
+
+    resume_output = ResumeTask.call(task_id: task_id)
+    fresh_manager_review_id = resume_output.delete_prefix('AutoImplementCycle ').to_i
+    expect(db[:work_cycles].where(id: fresh_manager_review_id).first).to include(
+      completed_at: nil,
+      role: 'manager',
+      action: 'review'
+    )
+    expect(task.fetch(:is_manager_review_required)).to be(false)
+  end
+
+  it 'continues a conflicting local-provider rebase after failed final checks' do
+    write_config(original_ref: base_sha, active_ref: base_sha)
+    add_task_commit('conflict.txt', "feature\n")
+    db[:tasks].where(id: task_id).update(state: 'manager_review')
+    insert_manager_review
+    target_sha = advance_main(conflict: true)
+
+    output = RebaseTask.call(
+      task_path: task_path,
+      project_path: project_path,
+      base_ref: 'origin/main'
+    )
+    expect(output).to include("AutoImplementRebaseConflict #{task_id}")
+
+    File.write(File.join(project_path, 'conflict.txt'), "resolved\n")
+    output = ContinueTaskRebase.call(
+      task_path: task_path,
+      project_path: project_path,
+      target_base_ref: 'origin/main',
+      target_base_commit_sha: target_sha
+    )
+
+    expect(output).to include("Task #{task_id} rebased.", 'Fresh Manager review: required.')
+    expect(task).to include(
+      starting_commit_sha: target_sha,
+      state: 'manager_review',
+      is_manager_review_required: true
+    )
+    expect(rebase_in_progress?).to be(false)
+  end
+
+  it 'rejects manager_review before the Manager review is settled or after a rebase' do
+    db[:tasks].where(id: task_id).update(state: 'manager_review')
+
+    expect do
+      RebaseTask.call(task_path: task_path, project_path: project_path, base_ref: 'origin/main')
+    end.to raise_error("Task #{task_id} cannot rebase before final checks")
+
+    insert_manager_review
+    db[:tasks].where(id: task_id).update(is_manager_review_required: true)
+    expect do
+      RebaseTask.call(task_path: task_path, project_path: project_path, base_ref: 'origin/main')
+    end.to raise_error("Task #{task_id} requires its post-rebase Manager review")
+  end
+
+  it 'rejects an existing Git rebase' do
     add_task_commit('conflict.txt', "feature\n")
     advance_main(conflict: true)
     rebase
+
     expect { rebase }.to raise_error(
       'A Git rebase is already in progress; run git rebase --abort before starting again'
     )
@@ -263,6 +353,17 @@ RSpec.describe 'Autoimplement Task rebasing' do
       step_number: 1,
       role: 'worker',
       action: 'implementation'
+    )
+  end
+
+  def insert_manager_review
+    db[:work_cycles].insert(
+      created_at: Time.now,
+      completed_at: Time.now,
+      task_id: task_id,
+      step_number: nil,
+      role: 'manager',
+      action: 'review'
     )
   end
 

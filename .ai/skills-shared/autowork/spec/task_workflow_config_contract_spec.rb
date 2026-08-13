@@ -36,10 +36,11 @@ RSpec.describe 'Task workflow config contract' do
     expect(branch_config).to match(/Do not infer.*merge-base.*reflog/im)
   end
 
-  it 'assigns local config initialization to Workit without local rebasing' do
+  it 'assigns local config initialization to Workit and explicit rebasing to Autoimplement' do
     expect(branch_config).to match(/Taskit.*does not record local Git\s+metadata/im)
     expect(branch_config).to match(/Workit.*immediately before planning.*Autoimplement/im)
-    expect(branch_config).to match(/Local Tasks never.*rebase/im)
+    expect(branch_config).to match(/Taskit and Workit\s+never rebase a local Task/im)
+    expect(branch_config).to match(/Autoimplement may rebase.*explicit operation.*supplied base ref/im)
     expect(workit).to include('**Local Task setup**')
   end
 end

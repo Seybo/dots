@@ -34,8 +34,9 @@ Resolved conflicts:
 Include every conflict occurrence. Surface non-conflict helper failures
 unchanged, with `[MM_NTF]` first when operator action is required. Leave an
 in-progress rebase and metadata unchanged on conflict or failure. Never switch
-branches, push, start a Work Cycle, expose Work Cycle commit SHAs, or resume
-normal orchestration automatically.
+branches, push, separately start a Work Cycle, expose Work Cycle commit SHAs, or
+resume normal orchestration automatically. Ruby owns any durable post-rebase
+review requirement created by the continuation helper.
 
 Interrupted continuation has no recovery state. Begin with `[MM_NTF]`, tell the
 operator to run `git rebase --abort` manually, then invoke the original explicit

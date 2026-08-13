@@ -31,7 +31,7 @@ class CompleteTaskRebase
   def update_task
     validate_config
     Database.connection.transaction(savepoint: true) do
-      updated_count = task_dataset.update(starting_commit_sha: new_starting_commit_sha)
+      updated_count = task_dataset.update(task_updates)
       if updated_count != 1
         raise "Task #{task_id} metadata changed while its Git rebase was running"
       end
@@ -63,8 +63,17 @@ class CompleteTaskRebase
       task_path: preparation.fetch(:task_path),
       project_path: project_path,
       starting_commit_sha: preparation.fetch(:starting_commit_sha),
-      state: 'initialized'
+      state: preparation.fetch(:task_state),
+      is_manager_review_required: preparation.fetch(:is_manager_review_required)
     )
+  end
+
+  def task_updates
+    updates = { starting_commit_sha: new_starting_commit_sha }
+    if preparation.fetch(:task_state) == 'manager_review'
+      updates[:is_manager_review_required] = true
+    end
+    updates
   end
 
   def render
@@ -73,7 +82,14 @@ class CompleteTaskRebase
       "#{preparation.fetch(:active_base_commit_sha)} -> " \
       "#{preparation.fetch(:target_base_ref)} @ #{preparation.fetch(:target_base_commit_sha)}\n" \
       "Starting commit: #{preparation.fetch(:starting_commit_sha)} -> #{new_starting_commit_sha}\n" \
+      "#{manager_review_requirement}" \
       'Push: not performed.'
+  end
+
+  def manager_review_requirement
+    return '' unless preparation.fetch(:task_state) == 'manager_review'
+
+    "Fresh Manager review: required.\n"
   end
 
   def new_starting_commit_sha

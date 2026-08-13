@@ -28,19 +28,29 @@ RSpec.describe 'Autoimplement skill contract' do
     expect(skill).to match(/Pass the selection only to `initialize-task`/)
   end
 
-  it 'runs explicit initialized-Task rebases without normal orchestration' do
+  it 'rebases initialized Tasks and local Tasks blocked at final checks without normal orchestration' do
     expect(skill).to include('/skill:autoimplement --rebase-base <base-ref>')
+    expect(skill).to include('/skill:autoimplement <task_id> --rebase-base <base-ref>')
+    expect(skill).to include('remaining zero-to-two Task selector arguments normally')
     expect(skill).to include('rebase-task <canonical-task-path>')
     expect(skill).to include(
       'continue-task-rebase <canonical-task-path> <target-ref> <full-target-sha>'
     )
     expect(skill).to include('AutoImplementRebaseConflict <task-id>')
-    expect(skill).to include('Task starting boundary and active config fields')
-    expect(skill).to match(/local-provider Task/i)
+    expect(skill).to match(/remaps the Task starting boundary.*active\s+config fields/m)
+    expect(skill).to match(/local-provider Task.*explicit.*base ref/im)
+    expect(skill).to match(/`initialized` or\s+`manager_review`/)
+    expect(skill).to match(/final-check boundary/i)
+    expect(skill).to match(/failed final checks.*normal Autoimplement invocation/im)
+    expect(skill).to match(/persists the requirement for one fresh Manager review/im)
+    expect(skill).to match(/does not rerun authored-step, super, or final Worker reviews/im)
+    expect(skill).to match(/fresh Manager review before final checks/im)
+    expect(skill).to match(/base is stale.*offer the explicit.*--rebase-base/im)
+    expect(skill).to match(/instead of telling the operator to discard.*restart the Task/im)
     expect(skill).to include('../../components/rebase-conflict-resolution.md')
     expect(conflict_policy).to include('`git rebase --abort` manually')
     expect(conflict_policy).to match(
-      /Never switch\s+branches, push, start a Work Cycle.*resume\s+normal orchestration automatically/m
+      /Never switch\s+branches, push, separately start a Work Cycle.*resume\s+normal orchestration automatically/m
     )
   end
 

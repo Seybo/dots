@@ -3,6 +3,8 @@
 class ContinueTaskRebase
   include ServiceObject
 
+  REBASE_STATES = %w[initialized manager_review].freeze
+
   arguments :task_path, :project_path, :target_base_ref, :target_base_commit_sha
 
   def call
@@ -26,15 +28,13 @@ class ContinueTaskRebase
 
   def validate_task
     raise "No Autoimplement Task for #{canonical_task_path}" if task.nil?
-    unless task.fetch(:state) == 'initialized'
-      raise "Task #{task.fetch(:id)} cannot rebase from state #{task.fetch(:state)}"
-    end
+
+    validate_task_state
 
     unless task.fetch(:project_path) == canonical_project_path
       raise "Task #{task.fetch(:id)} checkout mismatch: expected #{task.fetch(:project_path)}, " \
             "got #{canonical_project_path}"
     end
-    raise 'Local Tasks cannot be rebased' if local_task?
     return if incomplete_work_cycle.nil?
 
     raise "Task #{task.fetch(:id)} has incomplete Work Cycle #{incomplete_work_cycle.fetch(:id)}"
@@ -43,6 +43,8 @@ class ContinueTaskRebase
   def build_preparation(git_preparation)
     {
       task_id: task.fetch(:id),
+      task_state: task.fetch(:state),
+      is_manager_review_required: task.fetch(:is_manager_review_required),
       task_path: canonical_task_path,
       project_path: canonical_project_path,
       branch_name: task_context.fetch(:branch_name),
@@ -57,9 +59,32 @@ class ContinueTaskRebase
     }
   end
 
-  def local_task?
-    %w[main master].include?(task_context.fetch(:branch_name)) &&
-      branch.fetch('active_base_ref') == branch.fetch('active_base_commit_sha')
+  def validate_task_state
+    state = task.fetch(:state)
+    raise "Task #{task.fetch(:id)} cannot rebase from state #{state}" unless REBASE_STATES.include?(state)
+    if task.fetch(:is_manager_review_required)
+      raise "Task #{task.fetch(:id)} requires its post-rebase Manager review"
+    end
+    return if state == 'initialized' || manager_review_settled?
+
+    raise "Task #{task.fetch(:id)} cannot rebase before final checks"
+  end
+
+  def manager_review_settled?
+    latest = completed_work_cycles.last
+    return false unless latest&.values_at(:role, :action) == %w[manager review]
+
+    Database.connection[:reported_issues].
+      join(:work_cycle_reported_issues, reported_issue_id: :id).
+      where(Sequel[:work_cycle_reported_issues][:work_cycle_id] => latest.fetch(:id)).
+      select_map(Sequel[:reported_issues][:decision]).all?('skipped')
+  end
+
+  def completed_work_cycles
+    Database.connection[:work_cycles].
+      where(task_id: task.fetch(:id)).
+      exclude(completed_at: nil).
+      order(:id)
   end
 
   def incomplete_work_cycle

@@ -117,6 +117,7 @@ class ResumeTask
   end
 
   def resume_manager_review
+    return start_post_rebase_manager_review if task.fetch(:is_manager_review_required)
     return start_manager_review unless manager_review_exists?
 
     case [latest_completed_work_cycle.fetch(:role), latest_completed_work_cycle.fetch(:action)]
@@ -133,6 +134,22 @@ class ResumeTask
 
   def start_manager_review
     render_handoff(StartTaskManagerReviewWorkCycle.call(task_id: task.fetch(:id)))
+  end
+
+  def start_post_rebase_manager_review
+    work_cycle_id = nil
+    Database.connection.transaction(savepoint: true) do
+      work_cycle_id = StartTaskManagerReviewWorkCycle.call(task_id: task.fetch(:id))
+      updated_count = Database.connection[:tasks].
+                      where(
+                        id: task.fetch(:id),
+                        state: 'manager_review',
+                        is_manager_review_required: true
+                      ).
+                      update(is_manager_review_required: false)
+      raise "Task #{task_id} did not retain its post-rebase Manager review requirement" unless updated_count == 1
+    end
+    render_handoff(work_cycle_id)
   end
 
   def manager_review_exists?

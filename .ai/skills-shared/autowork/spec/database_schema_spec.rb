@@ -6,9 +6,12 @@ require_relative 'spec_helper'
 RSpec.describe 'database schema' do
   let(:db) { Database.connection }
 
-  it 'has one authoritative migration' do
+  it 'has the authoritative schema migrations' do
     expect(Dir[File.join(migrations_path, '*.rb')].map { |path| File.basename(path) }).to eq(
-      ['20260729115455_create_reported_issues.rb']
+      [
+        '20260729115455_create_reported_issues.rb',
+        '20260813160000_add_rebase_review_flag.rb',
+      ]
     )
   end
 
@@ -192,16 +195,22 @@ RSpec.describe 'database schema' do
 
   it 'creates Tasks with required identity and starting boundary' do
     expect(columns(:tasks)).to eq(
-      %i[id created_at task_path project_path starting_commit_sha state super_review_agent]
+      %i[
+        id created_at task_path project_path starting_commit_sha state super_review_agent
+        is_manager_review_required
+      ]
     )
     expect_generated_id_and_created_at(:tasks)
-    %i[task_path project_path starting_commit_sha state super_review_agent].each do |name|
+    %i[
+      task_path project_path starting_commit_sha state super_review_agent is_manager_review_required
+    ].each do |name|
       expect(column(:tasks, name)).to include(allow_null: false)
     end
 
     task_id = db[:tasks].insert(task_attributes)
 
     expect(task_id).to be_a(Integer)
+    expect(db[:tasks].where(id: task_id).get(:is_manager_review_required)).to be(false)
     expect { db[:tasks].insert(task_attributes.except(:created_at)) }.
       to raise_error(Sequel::NotNullConstraintViolation)
   end
@@ -380,6 +389,27 @@ RSpec.describe 'database schema' do
     expect(db.table_exists?(:task_issues)).to be(false)
   end
 
+  it 'upgrades an existing Task without losing workflow state' do
+    Dir.mktmpdir('autowork-schema-upgrade-spec') do |dir|
+      upgrade_db = Sequel.sqlite(File.join(dir, 'upgrade.db'))
+
+      begin
+        Database.configure_connection(upgrade_db)
+        Sequel::Migrator.run(upgrade_db, migrations_path, target: 20_260_729_115_455)
+        task_id = upgrade_db[:tasks].insert(task_attributes(state: 'manager_review'))
+
+        Sequel::Migrator.run(upgrade_db, migrations_path)
+
+        expect(upgrade_db[:tasks].where(id: task_id).first).to include(
+          state: 'manager_review',
+          is_manager_review_required: false
+        )
+      ensure
+        upgrade_db.disconnect
+      end
+    end
+  end
+
   it 'applies, rolls back, and reapplies the authoritative schema' do
     Dir.mktmpdir('autofix-schema-spec') do |dir|
       rollback_db = Sequel.sqlite(File.join(dir, 'rollback.db'))
@@ -410,7 +440,10 @@ RSpec.describe 'database schema' do
 
         Sequel::Migrator.run(rollback_db, migrations_path)
         expect(rollback_db[:schema_migrations].select_map(:filename)).to eq(
-          ['20260729115455_create_reported_issues.rb']
+          [
+            '20260729115455_create_reported_issues.rb',
+            '20260813160000_add_rebase_review_flag.rb',
+          ]
         )
         expect(rollback_db.tables).to include(:reported_issues, :tasks, :reviews, :work_cycles)
       ensure

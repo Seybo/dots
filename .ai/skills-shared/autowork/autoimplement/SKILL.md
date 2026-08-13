@@ -29,12 +29,16 @@ Supported invocations:
 /skill:autoimplement <project-or-session> [task_id] --super-review-agent claude|codex
 /skill:autoimplement --rebase-base
 /skill:autoimplement --rebase-base <base-ref>
+/skill:autoimplement <task_id> --rebase-base <base-ref>
+/skill:autoimplement <project-or-session> <task_id> --rebase-base <base-ref>
 ```
 
 Treat `--rebase-base [<base-ref>]` as a separate explicit operation. Require the
-flag exactly once with zero or one following value and reject every other
-argument or control on that invocation. Resolve the Task normally, then follow
-**Rebase initialized Task** without initializing or resuming it.
+flag exactly once with zero or one following value. Remove the flag and optional
+value, then resolve the remaining zero-to-two Task selector arguments normally.
+Reject retry, super-review-agent, and every other control on that invocation.
+This explicit Task selector is required when a local branch cannot identify its
+Task. Follow **Rebase Task** without initializing or resuming it.
 
 For normal workflow invocations, accept at most one `--retry` flag and at most
 one `--super-review-agent claude|codex` pair in any position alongside an
@@ -124,19 +128,18 @@ operator to run `/workit <task_id>`, approve the plan, and invoke
 Run `git -C <canonical-checkout> branch --show-current` and require a non-empty
 branch. Refuse `main` and `master`, except for project `env` and registered
 projects whose key starts with `my_`. Do not create, switch, rename, or push a
-branch. Rebase only through the explicit **Rebase initialized Task** operation
-below. Never offer or perform that operation for a local-provider Task working
-on `main` or `master`.
+branch. Rebase only through the explicit **Rebase Task** operation below.
 
 During isolated-database development, the operator must not run Autoimplement
 while an Autofix Review is active for the same project. Do not query the
 separate Autofix database to enforce this temporary rule.
 
-## Rebase initialized Task
+## Rebase Task
 
-Treat `--rebase-base [<base-ref>]` as an explicit Shortcut-Task operation. Never
-run it for a local-provider Task, initialize or resume normal orchestration, or
-contact a participant.
+Treat `--rebase-base [<base-ref>]` as an explicit Task operation. Do not
+initialize or resume normal orchestration or contact a participant during it.
+A local-provider Task requires an explicit full base ref because its initial
+active base is stored as a commit SHA; never guess `main`, `master`, or a remote.
 
 After normal project and Task resolution, run from the canonical checkout:
 
@@ -145,15 +148,23 @@ After normal project and Task resolution, run from the canonical checkout:
 ```
 
 When a base ref was supplied, preserve it exactly and append it as the final
-argument. Ruby requires the persisted Task to remain `initialized`, a clean
-configured checkout, no incomplete Work Cycle, no existing Git rebase, and
-ancestral active-base and Task-start boundaries. It fetches `origin`, resolves
-the selected ref once, rebases without switching or pushing, and updates only
-the Task starting boundary and active config fields after complete success.
+argument. Ruby requires the persisted Task state to be `initialized` or
+`manager_review`, a clean configured checkout, no incomplete Work Cycle, no
+existing Git rebase, and ancestral active-base and Task-start boundaries. In
+`manager_review`, the latest completed Work Cycle must be a settled Manager
+review, so the rebase is available only at the final-check boundary. Ruby
+fetches `origin`, resolves the selected ref once,
+rebases without switching or pushing, preserves completed Work Cycles and
+Reported Issues, remaps the Task starting boundary, and updates only the active
+config fields after complete success. A successful `manager_review` rebase also
+persists the requirement for one fresh Manager review of the rebased whole Task.
+It does not rerun authored-step, super, or final Worker reviews.
 
 When successful output contains no conflict control lines, append one blank line
 and `Resolved conflicts: none.`, return the combined output, and stop. Do not run
-`resume-task`.
+`resume-task` automatically. After rebasing a Task with failed final checks, tell
+the operator to use a normal Autoimplement invocation; it creates and runs the
+required fresh Manager review before final checks.
 
 A conflict handoff contains exactly:
 
@@ -375,7 +386,11 @@ Process helper stdout in this order:
 3. For an `Issue: <id>` block, follow **Issue assessment**.
 4. For `AutoImplementSquash <task-id>`, follow **Optional squash**.
 5. Return ordinary failed-check output without creating a Work Cycle; a normal
-   later resume reruns the complete checks.
+   later resume reruns the complete checks. When the failure shows that the
+   Task's base is stale, offer the explicit `/skill:autoimplement <task_id>
+   --rebase-base <base-ref>` operation instead of telling the operator to discard
+   workflow state or restart the Task. Do not run the Git mutation without that
+   explicit invocation.
 6. Surface every other failure unchanged and stop. Never retry automatically.
 
 ## Final lifecycle order
@@ -405,7 +420,8 @@ store no raw candidates or adjudication prose in SQLite.
 
 A clean or all-skipped Manager pass runs final checks. Failed or interrupted
 checks leave the Task in `manager_review`; normal resume reruns the full check
-set without another Manager review. Passing checks on clean Git persist only
+set without another Manager review unless an explicit final-stage rebase has
+persisted a fresh Manager-review requirement. Passing checks on clean Git persist only
 `final_checks_passed`. Stable terminal resume returns completion without checks,
 Git inspection, a new Work Cycle, or another squash offer. Autoimplement never
 pushes.

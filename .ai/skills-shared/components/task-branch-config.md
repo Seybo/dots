@@ -114,8 +114,11 @@ a local branch. Record:
 - every original/active base ref/SHA: current full `HEAD` SHA
 
 If branch config already exists, validate the configured branch and do not
-rewrite original values. Preserve unrelated config sections. Local Tasks never
-rebase.
+rewrite original values. Preserve unrelated config sections. Taskit and Workit
+never rebase a local Task. Autoimplement may rebase an existing local Task only
+through its explicit operation with a supplied base ref; after success it
+preserves original fields, updates the active fields and Task starting boundary,
+and durably requires a fresh whole-Task Manager review before final checks.
 
 ## Reporting
 
