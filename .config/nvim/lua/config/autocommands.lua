@@ -13,17 +13,23 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 -- -- [[ Saving folds across sessions ]] --
 -- create an augroup so you can clear it later if needed
 local view_grp = vim.api.nvim_create_augroup('SaveFolds', { clear = true })
+-- Only persist normal file buffers. Loading a view for a plugin buffer such as
+-- kulala://ui can replay SessionLoadPost and invalidate the buffer mid-render.
 -- save a view (folds, cursor, window layout, etc.) on buffer/window leave
 vim.api.nvim_create_autocmd({ 'BufWinLeave', 'WinLeave' }, {
   group = view_grp,
   pattern = '*',
-  command = 'silent! mkview',
+  callback = function(event)
+    if vim.bo[event.buf].buftype == '' then vim.cmd('silent! mkview') end
+  end,
 })
 -- restore that view when you come back
 vim.api.nvim_create_autocmd({ 'BufWinEnter', 'WinEnter' }, {
   group = view_grp,
   pattern = '*',
-  command = 'silent! loadview',
+  callback = function(event)
+    if vim.bo[event.buf].buftype == '' then vim.cmd('silent! loadview') end
+  end,
 })
 
 -- vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
