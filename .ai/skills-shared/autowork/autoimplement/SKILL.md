@@ -454,9 +454,11 @@ display the control line.
 
      Use the current Shortcut story name exactly. If lookup or name extraction
      fails, abort without fallback or Git mutation.
-   - For `task_provider: local`, derive
-     `Task <task-id>: <folder slug as words>` from the canonical Task folder,
-     removing its leading numeric ID and converting slug separators to spaces.
+   - For `task_provider: local`, read the first section named exactly
+     `# Story details` in `task.md` and use its non-empty `Name:` value exactly as
+     the subject. Do not prefix it with the local Task ID or derive it from the
+     folder slug. If the section or value is missing, abort without fallback or
+     Git mutation.
 4. Ask exactly:
 
    ```text

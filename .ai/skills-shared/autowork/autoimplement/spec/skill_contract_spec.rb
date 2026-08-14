@@ -128,7 +128,9 @@ RSpec.describe 'Autoimplement skill contract' do
     expect(lookup_index).to be < failure_index
     expect(failure_index).to be < ask_index
     expect(ask_index).to be < helper_index
-    expect(skill).to include('Task <task-id>: <folder slug as words>')
+    expect(skill).to include('use its non-empty `Name:` value exactly as')
+    expect(skill).to include('Do not prefix it with the local Task ID')
+    expect(skill).to include('abort without fallback or')
     expect(skill).to include('`no`, `skip`, or `leave`')
     expect(skill).to match(/Do not persist the question, answer, pending state, or squash result/)
   end
