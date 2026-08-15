@@ -83,6 +83,7 @@ Then write `task.md` from the requested context. After creation, let the user ch
    - include expected behavior and acceptance criteria when context supports them
    - do not add implementation planning; `/workit` creates `steps.md` later
    - put source links in `## References`
+   - preserve explicitly deferred questions in a final `# Deferred decisions` section using the complete Question / Why this is open / Recommendation format; omit the section when there are no deferred decisions
 
 5. **Use the correct task structure:**
    - local-only draft:
@@ -121,6 +122,7 @@ Then write `task.md` from the requested context. After creation, let the user ch
 8. **Report and offer continuation:**
    - show the draft name, draft folder, and `task.md` path
    - preserve the resolved project, `draftNN`, and full `task.md` path for the next turn
+   - inspect the final `# Deferred decisions` section when present; if it contains any question, remind the user that decisions remain unresolved and that Taskit will require explicit approval before conversion
    - offer both next steps and tell the user to reply with exactly one bare keyword:
      - `grillme` to grill the new `task.md`
      - `taskit` to convert `<project> draftNN`

@@ -84,6 +84,33 @@ Read that file whenever any of these must be inferred. In short:
 `taskit` only creates task folders under `/Volumes/dev/_tasks/<project>/`; it never
 creates project roots or code checkouts.
 
+## Deferred decision gate
+
+For Draft reference and Task markdown path modes, inspect `task.md` before any
+story creation, folder rename, branch setup, or other state change.
+
+A deferred-decision section is a first-level heading named exactly:
+
+```md
+# Deferred decisions
+```
+
+It must be the last first-level section. If it is not last, stop and ask the
+user to move it to the end. If the section is absent or has no content, proceed
+normally.
+
+If the section contains any unresolved question:
+
+1. Show the section and remind the user that deferred decisions remain.
+2. Do not convert the draft yet.
+3. Ask the user to reply with the exact bare keyword `approve` to continue
+   without resolving them, or to resolve the questions in `task.md` and rerun
+   Taskit.
+4. Treat only the next exact `approve` reply as explicit approval for the
+   preserved Taskit invocation. Any other reply ends this continuation.
+5. After approval, continue normally and preserve the deferred section. Approval
+   permits conversion; it does not mark the decisions resolved.
+
 ## Instructions
 
 1. **Parse command arguments:**
