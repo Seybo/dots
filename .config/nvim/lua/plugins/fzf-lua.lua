@@ -60,6 +60,7 @@ return {
     map_with_cursor_restore('n', '<leader>fm', fzf.files, { cwd = '../_mydev' }, '[Fzf] Search in my dev')
     map_with_cursor_restore('n', '<leader>ft', fzf.files, { cwd = '/Volumes/dev/_tasks' }, '[Fzf] Search in all tasks')
     map_with_cursor_restore('n', '<leader>ttg', fzf.files, { cwd = '/Volumes/dev/_tasks/shaka_gtm', raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search Shaka GTM tasks')
+    map_with_cursor_restore('n', '<leader>tto', fzf.files, { cwd = '/Volumes/dev/_tasks/shaka_outreach', raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search Shaka Outreach tasks')
     map_with_cursor_restore('n', '<leader>ttp', fzf.files, { cwd = '/Volumes/dev/_tasks/shaka_trp', raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search Shaka TRP tasks')
     map_with_cursor_restore('n', '<leader>tte', fzf.files, { cwd = '/Volumes/dev/_tasks/env', raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search env tasks')
     map_with_cursor_restore('n', '<leader>ttm', fzf.files, { cwd = '/Volumes/dev/_tasks', raw_cmd = 'rg --files --sortr modified my_*' }, '[Fzf] Search my_ tasks')
