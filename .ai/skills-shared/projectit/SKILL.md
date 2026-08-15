@@ -3,9 +3,9 @@ name: projectit
 description: >-
   Create an ordinal-workspace project for the task workflow. Creates its task
   root, first code workspace, Git repository, tmuxinator layout, registry
-  entry, and active-project entry. Offers an optional explicitly approved tmux
-  shortcut. Command-only skill. In Pi, invoke via /skill:projectit; /projectit is
-  also accepted where that alias is exposed.
+  entry, and active-project entry. Offers optional explicitly approved tmux and
+  Neovim task-search shortcuts. Command-only skill. In Pi, invoke via
+  /skill:projectit; /projectit is also accepted where that alias is exposed.
 disable-model-invocation: true
 ---
 
@@ -66,8 +66,9 @@ and adds the workspace repo root to:
 ```
 
 Additional workspaces use positive ordinals such as `2nd`, `7th`, and `28th`.
-Tmux sessions use `<project-key><number>`. At the end, the skill suggests an
-available one-letter tmux shortcut but adds it only after explicit approval.
+Tmux sessions use `<project-key><number>`. At the end, the skill suggests
+available one-letter tmux and Neovim task-search shortcuts but adds each only
+after explicit approval.
 
 ## Instructions
 
@@ -109,6 +110,10 @@ available one-letter tmux shortcut but adds it only after explicit approval.
    - tmux project bindings:
      ```text
      /Users/inseybo/.dots/.tmux-projects.conf
+     ```
+   - Neovim project task bindings:
+     ```text
+     /Users/inseybo/.dots/.config/nvim/lua/plugins/fzf-lua.lua
      ```
 
 4. **Validate base directories:**
@@ -170,10 +175,25 @@ available one-letter tmux shortcut but adds it only after explicit approval.
      ```
    - do not reload tmux automatically; tell the user to reload the config after adding a binding
 
-10. **Return paths clearly:**
+10. **Offer an optional Neovim task-search shortcut:**
+   - read `/Users/inseybo/.dots/.config/nvim/lua/plugins/fzf-lua.lua`
+   - inspect lowercase one-letter suffixes already used by `<leader>tt<letter>` mappings
+   - show the available lowercase letters and suggest one meaningful available letter based on `<name>`
+   - tmux and Neovim letters are independent and may use the same letter when it is available in both
+   - ask whether the user wants to add a shortcut and which letter to use
+   - do not edit the Neovim config without explicit approval given after showing the suggestion
+   - if approved, require exactly one available lowercase letter; refuse an existing binding rather than replacing it
+   - derive `<project-label>` from `<project>` by converting `_` and `-` to spaces and title-casing the words
+   - add this project binding alongside the existing project task bindings:
+     ```lua
+     map_with_cursor_restore('n', '<leader>tt<letter>', fzf.files, { cwd = '<task-root>', raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search <project-label> tasks')
+     ```
+   - tell the user to restart Neovim after adding a binding
+
+11. **Return paths clearly:**
    - show whether the task root, code root, `1st` workspace, Git repo, project registry entry, and active-project entry were created or already existed
    - show the full task root, first workspace, project registry, and active-project registry paths
-   - show whether the optional tmux shortcut was added or skipped
+   - show whether each optional tmux and Neovim shortcut was added or skipped
    - state that Git initializes on `main` or `master`, which is protected for every non-`env` project
    - before `/workit`, tell the user to create and switch to a task branch manually:
      ```bash
@@ -189,7 +209,7 @@ available one-letter tmux shortcut but adds it only after explicit approval.
 ## Important Notes
 
 - Do not auto-use this skill without the explicit `/projectit` command.
-- Create only project-level roots, the `1st` workspace, the project-level tmuxinator layout, the registry entries, and an explicitly approved tmux project binding.
-- Never overwrite, delete, rename, or replace existing files, directories, registry entries, or tmux bindings.
+- Create only project-level roots, the `1st` workspace, the project-level tmuxinator layout, the registry entries, and explicitly approved tmux and Neovim task-search bindings.
+- Never overwrite, delete, rename, or replace existing files, directories, registry entries, or shortcut bindings.
 - Do not create parent/base directories, per-workspace tmuxinator files, Ghostty shortcuts, or shell aliases.
 - This skill creates ordinal-workspace projects. Register existing standalone repositories manually as `checkout_layout: direct` in `projects.yml`.
