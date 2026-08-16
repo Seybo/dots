@@ -18,6 +18,7 @@ const NORMAL_KEYS: Record<string, string> = {
 
 const DELETE_WORD_FORWARD = "\x1b[100;3u"; // alt+d
 const DELETE_TO_LINE_END = "\x1b[107;5u"; // ctrl+k
+const BACKSPACE = "\x1b[127u";
 const NEW_LINE = "\x1b[106;5u"; // ctrl+j
 const UNDO = "\x1b[45;5u"; // ctrl+-
 
@@ -69,6 +70,11 @@ class VimEditor extends CustomEditor {
 			if (key === "w") {
 				super.handleInput(DELETE_WORD_FORWARD);
 				if (operator === "c") this.mode = "insert";
+				return;
+			}
+
+			if (key === "d" && operator === "d") {
+				this.deleteCurrentLine();
 				return;
 			}
 
@@ -143,6 +149,20 @@ class VimEditor extends CustomEditor {
 			super.handleInput(DELETE_TO_LINE_END);
 		}
 		if (isChange) this.mode = "insert";
+	}
+
+	private deleteCurrentLine(): void {
+		const { line } = this.getCursor();
+		const lines = this.getLines();
+		super.handleInput(NORMAL_KEYS["0"]);
+
+		if (lines[line]?.length) super.handleInput(DELETE_TO_LINE_END);
+
+		if (line < lines.length - 1) {
+			super.handleInput(DELETE_TO_LINE_END);
+		} else if (line > 0) {
+			super.handleInput(BACKSPACE);
+		}
 	}
 
 	render(width: number): string[] {
