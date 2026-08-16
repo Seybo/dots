@@ -1,10 +1,9 @@
 ---
 name: draftit
 description: >-
-  Create the next draftNN folder under /Volumes/dev/_tasks/<project> from
-  conversation context, optionally linking an env Feature and deriving a short
-  task slug automatically. Local-only drafts are the default; epic: makes a
-  registered Shortcut project Shortcut-ready.
+  Create the next draftNN folder for the current or preserved task project from
+  conversation context, deriving a short task slug automatically. Featureit and
+  Grillme may supply optional env Feature membership through their handoffs.
   Command-only skill. In Pi, invoke via /skill:draftit; /draftit is also
   accepted where that alias is exposed.
 disable-model-invocation: true
@@ -23,8 +22,7 @@ This is a command-only skill.
 ```text
 /skill:draftit help
 /draftit help
-/draftit <context-reference-or-text> [feature: <feature-slug>]
-/draftit <project> <context-reference-or-text> [feature: <feature-slug>] [epic: <id>]
+/draftit <context-reference-or-text>
 ```
 
 Examples:
@@ -32,18 +30,23 @@ Examples:
 ```text
 /draftit the above plan
 /draftit add CSV export for the current report
-/draftit env add Pi command discovery feature: pi-command-discovery
-/draftit shaka_gtm the above plan epic: 33001
 ```
 
-The first token is a project only when it matches a registered project key in
-`~/.ai/skills-shared/components/projects.yml`. Otherwise infer the project from
-the current checkout. Extract optional `feature: <feature-slug>` and `epic: <id>`
-pairs; all remaining text is context. Draftit always derives the task slug and
-accepts no explicit task name or slug override. Features are optional and valid
-only for `env`.
+A direct invocation infers the project only from the current registered
+checkout. If that state is unavailable, stop and tell the user to invoke
+Draftit from the intended project's checkout. Do not accept a project, Feature,
+epic, name, or slug argument.
 
-Do not auto-use this skill from a general drafting request. Wait for the explicit slash command. An exact bare `draftit` reply to Grillme's active continuation offer is equivalent to an explicit invocation.
+An exact bare `draftit` reply to Grillme's active continuation offer may use the
+project preserved by Grillme. When Grillme's authoritative source is an `env`
+Feature file or starts with the exact Feature reference, its handoff also
+supplies that Feature membership. Featureit's approved batch supplies project
+`env` and its Feature slug internally. These explicit handoffs are the only
+Feature source; never infer an active Feature from older conversation or durable
+state.
+
+Do not auto-use this skill from a general drafting request. Wait for the explicit
+slash command or an authorized handoff above.
 
 ## What it does
 
@@ -53,32 +56,29 @@ Create the next available `draftNN` folder under:
 /Volumes/dev/_tasks/<project>/
 ```
 
-Then write `task.md` from the requested context. When `feature:` is present,
-write the Feature reference first and append the draft to that Feature's ordered
-inventory. After standalone creation, let the user choose whether to grill or
-convert that draft without copying another slash command.
+Then write `task.md` from the requested context. When an authorized handoff
+supplies Feature membership, write the Feature reference first and append the
+draft to that Feature's ordered inventory. After standalone creation, let the
+user choose whether to grill or convert that draft without copying another slash
+command.
 
 ## Instructions
 
-1. **Parse and validate arguments:**
+1. **Parse and validate the invocation:**
    - if the only argument is `help`, show this help text and stop
-   - resolve `<project>` from an explicit registered key or the current checkout using [`task-resolution.md`](../components/task-resolution.md)
-   - extract optional `feature: <feature-slug>` and `epic: <id>` pairs from the request text
-   - reject duplicate option pairs or an empty option value
-   - treat all remaining text after the optional project and option pairs as draft context
    - require non-empty context; if none remains, show the invocation forms and ask for context
-   - reject `name:`, `slug:`, and other explicit naming options; Draftit always derives the slug
-   - do not inspect Pi session logs, prompt templates, other task directories, Git history, or unrelated repository files to infer missing context
+   - reject project, Feature, epic, name, slug, and other option-style arguments; Draftit derives identity and receives routing state only from the current checkout or an authorized handoff
+   - for a direct slash command, resolve the project from the current registered checkout using [`task-resolution.md`](../components/task-resolution.md); stop when it cannot be inferred
+   - for a Grillme handoff, use its preserved project when available; use its Feature only when the authoritative source is `/Volumes/dev/_tasks/env/features/<feature-slug>.md` or begins with the exact Feature reference
+   - for a Featureit batch handoff, require its preserved project `env` and Feature slug
+   - do not inspect Pi session logs, prompt templates, other task directories, Git history, older conversation, or persisted state to infer missing routing context
 
-2. **Resolve the project:**
-   - read `task_provider` from `~/.ai/skills-shared/components/projects.yml`
-   - if the project is not registered, stop and tell the user to add it to the registry
+2. **Resolve the project and optional Feature:**
+   - read the project from `~/.ai/skills-shared/components/projects.yml`; if it is not registered, stop and tell the user to add it to the registry
    - if its task root does not exist, create `/Volumes/dev/_tasks/<project>/`
-   - `epic:` is valid only for `task_provider: shortcut`; reject it for local projects
-   - `feature:` is valid only when the normalized project is exactly `env`; reject it for every other project
-   - validate the Feature slug with `^[a-z][a-z0-9-]*$`
-   - resolve the Feature as `/Volumes/dev/_tasks/env/features/<feature-slug>.md`; the Feature file must exist
-   - read the complete Feature file and require its final first-level section to be `# Drafts and tasks` before creating the draft
+   - without Feature state from Grillme or Featureit, create an unfeatured draft
+   - with Feature state, require the project is exactly `env`, validate the slug with `^[a-z][a-z0-9-]*$`, and resolve `/Volumes/dev/_tasks/env/features/<feature-slug>.md`
+   - the Feature file must exist; read it completely and require its final first-level section to be `# Drafts and tasks` before creating the draft
 
 3. **Resolve context and derive the slug:**
    - for references such as `the above plan`, use the relevant conversation content
@@ -97,8 +97,8 @@ convert that draft without copying another slash command.
    - put source links in `## References`
    - preserve explicitly deferred questions in a final `# Deferred decisions` section using the complete Question / Why this is open / Recommendation format; omit the section when there are no deferred decisions
 
-5. **Use the correct task structure:**
-   - local-only draft:
+5. **Use the task structure:**
+   - every draft is provider-neutral:
      ```md
      # Story details
 
@@ -108,19 +108,8 @@ convert that draft without copying another slash command.
 
      {draft content}
      ```
-     The missing `Epic:` keeps this local-only. Taskit uses `Name:` for local conversion and does not need a visible task-title heading inside `# Context`.
-   - Shortcut-ready draft:
-     ```md
-     # Story details
-
-     Name: {task slug with `-` replaced by spaces}
-     Epic: {explicit epic id}
-
-     # Context
-
-     {draft content}
-     ```
-   - for either format with `feature: <feature-slug>`, prepend the exact Feature reference and one blank line:
+   - Draftit never writes `Epic:`; Taskit collects Shortcut epic state during conversion when needed
+   - when an authorized handoff supplied Feature membership, prepend the exact Feature reference and one blank line:
      ```md
      Feature: [<feature-slug>](../features/<feature-slug>.md)
 
@@ -171,9 +160,8 @@ the one batch report.
 
 ## Important Notes
 
-- Local-only drafts are the default.
+- Drafts are provider-neutral; Taskit owns Shortcut epic collection and conversion.
 - Draftit always derives the slug from context. Rename a draft ad hoc later if its generated name needs correction.
-- `epic:` is the only Shortcut-ready trigger.
 - Do not register projects automatically.
 - Do not add extra files.
 - Do not auto-use this skill without an explicit `/draftit` command, an exact bare `draftit` reply to Grillme's active continuation offer, or Featureit's exact approved batch handoff.

@@ -2,7 +2,7 @@
 name: taskit
 description: >-
   Create a new local task folder and task.md file under /Volumes/dev/_tasks,
-  or create a Shortcut story only when given a story ID or a task.md with complete Story details.
+  or create a Shortcut story from a story ID or a task.md whose Shortcut epic is present or supplied during conversion.
   Supports a manual task name, a Shortcut story ID, a task.md path, a draftNN reference,
   or inferring the project and Shortcut story ID from the current git branch.
   Command-only skill. In Pi, invoke via /skill:taskit; /taskit is also
@@ -37,8 +37,8 @@ With two or more tokens, treat the first token as `<project>` only when it match
 The selector/task name is interpreted as either:
 
 - a **Shortcut story ID** if the selected project has `task_provider: shortcut` and the selector is a single token of digits only (e.g. `12345`); for `task_provider: local` projects, numeric selectors remain local/manual task names
-- a **draft reference** if it is a single token matching `^draft\d{2}$`, resolved to `/Volumes/dev/_tasks/<project>/draftNN/task.md`; Shortcut is used only for a `task_provider: shortcut` project whose file has complete `# Story details`
-- a **task markdown path** if it is a single existing path ending in `.md` or `.markdown`; Shortcut is used only for a `task_provider: shortcut` project whose file has complete `# Story details`
+- a **draft reference** if it is a single token matching `^draft\d{2}$`, resolved to `/Volumes/dev/_tasks/<project>/draftNN/task.md`; for a `task_provider: shortcut` project, Taskit obtains missing epic state when the file has `Name:`
+- a **task markdown path** if it is a single existing path ending in `.md` or `.markdown`; for a `task_provider: shortcut` project, Taskit obtains missing epic state when the file has `Name:`
 - a **manual task name** otherwise (preserve spaces)
 
 Examples:
@@ -63,9 +63,9 @@ Do not auto-use this skill from a general task-management request. Wait for the 
 
 In manual mode, create a local task folder inside the selected project and create a `task.md` file inside it.
 
-Shortcut is used only in explicit Shortcut mode for projects whose registry entry has `task_provider: shortcut`: a numeric story ID, an inferred branch story ID, or an existing `task.md` whose first `# Story details` section has both `Name:` and `Epic:`. Projects with `task_provider: local` never call Shortcut; all selectors and task files remain local/manual.
+Shortcut is used only in explicit Shortcut mode for projects whose registry entry has `task_provider: shortcut`: a numeric story ID, an inferred branch story ID, or an existing `task.md` whose first `# Story details` section has `Name:` and either an existing `Epic:` or an epic supplied through Taskit's conversion continuation. Projects with `task_provider: local` never call Shortcut; all selectors and task files remain local/manual.
 
-For `draftNN` and task markdown path mode, inspect the existing file. A `task_provider: shortcut` project with complete `# Story details` creates a Shortcut story and renames the folder to `<story_id>-<slug>`. A `task_provider: local` project never creates a Shortcut story; it remains a local-only task and is renamed to a sequential local task folder such as `0004-<slug>`.
+For `draftNN` and task markdown path mode, inspect the existing file. In a `task_provider: shortcut` project, a file with `Name:` and resolved epic state creates a Shortcut story and renames the folder to `<story_id>-<slug>`; exact `local` at the epic continuation keeps local conversion available. A `task_provider: local` project never creates a Shortcut story and is renamed to a sequential local task folder such as `0004-<slug>`.
 
 ## Project and branch resolution
 
@@ -182,7 +182,7 @@ If the section contains any unresolved question:
    - **Shortcut mode for `task_provider: shortcut` projects:** call `mcp__shortcut__stories-get-by-id` with the story ID; use the story's `name` as the task name and the story's `description` as the body. If the call fails or the story is missing, stop and report the error.
    - **Local/manual mode for `task_provider: local` projects:** do not call Shortcut, even if a selector is numeric or a task file contains Story details.
    - **Draft reference mode:** resolve `draftNN` to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then follow Task markdown path mode.
-   - **Task markdown path mode:** read the existing task file and resolve its optional Feature membership before deriving a name. If the selected project has `task_provider: shortcut` and the first section named exactly `# Story details` has both `Name:` and `Epic:`, use Shortcut conversion and use the parsed `Name` as the task name. Otherwise use Local task-file conversion. For local conversion, use a non-empty `Name:` from the first `# Story details` section when present; otherwise ignore the Feature metadata line and derive the task name from the first meaningful heading outside that section or the first non-empty non-metadata content line. If no useful name can be derived, ask the user for a task name. Projects with `task_provider: local` always use this local path even when `Epic:` is present.
+   - **Task markdown path mode:** read the existing task file and resolve its optional Feature membership before deriving a name. For a `task_provider: shortcut` project whose first section named exactly `# Story details` has non-empty `Name:`, resolve epic state through the existing `Epic:` or the epic continuation below; use Shortcut conversion unless that continuation returned exact `local`. Otherwise use Local task-file conversion. For local conversion, use a non-empty `Name:` from the first `# Story details` section when present; otherwise ignore the Feature metadata line and derive the task name from the first meaningful heading outside that section or the first non-empty non-metadata content line. If no useful name can be derived, ask the user for a task name. Projects with `task_provider: local` always use this local path even when `Epic:` is present.
    - slugify the task name:
      - lowercase everything
      - replace spaces with `-`
@@ -200,9 +200,9 @@ If the section contains any unresolved question:
      - example: `0004-create-budget-tracking-app`
    - **Shortcut mode:** `{story_id}-{slug}`
      - example: `147831-toast-prepare-by-time-kitchen-ticket-time`
-   - **Task markdown path mode with complete Story details:** after creating the Shortcut story, use `{created_story_id}-{slug}` using the created story's returned `id` and `name`
+   - **Task markdown path mode with resolved Shortcut conversion:** after creating the Shortcut story, use `{created_story_id}-{slug}` using the created story's returned `id` and `name`
      - example: `147831-toast-prepare-by-time-kitchen-ticket-time`
-   - **Task markdown path mode without complete Story details:** use Manual-mode local sequential naming `{local_id}-{slug}`
+   - **Task markdown path mode using Local conversion:** use Manual-mode local sequential naming `{local_id}-{slug}`
 
 5. **Create or update the folder and file:**
    - **Manual and Shortcut modes:** create directory:
@@ -273,17 +273,18 @@ If the section contains any unresolved question:
 
 ## Task markdown path mode
 
-This mode converts an existing task file according to both the selected project's `task_provider` and the file contents. The provider is checked first; file contents can enable Shortcut conversion only for `task_provider: shortcut` projects.
+This mode converts an existing task file according to both the selected project's `task_provider` and the file contents. The provider is checked first; only `task_provider: shortcut` projects may enter the Shortcut epic continuation or create a Shortcut story.
 
 ### Shortcut conversion format
 
-For a project with `task_provider: shortcut`, Shortcut conversion runs only when the file includes a first-level section named exactly:
+For a project with `task_provider: shortcut`, Shortcut conversion requires a first-level section named exactly:
 
 ```md
 # Story details
 ```
 
-Inside that section, before the next first-level heading, it must have these key/value lines:
+Inside that section, before the next first-level heading, it must have a non-empty
+`Name:` line. An existing `Epic:` may provide the epic immediately:
 
 ```md
 Name: My Shortcut story title
@@ -291,6 +292,7 @@ Epic: 123
 ```
 
 `Epic` may be either a numeric epic ID or a Shortcut epic URL containing `/epic/<id>/`.
+Draftit no longer writes it.
 
 Example:
 
@@ -310,7 +312,21 @@ Build polling for enriched Clay data.
 - Errors are surfaced clearly
 ```
 
-If the project has `task_provider: local`, never call Shortcut regardless of file contents. For `task_provider: shortcut` projects, if this section is absent or missing either `Name:` or `Epic:`, do not call Shortcut; use Local task-file conversion instead. A `# Story details` section with `Name:` but no `Epic:` is Draftit's local-only metadata format.
+If the project has `task_provider: local`, never call Shortcut regardless of file
+contents. For `task_provider: shortcut` projects, a missing section or missing
+`Name:` uses Local task-file conversion.
+
+### Missing epic continuation
+
+For a `task_provider: shortcut` project with `Name:` but without `Epic:`, make no
+file, Shortcut, folder, branch, or inventory change. Preserve the conversion and
+ask the user for a numeric Shortcut epic ID, an epic URL containing `/epic/<id>/`,
+or exact `local`. A valid epic response resumes Shortcut conversion with the
+normalized numeric ID. Exact `local` resumes Local task-file conversion. Any
+other response ends the continuation without mutation.
+
+Do not add an epic command-line argument or persist active epic state. The
+preserved current-conversation continuation is the only source.
 
 ### Description extraction for Shortcut conversion
 
@@ -361,9 +377,14 @@ The JSON must contain only:
 
 The Shortcut CLI adds the default team/workflow/state.
 
+When the epic came from the continuation, only after the Shortcut story is
+created successfully add `Epic: <normalized-id>` immediately after `Name:` in
+the first `# Story details` section. Then apply the existing duplicate-title
+cleanup and folder rename. Do not write the epic when story creation fails.
+
 ### Local task-file conversion
 
-When `# Story details` is absent or incomplete, do not call Shortcut. Convert the existing folder into a local task folder:
+When `# Story details` or `Name:` is absent, or the missing epic continuation returned exact `local`, do not call Shortcut. Convert the existing folder into a local task folder:
 
 - use a non-empty `Name:` from the first `# Story details` section when present
 - otherwise ignore the Feature metadata line and derive the task name from the first meaningful heading outside `# Story details` or the first non-empty non-metadata content line in `task.md`
@@ -412,13 +433,13 @@ For a featured `env` draft, after the successful rename replace the validated
 `- [<task-folder>](../<task-folder>/task.md)`, then re-read both files and verify
 the Feature reference and inventory agree. Do not modify the Feature reference
 or any other `task.md` contents in this mode unless the user explicitly asks for
-that in a later request or the duplicate-title cleanup for Shortcut conversion
-applies.
+that in a later request, Taskit records an epic supplied by its continuation, or
+the duplicate-title cleanup for Shortcut conversion applies.
 
 ## Important Notes
 
 - Manual and Shortcut modes are create-only; do not modify existing task folders or files in those modes
-- Task markdown path mode may rename the existing task folder after Shortcut or local conversion. It may also apply the defined duplicate-title cleanup after successful Shortcut creation, but must not otherwise modify `task.md` contents unless explicitly requested.
+- Task markdown path mode may rename the existing task folder after Shortcut or local conversion. After successful Shortcut creation it may record an epic supplied by the continuation and apply the defined duplicate-title cleanup, but must not otherwise modify `task.md` contents unless explicitly requested.
 - Preserve the original task name text only for slugification input; folder name uses the slugified form
 - Local task IDs use zero-padded 4-digit IDs (`0001`, `0002`, ...). To choose the next local ID, scan first-level task folders under `/Volumes/dev/_tasks/<project>/` matching `^\d{4}-`, then use one greater than the highest existing local ID; if none exist, start at `0001`. Ignore `draftNN` folders and Shortcut story ID folders when assigning local IDs.
 - If the generated folder already exists, stop and ask the user how to proceed rather than overwriting anything

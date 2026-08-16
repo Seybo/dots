@@ -110,13 +110,22 @@ RSpec.describe 'Feature workflow contract' do
     expect(grillme).to match(%r{draftNN/task\.md.*taskit}im)
   end
 
-  it 'lets Draftit create one featured draft or an approved Featureit batch' do
-    expect(draftit).to include('feature: <feature-slug>')
+  it 'keeps Draftit context-only and receives project and Feature state from the flow' do
+    expect(draftit).to include('/draftit <context-reference-or-text>')
+    expect(draftit).not_to include('/draftit <project>')
+    expect(draftit).not_to include('feature: <feature-slug>')
+    expect(draftit).not_to include('epic: <id>')
     expect(draftit).to include('Feature: [<feature-slug>](../features/<feature-slug>.md)')
     expect(draftit).to match(/Featureit.*batch/im)
+    expect(draftit).to match(/Grillme.*handoff.*Feature/im)
+    expect(draftit).to match(/current registered checkout/im)
     expect(draftit).to match(/append.*ordered.*inventory/im)
     expect(draftit).to match(/suppress.*continuation/im)
-    expect(draftit).to match(/Feature file.*must exist/im)
+  end
+
+  it 'defers Shortcut epic selection from Draftit to Taskit' do
+    expect(taskit).to match(/Name:.*without.*Epic:.*ask.*epic.*exact `local`/im)
+    expect(taskit).to match(/after.*Shortcut story.*add.*Epic:/im)
   end
 
   it 'preserves membership and replaces the inventory link after Taskit conversion' do
