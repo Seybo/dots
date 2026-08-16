@@ -96,6 +96,8 @@ RSpec.describe 'Autoimplement skill contract' do
     expect(skill).to include('`manager`/`review`')
     expect(skill).to match(/run it inline in the current Manager conversation/i)
     expect(skill).to include('`task.md` and `steps.md` are authoritative')
+    expect(skill).to include('returned `feature_path` and `feature_text`')
+    expect(skill).to include('do not perform a Feature lookup')
     expect(skill).to include('live conversation context')
     expect(skill).to include('complete ordered `history`')
     expect(skill).to include('git -C <canonical-checkout> diff <starting_commit_sha>..HEAD')

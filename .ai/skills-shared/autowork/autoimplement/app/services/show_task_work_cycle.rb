@@ -16,6 +16,8 @@ class ShowTaskWorkCycle
       task_path: task.fetch(:task_path),
       project_path: task_context.fetch(:project_path),
       branch_name: task_context.fetch(:branch_name),
+      feature_path: task_context.fetch(:feature_path),
+      feature_text: task_context.fetch(:feature_text),
       starting_commit_sha: task.fetch(:starting_commit_sha),
       super_review_agent: task.fetch(:super_review_agent),
       scope: scope,

@@ -118,6 +118,13 @@ Record the exact diff base. For stacked branches, use only a full user-provided 
 
 For PRs, fetch metadata/diff and create an isolated worktree. Never use `gh pr checkout`. Warn and offer directory scoping when a diff exceeds 2,000 lines.
 
+When a Task folder is supplied or deterministically resolved through
+`references/posting.md`, inspect its `task.md` first line and follow the optional
+Feature contract in `../components/task-resolution.md`: load the linked Feature before `task.md`
+and include its goal, scope, and shared constraints in review intent, exclude
+its inventory, and let task-specific intent win conflicts. When
+no Task is known or the exact reference is absent, do not look for a Feature.
+
 Pass every reviewer:
 
 - relevant project `CLAUDE.md` and `AGENTS.md` rules

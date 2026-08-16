@@ -6,7 +6,8 @@ require_relative '../../spec/spec_helper'
 RSpec.describe 'ShowTaskWorkCycle' do
   let(:service_class) { Object.const_get(:ShowTaskWorkCycle) }
   let(:db) { Database.connection }
-  let(:task_path) { Dir.mktmpdir('show-task-work-cycle-spec') }
+  let(:root_path) { Dir.mktmpdir('show-task-work-cycle-spec') }
+  let(:task_path) { File.join(root_path, 'env', '0046-featured-task') }
   let(:task_id) do
     db[:tasks].insert(
       created_at: Time.now,
@@ -18,6 +19,8 @@ RSpec.describe 'ShowTaskWorkCycle' do
   end
 
   before do
+    FileUtils.mkdir_p(task_path)
+    File.write(File.join(task_path, 'task.md'), "# Task\n")
     File.write(
       File.join(task_path, 'config.json'),
       JSON.generate(
@@ -34,7 +37,7 @@ RSpec.describe 'ShowTaskWorkCycle' do
   end
 
   after do
-    FileUtils.remove_entry(task_path)
+    FileUtils.remove_entry(root_path)
   end
 
   it 'returns initial Worker context with no completed step commits or Reported Issues' do
@@ -56,6 +59,8 @@ RSpec.describe 'ShowTaskWorkCycle' do
       'task_path' => task_path,
       'project_path' => '/project',
       'branch_name' => 'feature',
+      'feature_path' => nil,
+      'feature_text' => nil,
       'starting_commit_sha' => 'starting-sha',
       'super_review_agent' => 'claude',
       'scope' => 'step_implementation',
@@ -64,6 +69,31 @@ RSpec.describe 'ShowTaskWorkCycle' do
       'inputs' => [],
       'reported_issues' => []
     )
+  end
+
+  it 'returns linked Feature context without storing it in Task state' do
+    feature_path = File.join(root_path, 'env', 'features', 'feature-workflow.md')
+    FileUtils.mkdir_p(File.dirname(feature_path))
+    File.write(feature_path, "# Feature workflow\n\nShared context.\n")
+    File.write(
+      File.join(task_path, 'task.md'),
+      "Feature: [feature-workflow](../features/feature-workflow.md)\n\n# Task\n"
+    )
+    work_cycle_id = db[:work_cycles].insert(
+      created_at: Time.now,
+      task_id: task_id,
+      step_number: 1,
+      role: 'worker',
+      action: 'implementation'
+    )
+
+    context = JSON.parse(service_class.call(work_cycle_id: work_cycle_id))
+
+    expect(context).to include(
+      'feature_path' => feature_path,
+      'feature_text' => "# Feature workflow\n\nShared context.\n"
+    )
+    expect(db.schema(:tasks).map(&:first)).not_to include(:feature_path, :feature_text)
   end
 
   it 'returns Reviewer context with its derived step, cumulative commit count, and ordered issues' do

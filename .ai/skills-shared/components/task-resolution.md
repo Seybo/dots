@@ -113,6 +113,57 @@ Resolve the selector exactly like any other Task identifier: require one
 matching Task folder and its `task.md`; never guess from the branch name or from
 the newest Task.
 
+## Optional env Features
+
+A Feature groups related `env` drafts and Tasks while keeping their folders flat.
+Features are optional and initially supported only for the registered `env`
+project. Existing and simple drafts and Tasks remain unfeatured.
+
+Feature files live at:
+
+```text
+/Volumes/dev/_tasks/env/features/<feature-slug>.md
+```
+
+`<feature-slug>` follows Draftit's slug rules and matches
+`^[a-z][a-z0-9-]*$`. A featured draft or Task starts with this exact first line,
+before `# Story details` or any other content:
+
+```md
+Feature: [<feature-slug>](../features/<feature-slug>.md)
+```
+
+The relative path is stable because draft and numbered Task folders remain
+direct children of `/Volumes/dev/_tasks/env/`. Never nest those folders below
+`features/`.
+
+A Feature file contains its stable shared brief and this final first-level
+inventory section:
+
+```md
+# Drafts and tasks
+
+- [draft01](../draft01/task.md)
+- [0001-example-task](../0001-example-task/task.md)
+```
+
+Keep inventory links in approved work order. Draftit appends a draft only after
+creating its `task.md`; Taskit replaces that link after successfully renaming
+the draft folder. The Task reference is authoritative for Feature membership;
+the Feature inventory is an automatically maintained index. Do not scan Feature
+files to infer membership. Shared Feature context supplies the goal, scope, and
+constraints, while task-specific `task.md` and `steps.md` content wins when the
+texts conflict.
+
+When a workflow uses authored Task intent, inspect the exact first line for the
+Feature reference. After detecting it, resolve the link relative to the Task
+folder and read the complete Feature file before using the complete `task.md` or
+`steps.md` as task-specific instructions. Use the Feature goal, scope, and shared
+constraints as background; do not treat its inventory as Task requirements or
+copy that inventory into derived output. A normal read failure may stop the
+workflow without custom recovery. When the exact reference is absent, do not
+load Feature context and preserve existing unfeatured behavior.
+
 ## Local task branch rules
 
 For `task_provider: local`, task skills use the currently checked-out branch.

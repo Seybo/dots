@@ -20,19 +20,32 @@ After grilling completes successfully and the final summary is ready:
 - If the authoritative source is a file matching exactly
   `/Volumes/dev/_tasks/<project>/draftNN/task.md`, offer `taskit` for that draft.
   Preserve the project, `draftNN`, and full `task.md` path.
-- Otherwise, offer `draftit` using the settled interview result as context. For a
-  file-backed session, preserve the updated source file as the context reference;
-  for an idea-only session, preserve the settled conversation plan.
+- Otherwise, offer both:
+  - `featureit` to create an `env` Feature from the settled interview result
+  - `draftit` to create one draft from the settled interview result
+- For a non-draft file-backed session, preserve the updated source file as the
+  context reference. For an idea-only session, preserve the settled conversation
+  plan. In both cases, keep the recent final summary as the handoff context.
 
-Tell the user to reply with the offered bare keyword; do not require them to copy
-or retype a slash command. If the next user message is exactly that keyword:
+Tell the user to reply with one offered exact bare keyword; do not require them
+to copy or retype a slash command. Handle the next reply as follows:
 
 - `taskit` is an explicit Taskit invocation for the preserved project and draft;
   read and follow `../taskit/SKILL.md` immediately as `/taskit <project> draftNN`.
+- An exact bare `featureit` reply is an explicit Featureit invocation with the
+  preserved settled interview result; read and follow `../featureit/SKILL.md`
+  immediately as bare `/featureit`.
 - `draftit` is an explicit Draftit invocation with the preserved context; read and
   follow `../draftit/SKILL.md` immediately, letting Draftit resolve the project by
   its normal rules when Grillme did not resolve one.
 
 Do not invoke another skill for any other reply, after incomplete or failed
 Grillme work, or before the user chooses. Continuation replies must contain only
-the exact bare keyword; optional arguments are not supported.
+an offered exact bare keyword; optional arguments are not supported.
+
+## Final principles check
+
+Before reporting the work complete, re-read
+`~/.ai/rules/development-principles.md` and double-check all work against every
+principle. Explicitly list every part that does not follow a principle and
+explain why. If everything follows, say that there are no exceptions.

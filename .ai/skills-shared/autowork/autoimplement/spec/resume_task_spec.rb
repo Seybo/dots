@@ -19,6 +19,7 @@ RSpec.describe 'ResumeTask' do
   end
 
   before do
+    File.write(File.join(task_path, 'task.md'), "# Task\n")
     File.write(
       File.join(task_path, 'steps.md'),
       "# Steps\n\n## Step 1: First\n\n## Step 2: Second\n"

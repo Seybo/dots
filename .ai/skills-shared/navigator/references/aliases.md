@@ -15,6 +15,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 
 - `shortcut`, `story`, `stories`, `clubhouse` → `/skill:shortcut`
 - `create project`, `project setup`, `new project workspace`, `project task root` → `/skill:projectit`
+- `feature brief`, `group related tasks`, `split feature into drafts`, `featureit` → `/skill:featureit`
 - `create task`, `task folder`, `task.md`, `shortcut story from task` → `/skill:taskit`
 - `draft task`, `save this for later`, `capture context` → `/skill:draftit`
 - `start task`, `work on task` → `/skill:workit`

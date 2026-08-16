@@ -27,6 +27,7 @@ RSpec.describe SquashTask do
     File.write(File.join(project_path, 'tracked.txt'), "initial\n")
     git!('add', 'tracked.txt')
     git!('commit', '-q', '-m', 'Initial commit')
+    File.write(File.join(task_path, 'task.md'), "# Task\n")
     File.write(
       File.join(task_path, 'config.json'),
       JSON.generate(

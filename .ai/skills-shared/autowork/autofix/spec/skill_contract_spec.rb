@@ -26,6 +26,12 @@ RSpec.describe 'Autofix skill contract' do
     )
   end
 
+  it 'uses transient Feature context for inline Manager review' do
+    expect(skill).to include('returned `task_path`, `feature_path`, and `feature_text`')
+    expect(skill).to include('Task-specific requirements and Reported Issues win conflicts')
+    expect(skill).to include('do not perform a Feature lookup')
+  end
+
   it 'rebases the completed Task before import or during one active Review' do
     expect(skill).to include('valid before Review import')
     expect(skill).to match(/while one Review remains incomplete/i)

@@ -457,6 +457,8 @@ module Addressit
         - approval: #{@files.approval_path(round)}
         - addressit state: #{@files.state_path}
 
+        If task.md starts with the exact Feature reference from the shared task-resolution rules, read the linked Feature file before task.md. Use its goal, scope, and shared constraints as background; let task.md win conflicts and ignore the Feature inventory.
+
         Implement every comment whose decision is `approved` in the approval file. Address them together as one coherent change. Do not fix skipped comments or unrelated issues.
 
         Rules:
@@ -489,6 +491,8 @@ module Addressit
         Read:
         - task: #{@context.task_folder}/task.md
         - addressit state: #{@files.state_path}
+
+        If task.md starts with the exact Feature reference from the shared task-resolution rules, read the linked Feature file before task.md. Use its goal, scope, and shared constraints as background; let task.md win conflicts and ignore the Feature inventory.
 
         This is an independent discovery pass. Do not read manager hypotheses, historical risk files, or other audit artifacts. Do not edit files and do not run tests, linters, or formatters.
 
@@ -525,6 +529,8 @@ module Addressit
         - comments: #{@files.comments_path(round)}
         - approval: #{@files.approval_path(round)}
         - addressit state: #{@files.state_path}
+
+        If task.md starts with the exact Feature reference from the shared task-resolution rules, read the linked Feature file before task.md. Use its goal, scope, and shared constraints as background; let task.md win conflicts and ignore the Feature inventory.
 
         Review every approved comment and the complete current diff, not only the comment locations. Independently look for correctness, concurrency, idempotency, external-boundary, partial-failure, data-integrity, time/identity, and operator-behavior risks. Do not read manager hypotheses, historical risk files, or Pi's blind audit. Do not edit files and do not run tests, linters, or formatters. Use read-only inspection and Pi's reported checks.
 

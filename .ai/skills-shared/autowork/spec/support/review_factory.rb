@@ -66,6 +66,8 @@ class ReviewFactory
     def write_task_config(project_path, branch_name, base_ref, base_commit_sha)
       path = task_path(project_path)
       FileUtils.mkdir_p(path)
+      task_file = File.join(path, 'task.md')
+      File.write(task_file, "# Task\n") unless File.exist?(task_file)
       config_path = File.join(path, 'config.json')
       File.write(config_path, JSON.pretty_generate(config(branch_name, base_ref, base_commit_sha)))
     end

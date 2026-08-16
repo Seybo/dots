@@ -268,6 +268,8 @@ When helper stdout contains that pair:
 2. For role `manager`, perform the review inline in this conversation:
    - run `/Volumes/dev/bin/skills/autofix show-work-cycle <id>` and treat its
      JSON as authoritative
+   - use the returned `task_path`, `feature_path`, and `feature_text`: when the Feature fields are non-null, apply that shared goal, scope, and constraint context before reading the complete Task files, ignore the Feature inventory, and do not persist or rediscover the Feature text; Task-specific requirements and Reported Issues win conflicts
+   - when the Feature fields are null, do not perform a Feature lookup; read the Task files from `task_path` normally
    - review the complete committed diff from `starting_commit_sha` through
      current `HEAD`, every input and decision, relevant surrounding code, and
      the full conversation and workflow context

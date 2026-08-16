@@ -21,6 +21,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 
 - `/skill:shortcut` — read Shortcut stories, create minimal Shortcut stories, and update story descriptions.
 - `/skill:projectit` — create a project task root, expected code directory, and git repo for the task workflow.
+- `/skill:featureit` — save a settled Grillme result as one optional `env` Feature, then propose and create an approved ordered draft split.
 - `/skill:taskit` — create task folders under `/Volumes/dev/_tasks`, or create a Shortcut story from `task.md`.
 - `/skill:draftit` — save selected conversation context into a draft task folder.
 - `/skill:workit` — start work from an existing task folder.

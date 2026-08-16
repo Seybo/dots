@@ -36,7 +36,7 @@ At the start, determine whether the invocation identifies an existing source fil
 
 For a file-backed session:
 
-- Read the complete source file before interviewing.
+- Read the complete source file before interviewing. For a draft or Task with the exact leading Feature reference from [`task-resolution.md`](../components/task-resolution.md), load the linked Feature before `task.md` as shared goal, scope, and constraint context, then let the source file win conflicts.
 - Keep the interview read-only while questions remain. Do not rewrite the file after each answer.
 - When every material point is settled, discoverable, or explicitly deferred, automatically update that same file before the final summary. The file-backed invocation authorizes this source-file update; do not require a second save request.
 - Integrate settled decisions into the relevant sections, replace obsolete or conflicting statements, remove alternatives that were resolved, and preserve unrelated content and the file's established structure. Do not append a transcript or a generic grilling report.

@@ -137,7 +137,7 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - list the 10 most recently created task folders under `<project_root>`
      - prefer filesystem creation/birth time when available
      - if creation time is unavailable, fall back to modification time, then folder name ordering
-   - include each task's selection number, folder name, and the first Markdown heading or first non-empty line from `task.md` when available
+   - include each task's selection number, folder name, and useful Task title from `task.md` when available: ignore the Feature metadata line, prefer non-empty `Name:` from the first `# Story details` section, then use the first meaningful heading outside that section or first non-empty non-metadata line
    - ask the user which task to work on
    - accept the user's reply as either:
      - a displayed selection number (`1`-`10`)
@@ -153,7 +153,9 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - confirm the matched folder contains `task.md`; if not, stop and report the missing file
 
 5. **Load the task:**
-   - read `<task_folder>/task.md` once at the start
+   - inspect only the first line of `<task_folder>/task.md`; when it is the exact optional Feature reference from `task-resolution.md`, load the linked Feature before `task.md`, then read the complete `task.md` once
+   - use Feature goal, scope, and shared constraints as background; let `task.md` and `steps.md` win conflicts and do not treat the Feature inventory as implementation requirements
+   - when the first line is not the exact Feature reference, read the complete `task.md` once with no Feature lookup
    - any project-level `CLAUDE.md` in the project root or current working directory will be picked up automatically by the agent — do not re-read it as a separate step unless asked
    - do not modify `task.md` unless the user asks you to
 
@@ -218,8 +220,8 @@ and select the matching ordinal workspace. Applied to `/workit`:
 
 9. **After completing implementation:**
    - re-read `task.md` and `steps.md` and verify nothing was missed
-   - review the completed implementation against `~/.ai/rules/development-principles.md` and fix any violation before reporting completion
-   - explicitly confirm in the final report that the implementation follows those principles; report any intentional exception instead of claiming compliance
+   - re-read `~/.ai/rules/development-principles.md` and double-check the completed implementation against every principle before reporting completion
+   - explicitly list every part that does not follow a principle and explain why; if everything follows, say that there are no exceptions
    - report what was done
    - separately propose all improvements, findings, validations, edge cases, follow-up tasks, and behavior changes you noticed but intentionally did not implement because they were outside the current task/current behavior
 

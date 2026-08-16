@@ -17,6 +17,13 @@ RSpec.describe 'Autoimplement Work Cycle prompt' do
     expect(prompt).to include('Do not create the final result path until the temporary file is complete')
   end
 
+  it 'uses returned Feature context without persisting or rediscovering it' do
+    expect(prompt).to include('returned `feature_path` and `feature_text`')
+    expect(prompt).to include('let `task.md` and `steps.md` win conflicts')
+    expect(prompt).to include('do not treat the Feature inventory as requirements')
+    expect(prompt).to include('do not perform a Feature lookup')
+  end
+
   it 'distinguishes authored-step and whole-task correction scope' do
     expect(prompt).to include('scope` is `step_implementation`')
     expect(prompt).to include('scope` is `whole_task_correction`')

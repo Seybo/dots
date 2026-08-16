@@ -84,6 +84,35 @@ Read that file whenever any of these must be inferred. In short:
 `taskit` only creates task folders under `/Volumes/dev/_tasks/<project>/`; it never
 creates project roots or code checkouts.
 
+## Optional env Feature membership
+
+For Draft reference and Task markdown path modes, recognize Feature membership
+only when `task.md` starts with this exact line:
+
+```md
+Feature: [<feature-slug>](../features/<feature-slug>.md)
+```
+
+Follow the Feature contract in `../components/task-resolution.md`:
+
+- Feature membership is valid only for project `env`; validate the slug and
+  require the linked `/Volumes/dev/_tasks/env/features/<feature-slug>.md`
+- the Task reference is authoritative; do not scan Feature files to infer
+  membership
+- before mutation, require the Feature's final `# Drafts and tasks` section to
+  contain exactly one old inventory link:
+  `- [draftNN](../draftNN/task.md)`
+- precompute its final replacement as
+  `- [<task-folder>](../<task-folder>/task.md)`
+- after the successful no-clobber rename, replace the old inventory link while
+  preserving its position in the ordered list
+- do not modify or remove the Feature reference in `task.md`; its relative path
+  remains correct because the folder depth does not change
+
+A line beginning with `Feature:` that does not match the exact contract is
+invalid Feature metadata; stop instead of treating it as a Task name. When no
+Feature reference is present, all unfeatured behavior remains unchanged.
+
 ## Deferred decision gate
 
 For Draft reference and Task markdown path modes, inspect `task.md` before any
@@ -153,7 +182,7 @@ If the section contains any unresolved question:
    - **Shortcut mode for `task_provider: shortcut` projects:** call `mcp__shortcut__stories-get-by-id` with the story ID; use the story's `name` as the task name and the story's `description` as the body. If the call fails or the story is missing, stop and report the error.
    - **Local/manual mode for `task_provider: local` projects:** do not call Shortcut, even if a selector is numeric or a task file contains Story details.
    - **Draft reference mode:** resolve `draftNN` to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then follow Task markdown path mode.
-   - **Task markdown path mode:** read the existing task file. If the selected project has `task_provider: shortcut` and the first section named exactly `# Story details` has both `Name:` and `Epic:`, use Shortcut conversion and use the parsed `Name` as the task name. Otherwise use Local task-file conversion. For local conversion, use a non-empty `Name:` from the first `# Story details` section when present; otherwise derive the task name from the first meaningful heading outside that section or the first non-empty content line. If no useful name can be derived, ask the user for a task name. Projects with `task_provider: local` always use this local path even when `Epic:` is present.
+   - **Task markdown path mode:** read the existing task file and resolve its optional Feature membership before deriving a name. If the selected project has `task_provider: shortcut` and the first section named exactly `# Story details` has both `Name:` and `Epic:`, use Shortcut conversion and use the parsed `Name` as the task name. Otherwise use Local task-file conversion. For local conversion, use a non-empty `Name:` from the first `# Story details` section when present; otherwise ignore the Feature metadata line and derive the task name from the first meaningful heading outside that section or the first non-empty non-metadata content line. If no useful name can be derived, ask the user for a task name. Projects with `task_provider: local` always use this local path even when `Epic:` is present.
    - slugify the task name:
      - lowercase everything
      - replace spaces with `-`
@@ -337,7 +366,7 @@ The Shortcut CLI adds the default team/workflow/state.
 When `# Story details` is absent or incomplete, do not call Shortcut. Convert the existing folder into a local task folder:
 
 - use a non-empty `Name:` from the first `# Story details` section when present
-- otherwise derive the task name from the first meaningful heading outside `# Story details` or the first non-empty content line in `task.md`
+- otherwise ignore the Feature metadata line and derive the task name from the first meaningful heading outside `# Story details` or the first non-empty non-metadata content line in `task.md`
 - if the only useful text is metadata, `# Context`, or the file is otherwise empty, ask the user for a task name
 - rename the existing task folder to local sequential naming:
 
@@ -378,7 +407,13 @@ After successful rename, the task file path becomes:
 /Volumes/dev/_tasks/<project>/<story_id-or-local-id>-<slug>/task.md
 ```
 
-Do not update `task.md` contents in this mode unless the user explicitly asks for that in a later request or the duplicate-title cleanup for Shortcut conversion applies.
+For a featured `env` draft, after the successful rename replace the validated
+`- [draftNN](../draftNN/task.md)` entry with
+`- [<task-folder>](../<task-folder>/task.md)`, then re-read both files and verify
+the Feature reference and inventory agree. Do not modify the Feature reference
+or any other `task.md` contents in this mode unless the user explicitly asks for
+that in a later request or the duplicate-title cleanup for Shortcut conversion
+applies.
 
 ## Important Notes
 
@@ -393,3 +428,4 @@ Do not update `task.md` contents in this mode unless the user explicitly asks fo
 - For implementation-oriented tasks, later planning should use TDD where it makes sense, with specs focused on edge cases, boundaries, regressions, and acceptance criteria rather than only happy paths
 - Do not auto-use this skill without an explicit `/taskit` command or an exact bare `taskit` reply to an active Grillme or Draftit continuation offer
 - Step 8 branch setup applies only to registered ordinal-workspace projects with `task_provider: shortcut` in Shortcut mode. `task_provider: local` projects and Manual tasks do not touch git automatically.
+- Feature support is optional and env-only; unfeatured Taskit behavior stays unchanged.

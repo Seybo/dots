@@ -115,7 +115,9 @@ Do not create project folders, task folders, or files.
    - **Task markdown path mode:** require the provided path to exist and end in `.md` or `.markdown`
 
 4. **Read source text and manager context:**
-   - read the resolved task file
+   - inspect the resolved task file's first line; for the exact optional reference defined in `task-resolution.md`, load the linked Feature before `task.md`, then read the complete task file
+   - use the Feature goal, scope, and shared constraints as background while keeping task-specific requirements and acceptance criteria authoritative; do not copy the Feature inventory into PR text
+   - when the exact Feature reference is absent, read the complete task file without a Feature lookup
    - if the task folder has a `steps.md`, read it only when it appears useful for completed implementation context or PR-review nuance
    - review the current manager conversation for explicit operator-confirmed production facts, compatibility assumptions, intentional limitations, deferred behavior, and decisions about issues reviewers should skip
    - use the latest explicit operator decision when earlier discussion was superseded

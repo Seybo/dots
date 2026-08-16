@@ -296,3 +296,10 @@ The following were not decided in this session:
 - Migration/takeover timing from Addressit.
 - Whether Autofix independently discovers issues beyond supplied feedback.
 - Implementation-task boundaries and order.
+
+## Final principles check
+
+Before reporting the work complete, re-read
+`~/.ai/rules/development-principles.md` and double-check all work against every
+principle. Explicitly list every part that does not follow a principle and
+explain why. If everything follows, say that there are no exceptions.

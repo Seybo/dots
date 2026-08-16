@@ -34,6 +34,8 @@ RSpec.describe ShowWorkCycle do
       issue_data: [{ source_id: nil, body: 'Approved issue.' }]
     )
     issue_id = db[:review_issues].where(review_id: review_id).get(:reported_issue_id)
+    task_id = db[:reviews].where(id: review_id).get(:task_id)
+    task_path = db[:tasks].where(id: task_id).get(:task_path)
     db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
     work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
 
@@ -45,8 +47,11 @@ RSpec.describe ShowWorkCycle do
       'review_number' => 1,
       'role' => 'worker',
       'action' => 'implementation',
+      'task_path' => task_path,
       'project_path' => project_path,
       'branch_name' => 'feature',
+      'feature_path' => nil,
+      'feature_text' => nil,
       'starting_commit_sha' => git!('rev-parse', 'HEAD').strip,
       'active_base_ref' => 'origin/main',
       'active_base_commit_sha' => 'base-sha',
@@ -60,6 +65,39 @@ RSpec.describe ShowWorkCycle do
       ],
       'reported_issues' => []
     )
+  end
+
+  it 'returns linked Feature context without storing it in Review state' do
+    review_id = ReviewFactory.call(
+      project_path: project_path,
+      source: 'local',
+      branch_name: 'feature',
+      base_ref: 'origin/main',
+      base_commit_sha: 'base-sha',
+      issue_data: [{ source_id: nil, body: 'Approved issue.' }]
+    )
+    task = db[:tasks].where(id: db[:reviews].where(id: review_id).get(:task_id)).first
+    feature_slug = "autofix-feature-#{review_id}"
+    feature_path = File.expand_path("../features/#{feature_slug}.md", task.fetch(:task_path))
+    feature_text = "# Autofix Feature\n\nShared context.\n"
+    FileUtils.mkdir_p(File.dirname(feature_path))
+    File.write(feature_path, feature_text)
+    File.write(
+      File.join(task.fetch(:task_path), 'task.md'),
+      "Feature: [#{feature_slug}](../features/#{feature_slug}.md)\n\n# Task\n"
+    )
+    issue_id = db[:review_issues].where(review_id: review_id).get(:reported_issue_id)
+    db[:reported_issues].where(id: issue_id).update(decision: 'approved', decision_reason: 'Approved in spec.')
+    work_cycle_id = StartImplementationWorkCycle.call(review_id: review_id)
+
+    context = JSON.parse(described_class.call(work_cycle_id: work_cycle_id))
+
+    expect(context).to include(
+      'task_path' => task.fetch(:task_path),
+      'feature_path' => feature_path,
+      'feature_text' => feature_text
+    )
+    expect(db.schema(:reviews).map(&:first)).not_to include(:feature_path, :feature_text)
   end
 
   it 'returns Reviewer context without an interim commit SHA' do

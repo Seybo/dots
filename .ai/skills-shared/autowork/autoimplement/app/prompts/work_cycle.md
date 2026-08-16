@@ -12,8 +12,10 @@ Follow these instructions only when the complete user message is exactly `AutoIm
    ```
 
 3. Treat the returned JSON as authoritative. Do not query or write Autoimplement SQLite directly.
-4. Keep the Pi session and pane in their existing working directory. Target the returned `project_path` explicitly with absolute paths, `git -C`, or a per-command `cd`. Do not select or switch the project or branch.
-5. Follow the section matching the returned `role` and `action`. If no section matches, write a failed result describing the mismatch and stop.
+4. When the returned `feature_path` and `feature_text` are non-null, use that returned Feature text as shared goal, scope, and constraint context before reading the Task; let `task.md` and `steps.md` win conflicts, and do not treat the Feature inventory as requirements. Do not persist or rediscover the Feature text.
+5. When those fields are null, do not perform a Feature lookup.
+6. Keep the Pi session and pane in their existing working directory. Target the returned `project_path` explicitly with absolute paths, `git -C`, or a per-command `cd`. Do not select or switch the project or branch.
+7. Follow the section matching the returned `role` and `action`. If no section matches, write a failed result describing the mismatch and stop.
 
 ## Worker implementation
 

@@ -102,8 +102,10 @@ folders under `/Volumes/dev/_tasks/<project>/`:
 
 - prefer filesystem creation/birth time, then modification time, then folder
   name ordering
-- include a numbered selection, folder name, and first meaningful Markdown
-  heading or non-empty line from `task.md`
+- include a numbered selection, folder name, and useful Task title from
+  `task.md`: ignore the Feature metadata line, prefer non-empty `Name:` from the
+  first `# Story details` section, then use the first meaningful heading outside
+  that section or first non-empty non-metadata line
 - accept the next operator reply as either the displayed selection number or a
   digits-only Task ID
 
@@ -337,10 +339,11 @@ For a persisted `manager`/`review` Work Cycle, run it inline in the current Mana
 
 1. Require `scope: manager_review`, null step fields, and complete ordered
    `history` from `show-work-cycle`.
-2. Read the complete Task files. `task.md` and `steps.md` are authoritative when
-   conversation history is absent; also use live conversation context when
-   available, including task creation and grilling decisions.
-   Do not persist conversation transcripts.
+2. Apply authored context in order:
+   - when the returned `feature_path` and `feature_text` are non-null, use the returned Feature text as shared goal, scope, and constraints; ignore its inventory and do not persist or rediscover it
+   - when those fields are null, do not perform a Feature lookup
+   - then read the complete Task files; `task.md` and `steps.md` are authoritative when conversation history is absent and win conflicts with Feature context
+   - also use live conversation context when available, including task creation and grilling decisions. Do not persist conversation transcripts
 3. Read every Work Cycle, input, produced issue, decision, and completion state
    in the complete ordered `history`.
 4. Inspect the full commit range and Task diff:

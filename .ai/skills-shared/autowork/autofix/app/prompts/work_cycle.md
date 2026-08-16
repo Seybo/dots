@@ -12,8 +12,11 @@ Follow these instructions only when the complete user message is exactly `AutoFi
    ```
 
 3. Treat the returned JSON as authoritative. Do not query Autofix SQLite directly.
-4. Keep the Pi session and pane in their existing working directory. For every file operation and command, target the returned `project_path` explicitly with absolute paths, `git -C`, or a per-command `cd`. Never rely on or change Pi's starting cwd.
-5. Follow the section matching the returned `role` and `action`. If no section matches, write a failed result describing the mismatch and stop.
+4. When the returned `feature_path` and `feature_text` are non-null, use that returned Feature text as shared goal, scope, and constraint context; let Task-specific inputs and requirements win conflicts, and do not treat the Feature inventory as requirements. Do not persist or rediscover the Feature text.
+5. When those fields are null, do not perform a Feature lookup.
+6. Read the complete `task.md` and `steps.md` when present under the returned `task_path`; apply them after any returned Feature context and keep Reported Issues as the correction inputs.
+7. Keep the Pi session and pane in their existing working directory. For every file operation and command, target the returned `project_path` explicitly with absolute paths, `git -C`, or a per-command `cd`. Never rely on or change Pi's starting cwd.
+8. Follow the section matching the returned `role` and `action`. If no section matches, write a failed result describing the mismatch and stop.
 
 ## Worker implementation
 

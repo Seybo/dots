@@ -2,8 +2,9 @@
 name: draftit
 description: >-
   Create the next draftNN folder under /Volumes/dev/_tasks/<project> from
-  conversation context, deriving a short task slug automatically. Local-only
-  drafts are the default; epic: makes a registered Shortcut project Shortcut-ready.
+  conversation context, optionally linking an env Feature and deriving a short
+  task slug automatically. Local-only drafts are the default; epic: makes a
+  registered Shortcut project Shortcut-ready.
   Command-only skill. In Pi, invoke via /skill:draftit; /draftit is also
   accepted where that alias is exposed.
 disable-model-invocation: true
@@ -22,8 +23,8 @@ This is a command-only skill.
 ```text
 /skill:draftit help
 /draftit help
-/draftit <context-reference-or-text>
-/draftit <project> <context-reference-or-text> [epic: <id>]
+/draftit <context-reference-or-text> [feature: <feature-slug>]
+/draftit <project> <context-reference-or-text> [feature: <feature-slug>] [epic: <id>]
 ```
 
 Examples:
@@ -31,13 +32,16 @@ Examples:
 ```text
 /draftit the above plan
 /draftit add CSV export for the current report
+/draftit env add Pi command discovery feature: pi-command-discovery
 /draftit shaka_gtm the above plan epic: 33001
 ```
 
 The first token is a project only when it matches a registered project key in
 `~/.ai/skills-shared/components/projects.yml`. Otherwise infer the project from
-the current checkout. All remaining text is context. Draftit always derives the
-task slug; it accepts no explicit name or slug override.
+the current checkout. Extract optional `feature: <feature-slug>` and `epic: <id>`
+pairs; all remaining text is context. Draftit always derives the task slug and
+accepts no explicit task name or slug override. Features are optional and valid
+only for `env`.
 
 Do not auto-use this skill from a general drafting request. Wait for the explicit slash command. An exact bare `draftit` reply to Grillme's active continuation offer is equivalent to an explicit invocation.
 
@@ -49,15 +53,19 @@ Create the next available `draftNN` folder under:
 /Volumes/dev/_tasks/<project>/
 ```
 
-Then write `task.md` from the requested context. After creation, let the user choose whether to grill or convert that draft without copying another slash command.
+Then write `task.md` from the requested context. When `feature:` is present,
+write the Feature reference first and append the draft to that Feature's ordered
+inventory. After standalone creation, let the user choose whether to grill or
+convert that draft without copying another slash command.
 
 ## Instructions
 
 1. **Parse and validate arguments:**
    - if the only argument is `help`, show this help text and stop
    - resolve `<project>` from an explicit registered key or the current checkout using [`task-resolution.md`](../components/task-resolution.md)
-   - extract optional `epic: <id>` from the request text
-   - treat all remaining text after the optional project and `epic:` pair as draft context
+   - extract optional `feature: <feature-slug>` and `epic: <id>` pairs from the request text
+   - reject duplicate option pairs or an empty option value
+   - treat all remaining text after the optional project and option pairs as draft context
    - require non-empty context; if none remains, show the invocation forms and ask for context
    - reject `name:`, `slug:`, and other explicit naming options; Draftit always derives the slug
    - do not inspect Pi session logs, prompt templates, other task directories, Git history, or unrelated repository files to infer missing context
@@ -67,6 +75,10 @@ Then write `task.md` from the requested context. After creation, let the user ch
    - if the project is not registered, stop and tell the user to add it to the registry
    - if its task root does not exist, create `/Volumes/dev/_tasks/<project>/`
    - `epic:` is valid only for `task_provider: shortcut`; reject it for local projects
+   - `feature:` is valid only when the normalized project is exactly `env`; reject it for every other project
+   - validate the Feature slug with `^[a-z][a-z0-9-]*$`
+   - resolve the Feature as `/Volumes/dev/_tasks/env/features/<feature-slug>.md`; the Feature file must exist
+   - read the complete Feature file and require its final first-level section to be `# Drafts and tasks` before creating the draft
 
 3. **Resolve context and derive the slug:**
    - for references such as `the above plan`, use the relevant conversation content
@@ -108,6 +120,13 @@ Then write `task.md` from the requested context. After creation, let the user ch
 
      {draft content}
      ```
+   - for either format with `feature: <feature-slug>`, prepend the exact Feature reference and one blank line:
+     ```md
+     Feature: [<feature-slug>](../features/<feature-slug>.md)
+
+     # Story details
+     ```
+   - do not copy the Feature brief or inventory into `task.md`; the reference loads the shared context
 
 6. **Choose the draft folder:**
    - scan only first-level folders matching exactly `draftNN`, where `NN` is a two-digit positive integer
@@ -115,13 +134,17 @@ Then write `task.md` from the requested context. After creation, let the user ch
    - stop if all are used
 
 7. **Create the draft:**
+   - require `/Volumes/dev/_tasks/<project>/draftNN/` not to exist
    - create `/Volumes/dev/_tasks/<project>/draftNN/`
    - create `task.md` only; never modify an existing draft
    - add exactly one trailing newline
+   - for a featured draft, append `- [draftNN](../draftNN/task.md)` to the ordered Feature inventory only after `task.md` exists
+   - re-read the new `task.md` and Feature file and verify their links agree
 
 8. **Report and offer continuation:**
-   - show the draft name, draft folder, and `task.md` path
+   - show the draft name, draft folder, and `task.md` path; show the Feature path when present
    - preserve the resolved project, `draftNN`, and full `task.md` path for the next turn
+   - when Featureit batch mode is active, suppress the normal per-draft continuation below, return the created draft data to Featureit, and let Featureit start the next approved draft
    - inspect the final `# Deferred decisions` section when present; if it contains any question, remind the user that decisions remain unresolved and that Taskit will require explicit approval before conversion
    - offer both next steps and tell the user to reply with exactly one bare keyword:
      - `grillme` to grill the new `task.md`
@@ -131,6 +154,21 @@ Then write `task.md` from the requested context. After creation, let the user ch
    - do not invoke another skill for any other reply, after failed or incomplete draft creation, or before the user chooses
    - continuation replies must contain only the exact bare keyword; optional arguments are not supported
 
+## Featureit batch mode
+
+Featureit owns this internal batch path; it is not a public Draftit argument.
+After the user gives exact `approve` to Featureit's currently displayed proposal,
+Featureit reads and follows this skill once with project `env`, the validated
+Feature slug, and every approved draft context in displayed order.
+
+For each item, apply the same context writing, derived slug, smallest-missing
+`draftNN`, no-clobber write, and ordered inventory append as standalone Draftit.
+Complete and verify one draft before starting the next. Suppress each draft's
+normal Grillme/Taskit continuation and return its slug, folder, and `task.md`
+path to Featureit. On failure, stop without retry, rollback, renumbering, or
+starting another item. Featureit owns final verification, Feature trimming, and
+the one batch report.
+
 ## Important Notes
 
 - Local-only drafts are the default.
@@ -138,4 +176,11 @@ Then write `task.md` from the requested context. After creation, let the user ch
 - `epic:` is the only Shortcut-ready trigger.
 - Do not register projects automatically.
 - Do not add extra files.
-- Do not auto-use this skill without an explicit `/draftit` command or an exact bare `draftit` reply to Grillme's active continuation offer.
+- Do not auto-use this skill without an explicit `/draftit` command, an exact bare `draftit` reply to Grillme's active continuation offer, or Featureit's exact approved batch handoff.
+
+## Final principles check
+
+Before reporting the work complete, re-read
+`~/.ai/rules/development-principles.md` and double-check all work against every
+principle. Explicitly list every part that does not follow a principle and
+explain why. If everything follows, say that there are no exceptions.
