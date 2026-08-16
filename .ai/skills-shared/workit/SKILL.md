@@ -4,7 +4,7 @@ description: >-
   Start work on an existing task folder under /Volumes/dev/_tasks.
   Reads the task's task.md and proceeds with the work it describes.
   Can infer the project and task/story ID from the current git branch.
-  Supports a plan-only create-steps-only mode.
+  Supports plan-only, single-step, and non-stop modes.
   Command-only skill. In Pi, invoke via /skill:workit; /workit is also
   accepted where that alias is exposed.
 ---
@@ -25,6 +25,7 @@ In Pi, use either:
 /workit <project-or-session> [task_id] create-steps-only
 /workit <project-or-session> [task_id] --base <full-base-branch-or-ref> create-steps-only
 /workit <project-or-session> [task_id] step <step_number>
+/workit <project-or-session> [task_id] non-stop
 ```
 
 With no arguments, infer the project from the current git checkout; if a Shortcut story ID can also be inferred from the branch, use it, otherwise list recent tasks for the inferred project.
@@ -42,6 +43,8 @@ The identifier is matched as a prefix of the task folder name. Passing `147831` 
 
 Step mode adds a trailing `step <step_number>` clause. It executes exactly one existing `steps.md` step and then stops without committing. The step number must be digits only.
 
+Non-stop mode adds a trailing `non-stop` clause. It creates or updates the plan and executes every remaining step without stopping for plan approval or at step boundaries. Stop only for a blocker, required scope or plan change, failed check that cannot be resolved safely, or completion.
+
 Examples:
 
 ```text
@@ -56,6 +59,8 @@ Examples:
 /workit 0003 create-steps-only
 /workit shaka_gtm1 147831 step 2
 /workit 0003 step 1
+/workit shaka_gtm1 147831 non-stop
+/workit 0003 non-stop
 ```
 
 Do not auto-use this skill from a general "work on this task" request. Wait for the explicit slash command.
@@ -96,7 +101,8 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - detect and remove an optional `--base <full-base-branch-or-ref>` pair before resolving `<project>` / `<task_id>`; call the value `base_ref` when present; reject `--base` without a following value
    - detect and remove an optional trailing `create-steps-only` clause before resolving `<project>` / `<task_id>`; call this `create_steps_only_mode` when present
    - detect and remove an optional trailing `step <step_number>` clause before resolving `<project>` / `<task_id>`; validate `<step_number>` with `^[0-9]+$`; call this `step_mode` when present
-   - reject commands that combine `create-steps-only` with `step <step_number>`; these modes are mutually exclusive
+   - detect and remove an optional trailing `non-stop` clause before resolving `<project>` / `<task_id>`; call this `non_stop_mode` when present
+   - reject commands that combine `create-steps-only`, `step <step_number>`, or `non-stop`; these modes are mutually exclusive
    - if there are no tokens after `/workit`, infer `<project>` from the current checkout and infer `<task_id>` from the current branch when possible; if no story ID can be inferred, leave `<task_id>` missing
    - if there is exactly one token after `/workit`:
      - if the token matches a registered task project or registered session alias, treat it as `<project>` or a registered session alias and try to infer `<task_id>` from the current branch; if no story ID can be inferred, leave `<task_id>` missing
@@ -183,7 +189,7 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - in `step_mode`, if `steps.md` is missing, stop and tell the user to run `/workit` without `step` first to create and approve the plan
    - if `steps.md` already exists, read it and follow it; update it only if the task needs a corrected or more incremental plan and `step_mode` is not active
    - if `steps.md` is missing and `step_mode` is not active, create it first from `task.md` before implementation
-   - after creating `steps.md`, or after making substantive updates to an existing `steps.md`, stop and ask the user to review/confirm the plan before making production code/docs changes, except in `create_steps_only_mode`, where stopping after plan creation/update is the whole command and no implementation confirmation is needed
+   - after creating `steps.md`, or after making substantive updates to an existing `steps.md`, stop and ask the user to review/confirm the plan before making production code/docs changes, except in `create_steps_only_mode`, where stopping after plan creation/update is the whole command and no implementation confirmation is needed, and `non_stop_mode`, where implementation continues immediately
    - write `steps.md` using simple, precise technical language
    - structure `steps.md` as gradual, reviewable implementation slices; each step should leave the repo in a working state
    - use parseable step headings for every step:
@@ -212,8 +218,9 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - in `step_mode`, locate the exact requested section from `## Step N` up to before the next `## Step <number>` heading; read full `steps.md` for context but implement only that section
    - in `step_mode`, treat `steps.md` as frozen; if the step is missing, ambiguous, stale, impossible, or requires a plan change, stop and report instead of silently editing the plan
    - in `step_mode`, do not commit; leave code changes unstaged/uncommitted for the orchestrator, and report changes/checks/open questions/deviations before stopping
-   - after completing each numbered step/slice from `steps.md`, stop and report the changes made, checks run, open questions, and any deviations or findings; ask the user to confirm before starting the next step
-   - do not continue into the next `steps.md` step without explicit user confirmation, even if the next step seems obvious or mechanical
+   - after completing each numbered step/slice from `steps.md`, report the changes made, checks run, open questions, and any deviations or findings
+   - unless `non_stop_mode` is active, stop and ask the user to confirm before starting the next step; do not continue without explicit confirmation, even if the next step seems obvious or mechanical
+   - in `non_stop_mode`, continue directly into the next remaining step; stop early only for a blocker, required scope or plan change, or failed check that cannot be resolved safely
    - if the user has questions, requests changes, or wants to adjust scope at a step boundary, handle that before proceeding
    - only `task.md` and `steps.md` define the work — do not read other files in the task folder (e.g. `next.md`, notes, drafts) as instructions unless `task.md` explicitly references them
    - if the body is just `# Context` (or otherwise empty of instructions), ask the user what they want done before proceeding

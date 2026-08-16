@@ -266,10 +266,12 @@ If the section contains any unresolved question:
    - run this step only after all applicable Taskit work completes successfully
    - derive the numeric task ID from the final task folder prefix
    - preserve the normalized project and task ID; when an ordinal workspace was selected, preserve its session alias (for example, project `shaka_gtm` with workspace `1st` becomes `shaka_gtm1`)
-   - tell the user to reply with the exact bare keyword `workit`; do not require them to copy or retype a slash command
+   - offer two exact replies; do not require the user to copy or retype a slash command:
+     - `workit` — begin with normal step-boundary confirmations
+     - `workit non-stop` — begin in Workit's `non_stop_mode`
    - if the next user message is exactly `workit`, treat it as an explicit Workit invocation; read and follow `../workit/SKILL.md` immediately as `/workit <resolved-project-or-session> <task_id>`
+   - if the next user message is exactly `workit non-stop`, treat it as `/workit <resolved-project-or-session> <task_id> non-stop` and follow Workit immediately
    - do not invoke Workit for any other reply, after failed or incomplete Taskit work, or before the user chooses
-   - the continuation reply must contain only `workit`; optional arguments are not supported
 
 ## Task markdown path mode
 
