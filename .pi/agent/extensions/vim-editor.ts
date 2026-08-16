@@ -16,8 +16,14 @@ const NORMAL_KEYS: Record<string, string> = {
 	x: "\x1b[3~",
 };
 
+const DELETE_WORD_FORWARD = "\x1b[100;3u"; // alt+d
+const DELETE_TO_LINE_END = "\x1b[107;5u"; // ctrl+k
+const NEW_LINE = "\x1b[106;5u"; // ctrl+j
+const UNDO = "\x1b[45;5u"; // ctrl+-
+
 class VimEditor extends CustomEditor {
 	private mode: "normal" | "insert" = "insert";
+	private pendingOperator: "d" | "c" | null = null;
 
 	handleInput(data: string): void {
 		if (matchesKey(data, "escape")) {
@@ -28,6 +34,7 @@ class VimEditor extends CustomEditor {
 					this.mode = "normal";
 				}
 			} else {
+				this.pendingOperator = null;
 				super.handleInput(data);
 			}
 			return;
@@ -39,6 +46,7 @@ class VimEditor extends CustomEditor {
 		}
 
 		if (matchesKey(data, "enter")) {
+			this.pendingOperator = null;
 			this.mode = "insert";
 			super.handleInput(data);
 			return;
@@ -46,9 +54,64 @@ class VimEditor extends CustomEditor {
 
 		const printable = decodeKittyPrintable(data);
 		const key = printable ?? data;
+		const isPrintable =
+			printable !== undefined ||
+			(data.length > 0 &&
+				[...data].every((character) => {
+					const codePoint = character.codePointAt(0) ?? 0;
+					return codePoint >= 32 && codePoint !== 127;
+				}));
+
+		if (this.pendingOperator) {
+			const operator = this.pendingOperator;
+			this.pendingOperator = null;
+
+			if (key === "w") {
+				super.handleInput(DELETE_WORD_FORWARD);
+				if (operator === "c") this.mode = "insert";
+				return;
+			}
+
+			if (key === "$") {
+				this.applyLineEndOperator(operator === "c");
+				return;
+			}
+
+			if (!isPrintable) super.handleInput(data);
+			return;
+		}
+
+		if (key === "d" || key === "c") {
+			this.pendingOperator = key;
+			return;
+		}
+
+		if (key === "D" || key === "C") {
+			this.applyLineEndOperator(key === "C");
+			return;
+		}
 
 		if (key === "i") {
 			this.mode = "insert";
+			return;
+		}
+
+		if (key === "I") {
+			super.handleInput(NORMAL_KEYS["0"]);
+			this.mode = "insert";
+			return;
+		}
+
+		if (key === "o" || key === "O") {
+			super.handleInput(key === "o" ? NORMAL_KEYS.$ : NORMAL_KEYS["0"]);
+			super.handleInput(NEW_LINE);
+			if (key === "O") super.handleInput(NORMAL_KEYS.k);
+			this.mode = "insert";
+			return;
+		}
+
+		if (key === "u") {
+			super.handleInput(UNDO);
 			return;
 		}
 
@@ -70,15 +133,16 @@ class VimEditor extends CustomEditor {
 			return;
 		}
 
-		const isPrintable =
-			printable !== undefined ||
-			(data.length > 0 &&
-				[...data].every((character) => {
-					const codePoint = character.codePointAt(0) ?? 0;
-					return codePoint >= 32 && codePoint !== 127;
-				}));
 		if (isPrintable) return;
 		super.handleInput(data);
+	}
+
+	private applyLineEndOperator(isChange: boolean): void {
+		const { line, col } = this.getCursor();
+		if (col < (this.getLines()[line]?.length ?? 0)) {
+			super.handleInput(DELETE_TO_LINE_END);
+		}
+		if (isChange) this.mode = "insert";
 	}
 
 	render(width: number): string[] {
