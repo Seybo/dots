@@ -1,7 +1,7 @@
 ---
 name: abbreviations
 description: >-
-  Add, update, or remove agent shorthand abbreviations like 00ex, 00rvu, and 00rar.
+  Add, update, or remove agent shorthand abbreviations.
   Command-only skill. Invoke only via /skill:abbreviations.
 disable-model-invocation: true
 ---
