@@ -46,6 +46,8 @@ Use these defaults unless project-specific instructions require otherwise.
 
 - Build the smallest end-to-end working path first.
 - Prefer explicit, boring code with one obvious execution path.
+- Before adding a condition, exception, or special case, check whether the existing rule or model is wrong. Prefer removing or narrowing old logic over layering new logic around it. When solutions are equally correct, choose the one with fewer branches, states, and concepts. Remove logic made obsolete by the change.
+- If meaningful simplification requires giving up behavior, compatibility, flexibility, or convenience, explain the trade-off and recommend it when the cost is reasonable. Do not silently remove required behavior, security, data integrity, or domain invariants; ask the user to decide.
 - Reuse established project patterns and terminology.
 - Refactor only when working code demonstrates a concrete need.
 - Introduce abstractions only after repeated behavior reveals a stable boundary.
