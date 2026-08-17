@@ -15,38 +15,35 @@ active continuation offer is equivalent to this explicit invocation. An exact
 bare `grillme` reply to Featureit's active continuation offer uses Featureit's
 preserved Feature file as the authoritative source.
 
-## Conversational continuation
+## Completion and continuation
 
 After grilling completes successfully and the final summary is ready:
 
-- If the authoritative source is a file matching exactly
-  `/Volumes/dev/_tasks/<project>/draftNN/task.md`, offer `taskit` for that draft.
-  Preserve the project, `draftNN`, and full `task.md` path.
-- Otherwise, offer only `draftit` to create one draft from the settled result.
-- For a non-draft file-backed session, preserve the updated source file as the
-  context reference. For an idea-only session, preserve the settled conversation
-  plan. In both cases, keep the recent final summary as the handoff context.
-- For Draftit's handoff, preserve project `env` and the Feature slug when the
-  authoritative source is exactly
-  `/Volumes/dev/_tasks/env/features/<feature-slug>.md` or starts with the exact
-  Feature reference from `task-resolution.md`. Otherwise preserve only a project
-  that was already resolved from the authoritative source; never infer Feature
-  membership from conversation history.
+1. **Existing non-Feature file:** Grillme has saved the settled results in that
+   file. If it matches exactly
+   `/Volumes/dev/_tasks/<project>/draftNN/task.md`, offer `taskit`, preserve the
+   project and draft path, and tell the user to reply with exact bare `taskit`.
+   For any other existing non-Feature file, report the update and stop.
+2. **Feature file:** Keep the Feature unchanged and offer `draftit` to create one
+   Feature-linked draft from the settled capability. Preserve project `env`, the
+   validated Feature slug, and the final summary. Tell the user to reply with
+   exact bare `draftit`.
+3. **Conversation or pasted text:** Offer `draftit` to create one draft from the
+   settled result. Preserve the final summary and any project already resolved
+   from the current workflow. Tell the user to reply with exact bare `draftit`.
 
-Tell the user to reply with the offered exact bare keyword; do not require them
-to copy or retype a slash command. Handle the next reply as follows:
+Handle an offered continuation only when the next reply is its exact bare
+keyword:
 
-- `taskit` is an explicit Taskit invocation for the preserved project and draft;
-  read and follow `../taskit/SKILL.md` immediately as
-  `/taskit <project> draftNN`.
-- `draftit` is an explicit Draftit invocation with the preserved context; read
-  and follow `../draftit/SKILL.md` immediately, passing only the project and
-  optional Feature state preserved by the handoff. When Grillme did not resolve
-  a project, Draftit requires the current registered checkout.
+- `taskit`: read and follow `../taskit/SKILL.md` immediately as
+  `/taskit <project> draftNN` using the preserved project and draft.
+- `draftit`: read and follow `../draftit/SKILL.md` immediately using the
+  preserved summary, project when available, and Feature only for a Feature-file
+  session.
 
-Do not invoke another skill for any other reply, after incomplete or failed
-Grillme work, or before the user chooses. Continuation replies must contain only
-the offered exact bare keyword; optional arguments are not supported.
+Do not invoke another skill after incomplete or failed Grillme work, before the
+user chooses, or for any other reply. Continuation replies do not accept
+optional arguments.
 
 ## Final principles check
 

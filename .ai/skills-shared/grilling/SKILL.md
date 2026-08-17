@@ -34,20 +34,26 @@ questions.
 
 At the start, determine whether the invocation identifies an existing source file. This includes an explicit file path or a selector such as `draft04` that unambiguously resolves to one plan or task file through the current workflow's established resolution rules. If a selector resolves to multiple files, ask which file is authoritative before grilling.
 
-For a file-backed session:
+For a file-backed session, read the complete source file before interviewing. For a draft or Task with the exact leading Feature reference from [`task-resolution.md`](../components/task-resolution.md), load the linked Feature before `task.md` as shared goal, scope, and constraint context, then let the source file win conflicts.
 
-- Read the complete source file before interviewing. For a draft or Task with the exact leading Feature reference from [`task-resolution.md`](../components/task-resolution.md), load the linked Feature before `task.md` as shared goal, scope, and constraint context, then let the source file win conflicts.
-- When the authoritative source matches `/Volumes/dev/_tasks/env/features/<feature-slug>.md`, grill exactly one capability per session. Use a capability named by the invocation or handoff; otherwise ask which capability to develop before continuing. Preserve unrelated research and unresolved questions without asking about them or treating them as deferred by this session.
+When the authoritative source matches `/Volumes/dev/_tasks/env/features/<feature-slug>.md`:
+
+- Grill exactly one capability per session. Use a capability named by the invocation or handoff; otherwise ask which capability to develop before continuing.
+- Preserve unrelated research and unresolved questions without asking about them or treating them as deferred by this session.
+- Treat the Feature as read-only shared context. Never edit, reorganize, or back it up during Grillme.
+- Preserve the settled capability and any explicit deferrals in the final conversation summary so Grillme can offer Draftit.
+
+For every other file-backed session:
+
 - Keep the interview read-only while questions remain. Do not rewrite the file after each answer.
-- When every material point is settled, discoverable, or explicitly deferred, automatically update that same file before the final summary. The file-backed invocation authorizes this source-file update; do not require a second save request.
-- Integrate settled decisions into the relevant sections, replace obsolete or conflicting statements, remove alternatives that were resolved, and preserve unrelated content and the file's established structure. Do not append a transcript or a generic grilling report.
-- Put every explicitly deferred question in a `# Deferred decisions` section using the complete Question / Why this is open / Recommendation format. For a Feature file matching `/Volumes/dev/_tasks/env/features/<feature-slug>.md`, place `# Deferred decisions` immediately before `# Drafts and tasks` and keep that inventory as the final first-level section. For every other file, keep `# Deferred decisions` as the final first-level section. Remove questions once resolved, omit the section when no deferred decisions remain, and do not infer a deferral merely because the user has not answered yet.
+- When each material point is settled, discoverable, or explicitly deferred, automatically update the source file before the final summary. The invocation authorizes this update; do not require a second save request.
+- Integrate settled decisions into the relevant sections, replace obsolete or conflicting statements, remove resolved alternatives, and preserve unrelated content and the file's established structure. Do not append a transcript or generic grilling report.
+- Put every explicitly deferred question in a final `# Deferred decisions` section using the complete Question / Why this is open / Recommendation format. Remove questions once resolved, omit the section when empty, and do not infer a deferral merely because the user has not answered yet.
 - Before editing, determine whether version control can restore the current content. If it cannot, create and verify a backup outside the affected path first.
 - Update only the identified source file. Do not edit implementation code, related plans, roadmaps, or other files unless the user explicitly requests them.
 - Re-read the updated file and verify it reflects every settled decision and explicit deferral before reporting completion.
-- If the user explicitly requests report-only or no-save grilling, do not update the file.
 
-When no source file is identified, the workflow is strictly read-only; summarize and stop when grilling is complete.
+When no source file is identified, the workflow is strictly read-only; preserve the settled result in the final conversation summary.
 
 The user may provide either a developed plan or only a feature idea.
 
@@ -99,4 +105,4 @@ Ask one question at a time and wait for feedback. When the user explicitly defer
 
 Cover material concerns such as boundaries, contracts, failure behavior, security, compatibility, and operations only when relevant to this plan. Prefer KISS/YAGNI; exhaustive grilling means finding all material unresolved decisions, not enumerating every imaginable design.
 
-Stop when every material point is settled, discoverable, or explicitly deferred. For a file-backed session, save and verify the source file first. Then summarize the settled decisions, any explicitly deferred issues, and the updated file path.
+Stop when every material point is settled, discoverable, or explicitly deferred. For a non-Feature file-backed session, save and verify the source file first. For a Feature-backed session, verify the Feature stayed unchanged. Then summarize the settled decisions, any explicitly deferred issues, and the authoritative file path when present.

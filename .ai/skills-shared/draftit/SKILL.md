@@ -39,12 +39,13 @@ epic, name, or slug argument.
 
 An exact bare `draftit` reply to Grillme's active continuation offer may use the
 project preserved by Grillme. When Grillme's authoritative source is an `env`
-Feature file or starts with the exact Feature reference, its handoff also
-supplies that Feature membership. This explicit handoff is the only Feature
-source; never infer an active Feature from older conversation or durable state.
+Feature file, its handoff also supplies that Feature membership. This explicit
+handoff is the only Feature source; never infer an active Feature from older
+conversation or durable state.
 
 Do not auto-use this skill from a general drafting request. Wait for the explicit
-slash command or an authorized handoff above.
+slash command or an exact bare `draftit` reply to Grillme's active continuation
+offer.
 
 ## What it does
 
@@ -67,7 +68,7 @@ command.
    - require non-empty context; if none remains, show the invocation forms and ask for context
    - reject project, Feature, epic, name, slug, and other option-style arguments; Draftit derives identity and receives routing state only from the current checkout or an authorized handoff
    - for a direct slash command, resolve the project from the current registered checkout using [`task-resolution.md`](../components/task-resolution.md); stop when it cannot be inferred
-   - for a Grillme handoff, use its preserved project when available; use its Feature only when the authoritative source is `/Volumes/dev/_tasks/env/features/<feature-slug>.md` or begins with the exact Feature reference
+   - for a Grillme handoff, use its preserved project when available; use its Feature only when the authoritative source is `/Volumes/dev/_tasks/env/features/<feature-slug>.md`
    - do not inspect Pi session logs, prompt templates, other task directories, Git history, older conversation, or persisted state to infer missing routing context
 
 2. **Resolve the project and optional Feature:**
