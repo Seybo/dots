@@ -3,9 +3,10 @@ import { spawn } from "node:child_process";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
+import { extractCodeBlocks } from "./code-blocks.ts";
 import { extractSentences } from "./sentences.ts";
 
-const MAX_VISIBLE_SENTENCES = 8;
+const MAX_VISIBLE_ITEMS = 8;
 
 function latestAssistantText(ctx: ExtensionCommandContext): string | undefined {
 	const branch = ctx.sessionManager.getBranch();
@@ -25,29 +26,33 @@ function latestAssistantText(ctx: ExtensionCommandContext): string | undefined {
 	return undefined;
 }
 
-function compactPreview(sentence: string): string {
-	return sentence.replace(/\s+/g, " ").trim();
+function compactPreview(item: string): string {
+	return item.replace(/\s+/g, " ").trim();
 }
 
-async function pickSentence(ctx: ExtensionCommandContext, sentences: string[]): Promise<string | null> {
+async function pickPart(
+	ctx: ExtensionCommandContext,
+	items: string[],
+	partName: "sentence" | "code block",
+): Promise<string | null> {
 	return ctx.ui.custom<string | null>((tui, theme, keybindings, done) => {
-		let selectedIndex = sentences.length - 1;
+		let selectedIndex = items.length - 1;
 
 		return {
 			render(width: number): string[] {
-				const lines = [theme.fg("accent", theme.bold("Copy sentence")), ""];
-				const visibleCount = Math.min(sentences.length, MAX_VISIBLE_SENTENCES);
+				const lines = [theme.fg("accent", theme.bold(`Copy ${partName}`)), ""];
+				const visibleCount = Math.min(items.length, MAX_VISIBLE_ITEMS);
 				const startIndex = Math.max(
 					0,
-					Math.min(selectedIndex - visibleCount + 1, sentences.length - visibleCount),
+					Math.min(selectedIndex - visibleCount + 1, items.length - visibleCount),
 				);
-				const endIndex = Math.min(sentences.length, startIndex + visibleCount);
-				const numberWidth = String(sentences.length).length;
+				const endIndex = Math.min(items.length, startIndex + visibleCount);
+				const numberWidth = String(items.length).length;
 
 				for (let index = startIndex; index < endIndex; index++) {
 					const prefix = index === selectedIndex ? "▶" : " ";
 					const number = String(index + 1).padStart(numberWidth);
-					const text = truncateToWidth(`${prefix} ${number}. ${compactPreview(sentences[index]!)}`, width, "…");
+					const text = truncateToWidth(`${prefix} ${number}. ${compactPreview(items[index]!)}`, width, "…");
 					lines.push(
 						index === selectedIndex
 							? theme.bg("selectedBg", theme.fg("accent", text))
@@ -55,9 +60,9 @@ async function pickSentence(ctx: ExtensionCommandContext, sentences: string[]): 
 					);
 				}
 
-				lines.push("", theme.fg("accent", `Selected sentence ${selectedIndex + 1}/${sentences.length}`));
+				lines.push("", theme.fg("accent", `Selected ${partName} ${selectedIndex + 1}/${items.length}`));
 				const previewWidth = Math.max(1, width - 2);
-				const selected = theme.bg("selectedBg", theme.fg("text", sentences[selectedIndex]!));
+				const selected = theme.bg("selectedBg", theme.fg("text", items[selectedIndex]!));
 				lines.push(...wrapTextWithAnsi(selected, previewWidth).map((line) => `  ${line}`));
 				lines.push("", theme.fg("dim", "↑/↓ browse · Enter copy · Esc cancel"));
 
@@ -66,17 +71,17 @@ async function pickSentence(ctx: ExtensionCommandContext, sentences: string[]): 
 			invalidate() {},
 			handleInput(data: string) {
 				if (keybindings.matches(data, "tui.select.up")) {
-					selectedIndex = (selectedIndex - 1 + sentences.length) % sentences.length;
+					selectedIndex = (selectedIndex - 1 + items.length) % items.length;
 					tui.requestRender();
 					return;
 				}
 				if (keybindings.matches(data, "tui.select.down")) {
-					selectedIndex = (selectedIndex + 1) % sentences.length;
+					selectedIndex = (selectedIndex + 1) % items.length;
 					tui.requestRender();
 					return;
 				}
 				if (keybindings.matches(data, "tui.select.confirm")) {
-					done(sentences[selectedIndex]!);
+					done(items[selectedIndex]!);
 					return;
 				}
 				if (keybindings.matches(data, "tui.select.cancel")) done(null);
@@ -112,33 +117,40 @@ function copyToClipboard(text: string): Promise<void> {
 
 export default function copyPartExtension(pi: ExtensionAPI) {
 	pi.registerCommand("cp", {
-		description: "Browse and copy one sentence from the latest assistant response. Usage: /cp s",
+		description: "Browse and copy one sentence or code block from the latest assistant response",
 		handler: async (args, ctx) => {
-			if (args.trim() !== "s") {
-				ctx.ui.notify("Usage: /cp s", "warning");
+			const mode = args.trim();
+			if (mode !== "s" && mode !== "c") {
+				ctx.ui.notify("Usage: /cp s or /cp c", "warning");
 				return;
 			}
 			if (ctx.mode !== "tui") {
-				ctx.ui.notify("/cp s requires interactive mode", "error");
+				ctx.ui.notify(`/cp ${mode} requires interactive mode`, "error");
 				return;
 			}
 
 			const response = latestAssistantText(ctx);
-			const sentences = response ? extractSentences(response) : [];
-			if (sentences.length === 0) {
-				ctx.ui.notify("The latest assistant response has no sentence prose to copy", "warning");
+			const partName = mode === "s" ? "sentence" : "code block";
+			const items = response
+				? mode === "s"
+					? extractSentences(response)
+					: extractCodeBlocks(response)
+				: [];
+			if (items.length === 0) {
+				const missing = mode === "s" ? "sentence prose" : "fenced code block";
+				ctx.ui.notify(`The latest assistant response has no ${missing} to copy`, "warning");
 				return;
 			}
 
-			const sentence = await pickSentence(ctx, sentences);
-			if (sentence === null) return;
+			const item = await pickPart(ctx, items, partName);
+			if (item === null) return;
 
 			try {
-				await copyToClipboard(sentence);
-				ctx.ui.notify("Copied sentence to clipboard", "info");
+				await copyToClipboard(item);
+				ctx.ui.notify(`Copied ${partName} to clipboard`, "info");
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
-				ctx.ui.notify(`Failed to copy sentence: ${message}`, "error");
+				ctx.ui.notify(`Failed to copy ${partName}: ${message}`, "error");
 			}
 		},
 	});
