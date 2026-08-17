@@ -4,9 +4,29 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 import { extractCodeBlocks } from "./code-blocks.ts";
+import { extractLinks } from "./links.ts";
+import { parseCopyArgs, resolveSelection } from "./selection.ts";
 import { extractSentences } from "./sentences.ts";
 
 const MAX_VISIBLE_ITEMS = 8;
+
+type ModeConfig = {
+	partName: "sentence" | "code block" | "link";
+	missing: string;
+	extract: (response: string) => string[];
+};
+
+const MODES = {
+	s: { partName: "sentence", missing: "sentence prose", extract: extractSentences },
+	c: { partName: "code block", missing: "fenced code block", extract: extractCodeBlocks },
+	l: { partName: "link", missing: "web link", extract: extractLinks },
+} satisfies Record<string, ModeConfig>;
+
+type Mode = keyof typeof MODES;
+
+function isMode(mode: string): mode is Mode {
+	return Object.hasOwn(MODES, mode);
+}
 
 function latestAssistantText(ctx: ExtensionCommandContext): string | undefined {
 	const branch = ctx.sessionManager.getBranch();
@@ -33,7 +53,7 @@ function compactPreview(item: string): string {
 async function pickPart(
 	ctx: ExtensionCommandContext,
 	items: string[],
-	partName: "sentence" | "code block",
+	partName: ModeConfig["partName"],
 ): Promise<string | null> {
 	return ctx.ui.custom<string | null>((tui, theme, keybindings, done) => {
 		let selectedIndex = items.length - 1;
@@ -117,40 +137,42 @@ function copyToClipboard(text: string): Promise<void> {
 
 export default function copyPartExtension(pi: ExtensionAPI) {
 	pi.registerCommand("cp", {
-		description: "Browse and copy one sentence or code block from the latest assistant response",
+		description: "Browse and copy one sentence, code block, or web link from the latest assistant response",
 		handler: async (args, ctx) => {
-			const mode = args.trim();
-			if (mode !== "s" && mode !== "c") {
-				ctx.ui.notify("Usage: /cp s or /cp c", "warning");
+			const parsed = parseCopyArgs(args);
+			if (!parsed || !isMode(parsed.mode)) {
+				ctx.ui.notify("Usage: /cp <s|c|l> [number|l]", "warning");
 				return;
 			}
 			if (ctx.mode !== "tui") {
-				ctx.ui.notify(`/cp ${mode} requires interactive mode`, "error");
+				ctx.ui.notify(`/cp ${parsed.mode} requires interactive mode`, "error");
 				return;
 			}
 
+			const config = MODES[parsed.mode];
 			const response = latestAssistantText(ctx);
-			const partName = mode === "s" ? "sentence" : "code block";
-			const items = response
-				? mode === "s"
-					? extractSentences(response)
-					: extractCodeBlocks(response)
-				: [];
+			const items = response ? config.extract(response) : [];
 			if (items.length === 0) {
-				const missing = mode === "s" ? "sentence prose" : "fenced code block";
-				ctx.ui.notify(`The latest assistant response has no ${missing} to copy`, "warning");
+				ctx.ui.notify(`The latest assistant response has no ${config.missing} to copy`, "warning");
 				return;
 			}
 
-			const item = await pickPart(ctx, items, partName);
+			const selection = resolveSelection(items, parsed.selector);
+			if (selection.kind === "invalid") {
+				ctx.ui.notify(`No ${config.partName} matches selector ${parsed.selector}`, "warning");
+				return;
+			}
+
+			const item =
+				selection.kind === "picker" ? await pickPart(ctx, items, config.partName) : selection.item;
 			if (item === null) return;
 
 			try {
 				await copyToClipboard(item);
-				ctx.ui.notify(`Copied ${partName} to clipboard`, "info");
+				ctx.ui.notify(`Copied ${config.partName} to clipboard`, "info");
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
-				ctx.ui.notify(`Failed to copy ${partName}: ${message}`, "error");
+				ctx.ui.notify(`Failed to copy ${config.partName}: ${message}`, "error");
 			}
 		},
 	});
