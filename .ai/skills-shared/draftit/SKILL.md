@@ -132,7 +132,8 @@ command.
    - show the draft name, draft folder, and `task.md` path; show the Feature path when present
    - preserve the resolved project, `draftNN`, and full `task.md` path for the next turn
    - inspect the final `# Deferred decisions` section when present; if it contains any question, remind the user that decisions remain unresolved and that Taskit will require explicit approval before conversion
-   - offer both next steps and tell the user to reply with exactly one bare keyword:
+   - when invoked from Grillme's continuation, offer only `taskit` and tell the user to reply with exact bare `taskit`
+   - otherwise offer both next steps and tell the user to reply with exactly one bare keyword:
      - `grillme` to grill the new `task.md`
      - `taskit` to convert `<project> draftNN`
    - if the next user message is exactly `grillme`, treat it as an explicit Grillme invocation; read and follow `../grillme/SKILL.md` immediately with the full `task.md` path as its authoritative source
