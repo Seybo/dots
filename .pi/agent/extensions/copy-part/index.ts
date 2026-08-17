@@ -4,6 +4,7 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 import { extractCodeBlocks } from "./code-blocks.ts";
+import { extractFilePaths } from "./file-paths.ts";
 import { extractLinks } from "./links.ts";
 import { parseCopyArgs, resolveSelection } from "./selection.ts";
 import { extractSentences } from "./sentences.ts";
@@ -11,7 +12,7 @@ import { extractSentences } from "./sentences.ts";
 const MAX_VISIBLE_ITEMS = 8;
 
 type ModeConfig = {
-	partName: "sentence" | "code block" | "link";
+	partName: "sentence" | "code block" | "link" | "file path";
 	missing: string;
 	extract: (response: string) => string[];
 };
@@ -20,6 +21,7 @@ const MODES = {
 	s: { partName: "sentence", missing: "sentence prose", extract: extractSentences },
 	c: { partName: "code block", missing: "fenced code block", extract: extractCodeBlocks },
 	l: { partName: "link", missing: "web link", extract: extractLinks },
+	f: { partName: "file path", missing: "file path", extract: extractFilePaths },
 } satisfies Record<string, ModeConfig>;
 
 type Mode = keyof typeof MODES;
@@ -137,11 +139,11 @@ function copyToClipboard(text: string): Promise<void> {
 
 export default function copyPartExtension(pi: ExtensionAPI) {
 	pi.registerCommand("cp", {
-		description: "Browse and copy one sentence, code block, or web link from the latest assistant response",
+		description: "Browse and copy one sentence, code block, web link, or file path from the latest assistant response",
 		handler: async (args, ctx) => {
 			const parsed = parseCopyArgs(args);
 			if (!parsed || !isMode(parsed.mode)) {
-				ctx.ui.notify("Usage: /cp <s|c|l> [number|l]", "warning");
+				ctx.ui.notify("Usage: /cp <s|c|l|f> [number|l]", "warning");
 				return;
 			}
 			if (ctx.mode !== "tui") {
