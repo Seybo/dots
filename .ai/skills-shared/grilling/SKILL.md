@@ -68,11 +68,13 @@ When starting from a feature idea:
 3. Follow Top-down grilling before moving to narrower questions.
 4. Build on prior answers without inventing unstated requirements or hypothetical alternatives.
 
+Treat references as evidence to inspect, not as proof. Investigate relevant local code and documentation, official or upstream sources, and focused external sources only when they are likely to resolve a material decision. Do not research merely to satisfy a checklist.
+
 Before asking a question, classify the relevant point as:
 
 - **Settled** — explicitly specified or previously answered.
-- **Discoverable** — answerable from the codebase or documentation; investigate it instead.
-- **Open** — genuinely unanswered and materially affects behavior, scope, architecture, safety, or operability.
+- **Discoverable** — answerable from relevant source material, existing implementations, documentation, or proportionate external research; investigate it instead.
+- **Open** — genuinely unanswered after relevant discovery and materially affects behavior, scope, architecture, safety, or operability.
 
 Ask only about open points.
 
@@ -88,7 +90,7 @@ Do not:
 A question is valid only when:
 
 1. The answer is not already present.
-2. The codebase or documentation cannot answer it.
+2. Relevant evidence cannot answer it.
 3. Different answers would materially change behavior, scope, architecture, safety, operability, or another decision the plan must settle.
 
 When challenging an existing decision, quote the conflicting statements or name the concrete risk. Do not present an invented alternative as though the plan implied it.
