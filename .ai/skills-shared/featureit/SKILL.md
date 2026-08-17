@@ -1,10 +1,10 @@
 ---
 name: featureit
 description: >-
-  Create an env Feature file from a completed Grillme summary, propose an ordered
-  split, and create the approved drafts through Draftit. Command-only skill. In
-  Pi, invoke via /skill:featureit; /featureit is also accepted where that alias
-  is exposed.
+  Research a user-provided env Feature idea, create its durable Feature file,
+  then hand that Feature to Grillme for incremental development into drafts.
+  Command-only skill. In Pi, invoke via /skill:featureit; /featureit is also
+  accepted where that alias is exposed.
 disable-model-invocation: true
 ---
 
@@ -17,52 +17,92 @@ This is a command-only skill for the registered `env` project.
 ## Invocation
 
 ```text
-/skill:featureit
-/featureit
+/skill:featureit <feature-idea>
+/featureit <feature-idea>
 ```
 
-An exact bare `featureit` reply to Grillme's active continuation offer is
-equivalent to this explicit invocation with Grillme's preserved settled result.
-Reject arguments; Featureit derives its name and accepts no project, path, name,
-or slug option.
+Example:
+
+```text
+/featureit create a tmux extension that copies semantic parts of pane output
+```
+
+Require a non-empty natural-language Feature idea. Reject option-style
+arguments and project, path, name, slug, or mode options. Featureit derives the
+Feature identity and always uses project `env`.
 
 Do not auto-use this skill from a general feature request. Invoke it only through
-the slash command or Grillme's exact continuation.
+the slash command.
 
 ## What it does
 
-Create one Feature file from the recent final Grillme summary in the current
-conversation, then let the user approve an ordered split into `env` drafts. The
-initial file contains the complete settled Feature design. After every approved
-draft is created, the file becomes the stable shared brief and ordered draft
-inventory.
+Investigate the Feature idea, then create one Feature file containing the durable
+research and shared context for incremental development. Featureit does not grill
+the research, propose a split, or create drafts. After creation, it offers
+Grillme to settle one capability; Draftit can then create one Feature-linked
+draft.
 
 Read and follow [`task-resolution.md`](../components/task-resolution.md) for the
-Feature path, reference, inventory, membership, and precedence contract. Read
-and follow [`draftit/SKILL.md`](../draftit/SKILL.md) before creating drafts.
+Feature path, reference, inventory, membership, and precedence contract.
+
+## Research the Feature
+
+1. **Resolve the idea:**
+   - use the complete invocation text as the Feature idea
+   - identify the user-visible outcome and the immediate questions that research
+     can answer
+   - do not ask the user for information discoverable from local files,
+     documentation, or public sources
+   - ask one focused question only when the outcome is too unclear to guide
+     relevant research or derive a useful Feature identity
+
+2. **Investigate relevant evidence:**
+   - inspect relevant local code, configuration, documentation, and established
+     project conventions first
+   - inspect official documentation or upstream source when technology behavior,
+     extension APIs, or supported capabilities matter
+   - use the available web-search workflow when current public information or
+     comparable projects could materially inform the Feature; do not rely on
+     model memory for current ecosystem claims
+   - search for existing tools or plugins with similar functionality when they
+     could reveal proven capabilities, interaction patterns, or limitations
+   - keep research proportional to the Feature; do not perform an exhaustive
+     survey or investigate speculative concerns
+   - do not install, execute, or trust third-party code as part of research
+
+3. **Produce a self-contained research summary:**
+   - state the Feature goal and relevant existing local behavior
+   - summarize material findings, constraints, capability options, and the
+     simplest recommended starting point
+   - preserve recommendations as recommendations rather than settled
+     requirements
+   - preserve unresolved product decisions as open questions for Grillme
+   - include useful source links and local file paths
+   - include this concise audit, explicitly marking every category that was not
+     performed and why:
+
+     ```md
+     ## Research performed
+
+     - Local code and docs: <paths and topics, or "Not performed — <reason>">
+     - Official documentation: <sources and topics, or "Not performed — <reason>">
+     - Web search: <search topics or queries, or "Not performed — <reason>">
+     - Comparable projects: <names and links, or "None found">
+     ```
 
 ## Create the Feature
 
-1. **Resolve context:**
-   - require a successfully completed Grillme session in the current conversation
-   - use its recent final settled Grillme summary as the complete source
-   - prefer that summary over older discussion that it superseded
-   - do not inspect Pi session logs, session JSONL, prompt templates, task folders,
-     Git history, or unrelated files to reconstruct context
-   - if no completed settled summary is available, stop and tell the user to run
-     Grillme first
-
-2. **Derive the Feature slug:**
+1. **Derive the Feature slug:**
    - derive a concise name from the user-visible Feature outcome, normally two to
      six words
    - lowercase it, replace separators and spaces with `-`, remove characters
      except letters, numbers, and `-`, collapse repeated `-`, and trim leading or
      trailing `-`
-   - require the derived Feature slug to match `^[a-z][a-z0-9-]*$`; ask for clearer
-     Feature context if no useful slug can be derived
+   - require the derived Feature slug to match `^[a-z][a-z0-9-]*$`; ask for a
+     clearer Feature idea if no useful slug can be derived
    - do not accept a manual name or slug override
 
-3. **Resolve the target:**
+2. **Resolve the target:**
    - use the fixed Feature root `/Volumes/dev/_tasks/env/features/`
    - create that directory when missing
    - resolve the target as
@@ -70,8 +110,8 @@ and follow [`draftit/SKILL.md`](../draftit/SKILL.md) before creating drafts.
    - the target Feature file must not already exist; stop rather than overwrite,
      merge, rename, or choose another slug
 
-4. **Write the initial file:**
-   - preserve the complete settled design as useful self-contained Markdown
+3. **Write the Feature:**
+   - preserve the complete self-contained research summary
    - use this structure and keep `# Drafts and tasks` as the final first-level
      section:
 
@@ -80,86 +120,42 @@ and follow [`draftit/SKILL.md`](../draftit/SKILL.md) before creating drafts.
 
      # Context
 
-     <complete settled Feature design>
+     <complete research summary, including Research performed>
 
      # Drafts and tasks
      ```
 
-   - do not create draft folders yet
+   - do not create draft folders
    - add exactly one trailing newline
 
-5. **Report and offer the split:**
+4. **Verify and report:**
+   - re-read the Feature file
+   - verify it preserves the complete research summary and ends with
+     `# Drafts and tasks`
    - show the Feature slug and full file path
-   - preserve the path, slug, and complete initial contents for this continuation
-   - ask exactly:
+   - show a concise `Research performed` list using the same four categories from
+     the Feature file, including explicit `Not performed` entries
+   - preserve the path and slug for the continuation below
+   - tell the user to reply with exact bare `grillme` to develop one capability
+     from the Feature
 
-     ```text
-     Propose split to drafts?
-     ```
+## Grillme continuation
 
-## Propose the draft split
-
-An exact `yes` reply presents an ordered draft proposal without creating or
-modifying files. Any other reply before a proposal ends this continuation.
-
-Build the proposal from the complete Feature file using these existing planning
-rules:
-
-- Build the smallest end-to-end working path first.
-- Split by logical behavior, not by files or technical layers. Keep one
-  behavior's implementation, callers, configuration, tests, and documentation
-  together.
-- Order drafts by dependency and cause-and-effect. Every draft leaves the
-  environment runnable and adds one useful outcome.
-- Split again when one draft crosses more than one substantial integration boundary.
-- Do not target a fixed draft count or add speculative work. If a later draft
-  changes earlier behavior, state what it retains, replaces, or removes.
-
-For each proposed draft, show its concise title, outcome, task-specific context,
-grounded acceptance criteria, and dependencies. Keep shared goals and
-constraints assigned to the Feature rather than duplicating them in every
-draft. Ensure every task-specific requirement is assigned to at least one draft.
-
-The proposal is read-only conversation state. The user may request revisions;
-revise and present the complete ordered proposal again without touching files.
-After every proposal or revision, tell the user that exact bare `approve` creates
-that displayed version. Do not treat another reply as approval.
-
-## Create the approved drafts
-
-An exact `approve` reply for the currently displayed proposal applies Draftit in
-Featureit batch mode:
-
-1. Re-read the complete Feature file and require its path and slug still match
-   the preserved continuation.
-2. Read and follow `../draftit/SKILL.md` once, then apply its normal content,
-   slug, numbering, write, and Feature-inventory rules to every approved draft
-   in displayed order with project `env` and the preserved Feature slug.
-3. Create one complete `draftNN/task.md` before starting the next draft. Append
-   its relative link to the ordered Feature inventory only after that draft file
-   exists.
-4. Suppress Draftit's normal per-draft Grillme/Taskit continuation while this
-   batch is active.
-5. If any draft fails, stop. Keep the Feature's complete design and every
-   already-created draft/link visible; do not retry, roll back, trim, or invent
-   recovery state.
-6. Only after every approved draft is created successfully, verify every removed
-   task-specific requirement is represented in the created drafts, then trim the
-   Feature file to its stable goal, scope, shared constraints, and unchanged
-   ordered inventory.
-7. Re-read the Feature file and every created `task.md`, verify the references and
-   inventory links agree, and report all created draft paths plus the Feature
-   path.
+An exact bare `grillme` reply to Featureit's active continuation is an explicit
+Grillme invocation with the new Feature file as its authoritative source. Read
+and follow `../grillme/SKILL.md` immediately using the preserved full Feature
+path. Any other reply ends the continuation.
 
 ## Boundaries
 
 - Featureit creates Features only for `env`.
-- Feature files and drafts are local files; do not create Shortcut stories,
+- Feature files are local files; do not create drafts, Tasks, Shortcut stories,
   branches, commits, databases, persisted workflow state, or session artifacts.
-- Featureit is create-only. Do not reopen, resume, re-split, or overwrite an
-  existing Feature.
-- Do not invoke Taskit, Workit, or another continuation after the batch. The user
-  chooses the normal next workflow explicitly.
+- Featureit is create-only. Do not reopen, resume, split, overwrite, or add work
+  to an existing Feature.
+- Feature development proceeds incrementally through repeated
+  `Grillme -> Draftit` cycles, one draft at a time.
+- Do not invoke Draftit, Taskit, Workit, or another continuation automatically.
 
 ## Final principles check
 

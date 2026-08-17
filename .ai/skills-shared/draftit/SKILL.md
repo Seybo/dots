@@ -2,8 +2,8 @@
 name: draftit
 description: >-
   Create the next draftNN folder for the current or preserved task project from
-  conversation context, deriving a short task slug automatically. Featureit and
-  Grillme may supply optional env Feature membership through their handoffs.
+  conversation context, deriving a short task slug automatically. Grillme may
+  supply optional env Feature membership through its handoff.
   Command-only skill. In Pi, invoke via /skill:draftit; /draftit is also
   accepted where that alias is exposed.
 disable-model-invocation: true
@@ -40,10 +40,8 @@ epic, name, or slug argument.
 An exact bare `draftit` reply to Grillme's active continuation offer may use the
 project preserved by Grillme. When Grillme's authoritative source is an `env`
 Feature file or starts with the exact Feature reference, its handoff also
-supplies that Feature membership. Featureit's approved batch supplies project
-`env` and its Feature slug internally. These explicit handoffs are the only
-Feature source; never infer an active Feature from older conversation or durable
-state.
+supplies that Feature membership. This explicit handoff is the only Feature
+source; never infer an active Feature from older conversation or durable state.
 
 Do not auto-use this skill from a general drafting request. Wait for the explicit
 slash command or an authorized handoff above.
@@ -70,13 +68,12 @@ command.
    - reject project, Feature, epic, name, slug, and other option-style arguments; Draftit derives identity and receives routing state only from the current checkout or an authorized handoff
    - for a direct slash command, resolve the project from the current registered checkout using [`task-resolution.md`](../components/task-resolution.md); stop when it cannot be inferred
    - for a Grillme handoff, use its preserved project when available; use its Feature only when the authoritative source is `/Volumes/dev/_tasks/env/features/<feature-slug>.md` or begins with the exact Feature reference
-   - for a Featureit batch handoff, require its preserved project `env` and Feature slug
    - do not inspect Pi session logs, prompt templates, other task directories, Git history, older conversation, or persisted state to infer missing routing context
 
 2. **Resolve the project and optional Feature:**
    - read the project from `~/.ai/skills-shared/components/projects.yml`; if it is not registered, stop and tell the user to add it to the registry
    - if its task root does not exist, create `/Volumes/dev/_tasks/<project>/`
-   - without Feature state from Grillme or Featureit, create an unfeatured draft
+   - without Feature state from Grillme, create an unfeatured draft
    - with Feature state, require the project is exactly `env`, validate the slug with `^[a-z][a-z0-9-]*$`, and resolve `/Volumes/dev/_tasks/env/features/<feature-slug>.md`
    - the Feature file must exist; read it completely and require its final first-level section to be `# Drafts and tasks` before creating the draft
 
@@ -133,7 +130,6 @@ command.
 8. **Report and offer continuation:**
    - show the draft name, draft folder, and `task.md` path; show the Feature path when present
    - preserve the resolved project, `draftNN`, and full `task.md` path for the next turn
-   - when Featureit batch mode is active, suppress the normal per-draft continuation below, return the created draft data to Featureit, and let Featureit start the next approved draft
    - inspect the final `# Deferred decisions` section when present; if it contains any question, remind the user that decisions remain unresolved and that Taskit will require explicit approval before conversion
    - offer both next steps and tell the user to reply with exactly one bare keyword:
      - `grillme` to grill the new `task.md`
@@ -143,28 +139,13 @@ command.
    - do not invoke another skill for any other reply, after failed or incomplete draft creation, or before the user chooses
    - continuation replies must contain only the exact bare keyword; optional arguments are not supported
 
-## Featureit batch mode
-
-Featureit owns this internal batch path; it is not a public Draftit argument.
-After the user gives exact `approve` to Featureit's currently displayed proposal,
-Featureit reads and follows this skill once with project `env`, the validated
-Feature slug, and every approved draft context in displayed order.
-
-For each item, apply the same context writing, derived slug, smallest-missing
-`draftNN`, no-clobber write, and ordered inventory append as standalone Draftit.
-Complete and verify one draft before starting the next. Suppress each draft's
-normal Grillme/Taskit continuation and return its slug, folder, and `task.md`
-path to Featureit. On failure, stop without retry, rollback, renumbering, or
-starting another item. Featureit owns final verification, Feature trimming, and
-the one batch report.
-
 ## Important Notes
 
 - Drafts are provider-neutral; Taskit owns Shortcut epic collection and conversion.
 - Draftit always derives the slug from context. Rename a draft ad hoc later if its generated name needs correction.
 - Do not register projects automatically.
 - Do not add extra files.
-- Do not auto-use this skill without an explicit `/draftit` command, an exact bare `draftit` reply to Grillme's active continuation offer, or Featureit's exact approved batch handoff.
+- Do not auto-use this skill without an explicit `/draftit` command or an exact bare `draftit` reply to Grillme's active continuation offer.
 
 ## Final principles check
 

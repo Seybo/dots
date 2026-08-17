@@ -84,29 +84,35 @@ RSpec.describe 'Feature workflow contract' do
     expect(resolution).to match(/task-specific.*wins/im)
   end
 
-  it 'creates one no-clobber Feature from the settled Grillme summary' do
+  it 'researches a user-provided idea and creates one no-clobber Feature' do
     expect(featureit).to include('disable-model-invocation: true')
-    expect(featureit).to include('/skill:featureit')
-    expect(featureit).to match(/recent.*Grillme.*summary/im)
-    expect(featureit).to match(/do not inspect Pi session logs/i)
+    expect(featureit).to include('/skill:featureit <feature-idea>')
+    expect(featureit).to match(/require a non-empty natural-language Feature idea/i)
+    expect(featureit).to match(/inspect relevant local code.*documentation/im)
+    expect(featureit).to match(/official documentation or upstream source/i)
+    expect(featureit).to match(/available web-search workflow/i)
+    expect(featureit).to match(/existing tools or plugins with similar functionality/i)
     expect(featureit).to match(/must not already exist/i)
     expect(featureit).to match(/derive.*Feature slug/im)
   end
 
-  it 'proposes and creates an approved ordered draft split' do
-    expect(featureit).to include('Propose split to drafts?')
-    expect(featureit).to match(/exact.*`yes`.*without.*files/im)
-    expect(featureit).to match(/exact.*`approve`.*Draftit/im)
-    expect(featureit).to match(/smallest end-to-end working path/i)
-    expect(featureit).to match(/logical behavior, not.*files/im)
-    expect(featureit).to match(/substantial integration boundary/i)
-    expect(featureit).to match(/only after every.*draft.*created.*trim/im)
+  it 'reports the research audit and hands the Feature to Grillme without splitting it' do
+    expect(featureit).to match(/does not grill.*propose.*split.*create drafts/im)
+    expect(featureit).to include('Local code and docs:')
+    expect(featureit).to include('Official documentation:')
+    expect(featureit).to include('Web search:')
+    expect(featureit).to include('Comparable projects:')
+    expect(featureit).to match(/explicit.*Not performed/im)
+    expect(featureit).to match(/exact bare `grillme`/i)
+    expect(featureit).to include('../grillme/SKILL.md')
+    expect(featureit).to match(/one capability/i)
+    expect(featureit).not_to include('Propose split to drafts?')
   end
 
-  it 'offers Featureit from completed non-draft Grillme sessions' do
-    expect(grillme).to match(/featureit.*settled interview result/im)
-    expect(grillme).to match(/exact bare `featureit`/i)
-    expect(grillme).to include('../featureit/SKILL.md')
+  it 'offers one Draftit continuation from completed non-draft Grillme sessions' do
+    expect(grillme).to match(/offer only `draftit`/i)
+    expect(grillme).not_to include('../featureit/SKILL.md')
+    expect(grillme).to match(/Feature slug.*Feature reference/im)
     expect(grillme).to match(%r{draftNN/task\.md.*taskit}im)
   end
 
@@ -116,11 +122,16 @@ RSpec.describe 'Feature workflow contract' do
     expect(draftit).not_to include('feature: <feature-slug>')
     expect(draftit).not_to include('epic: <id>')
     expect(draftit).to include('Feature: [<feature-slug>](../features/<feature-slug>.md)')
-    expect(draftit).to match(/Featureit.*batch/im)
+    expect(draftit).not_to match(/Featureit.*batch/im)
     expect(draftit).to match(/Grillme.*handoff.*Feature/im)
     expect(draftit).to match(/current registered checkout/im)
     expect(draftit).to match(/append.*ordered.*inventory/im)
-    expect(draftit).to match(/suppress.*continuation/im)
+  end
+
+  it 'grills one Feature capability while preserving the final inventory' do
+    expect(grilling).to match(/grill exactly one capability per session/i)
+    expect(grilling).to match(/preserve unrelated research and unresolved questions/i)
+    expect(grilling).to match(/Deferred decisions.*immediately before.*Drafts and tasks/im)
   end
 
   it 'defers Shortcut epic selection from Draftit to Taskit' do
