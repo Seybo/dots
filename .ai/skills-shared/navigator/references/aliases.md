@@ -5,7 +5,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 ## GitHub / PRs
 
 - `github`, `gh`, `pr`, `pull request`, `review PR`, `review my branch`, `look at diff`, `code review` → `/skill:super-review`
-- `hunk`, `guided diff`, `explain current hunk`, `expit`, `expall` → `/skill:hunkit`
+- `hunk`, `guided diff`, `explain current hunk`, `expall`, `bare expit after hunkit` → `/skill:hunkit`
 - `fix super-review`, `address super-review findings`, `apply review fixes` → `/skill:claude-super-fix`
 - `review comments`, `address comments`, `inline comments`, `review id` → `/skill:addressit`
 - `import review`, `fix imported review`, `reported issues`, `autofix` → `/skill:autofix`
@@ -55,6 +55,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 
 ## Explanation
 
+- `/expit`, `explain this differently`, `try another explanation approach` → `/skill:expit` (explicit invocation only)
 - `explain file`, `walk through file` → `/skill:explain-file`
 - `explain flow`, `what happens when`, `walk me through feature` → `/skill:explain-flow`
 

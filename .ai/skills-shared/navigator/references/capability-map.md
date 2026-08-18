@@ -62,6 +62,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 
 ## Explaining code and flows
 
+- `/skill:expit` or `/expit` — explicitly explain a supplied or recent subject using ordered example approaches.
 - `/skill:explain-file` — explain one file paragraph by paragraph.
 - `/skill:explain-flow` — trace how a specific feature or flow executes through a codebase.
 
