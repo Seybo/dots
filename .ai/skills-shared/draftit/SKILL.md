@@ -20,6 +20,8 @@ This is a command-only skill.
 ## Invocation
 
 ```text
+/skill:draftit
+/draftit
 /skill:draftit help
 /draftit help
 /draftit <context-reference-or-text>
@@ -28,9 +30,15 @@ This is a command-only skill.
 Examples:
 
 ```text
+/draftit
 /draftit the above plan
 /draftit add CSV export for the current report
 ```
+
+A direct invocation with no context argument infers the task context from the
+immediately preceding coherent discussion. If that discussion does not contain
+enough information for a useful task, ask the user for context instead of
+searching further back.
 
 A direct invocation infers the project only from the current registered
 checkout. If that state is unavailable, stop and tell the user to invoke
@@ -65,7 +73,7 @@ command.
 
 1. **Parse and validate the invocation:**
    - if the only argument is `help`, show this help text and stop
-   - require non-empty context; if none remains, show the invocation forms and ask for context
+   - when no context argument remains, infer context from the immediately preceding coherent discussion; if it does not describe a useful task, show the invocation forms and ask for context
    - reject project, Feature, epic, name, slug, and other option-style arguments; Draftit derives identity and receives routing state only from the current checkout or an authorized handoff
    - for a direct slash command, resolve the project from the current registered checkout using [`task-resolution.md`](../components/task-resolution.md); stop when it cannot be inferred
    - for a Grillme handoff, use its preserved project when available; use its Feature only when the authoritative source is `/Volumes/dev/_tasks/env/features/<feature-slug>.md`
@@ -79,6 +87,7 @@ command.
    - the Feature file must exist; read it completely and require its final first-level section to be `# Drafts and tasks` before creating the draft
 
 3. **Resolve context and derive the slug:**
+   - with no context argument, use only the immediately preceding coherent discussion that led to the invocation; do not combine unrelated earlier topics
    - for references such as `the above plan`, use the relevant conversation content
    - for literal text, use that text
    - for commits, PRs, review comments, or external threads, inspect the source and rewrite it as self-contained context
