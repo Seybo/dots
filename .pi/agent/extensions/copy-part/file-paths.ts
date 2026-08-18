@@ -27,7 +27,11 @@ function normalizePath(candidate: string): string | undefined {
 	const path = value.match(PATH_PATTERN)?.groups?.path;
 	if (!path || !path.includes("/") || path.includes("//") || path.endsWith("/")) return undefined;
 
-	if (path.startsWith("/") || path.startsWith("./") || path.startsWith("../")) return value;
+	if (path.startsWith("/")) {
+		const remainder = path.slice(1);
+		return remainder.includes("/") || remainder.includes(".") ? value : undefined;
+	}
+	if (path.startsWith("./") || path.startsWith("../")) return value;
 
 	const filename = path.slice(path.lastIndexOf("/") + 1);
 	return filename.includes(".") ? value : undefined;

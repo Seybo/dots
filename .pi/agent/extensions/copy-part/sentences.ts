@@ -51,10 +51,28 @@ function proseChunks(markdown: string): string[] {
 	return chunks;
 }
 
+function mergeNumberedPrefixes(sentences: string[]): string[] {
+	const merged: string[] = [];
+
+	for (let index = 0; index < sentences.length; index++) {
+		const sentence = sentences[index]!;
+		const next = sentences[index + 1];
+		if (/^\d+\.$/.test(sentence) && next && !/^\d+\.$/.test(next)) {
+			merged.push(`${sentence} ${next}`);
+			index++;
+		} else {
+			merged.push(sentence);
+		}
+	}
+
+	return merged;
+}
+
 export function extractSentences(markdown: string): string[] {
 	const segmenter = new Intl.Segmenter(undefined, { granularity: "sentence" });
 
-	return proseChunks(markdown).flatMap((chunk) =>
-		Array.from(segmenter.segment(chunk), ({ segment }) => segment.trim()).filter(Boolean),
-	);
+	return proseChunks(markdown).flatMap((chunk) => {
+		const sentences = Array.from(segmenter.segment(chunk), ({ segment }) => segment.trim()).filter(Boolean);
+		return mergeNumberedPrefixes(sentences);
+	});
 }

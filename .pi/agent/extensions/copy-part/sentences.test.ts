@@ -18,6 +18,22 @@ test("keeps headings and list prose while dropping blank segments", () => {
 	]);
 });
 
+test("keeps numbered-line prefixes with their sentence", () => {
+	const markdown = [
+		"Understood. For each response, assess:",
+		"",
+		"1. What follows the current rules.",
+		"2. What does not.",
+	].join("\n");
+
+	assert.deepEqual(extractSentences(markdown), [
+		"Understood.",
+		"For each response, assess:",
+		"1. What follows the current rules.",
+		"2. What does not.",
+	]);
+});
+
 test("returns no candidates for blank content", () => {
 	assert.deepEqual(extractSentences(" \n\n\t"), []);
 });
