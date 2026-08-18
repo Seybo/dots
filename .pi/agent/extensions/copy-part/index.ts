@@ -1,11 +1,13 @@
 import { spawn } from "node:child_process";
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { Key, matchesKey, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 import { extractCodeBlocks } from "./code-blocks.ts";
 import { extractFilePaths } from "./file-paths.ts";
 import { extractLinks } from "./links.ts";
+import { PickerState } from "./picker-state.ts";
+import { formatSentenceList } from "./sentence-list.ts";
 import { parseCopyArgs, resolveSelection } from "./selection.ts";
 import { extractSentences } from "./sentences.ts";
 
@@ -15,10 +17,16 @@ type ModeConfig = {
 	partName: "sentence" | "code block" | "link" | "file path";
 	missing: string;
 	extract: (response: string) => string[];
+	isMultiSelect?: boolean;
 };
 
 const MODES = {
-	s: { partName: "sentence", missing: "sentence prose", extract: extractSentences },
+	s: {
+		partName: "sentence",
+		missing: "sentence prose",
+		extract: extractSentences,
+		isMultiSelect: true,
+	},
 	c: { partName: "code block", missing: "fenced code block", extract: extractCodeBlocks },
 	l: { partName: "link", missing: "web link", extract: extractLinks },
 	f: { partName: "file path", missing: "file path", extract: extractFilePaths },
@@ -56,9 +64,10 @@ async function pickPart(
 	ctx: ExtensionCommandContext,
 	items: string[],
 	partName: ModeConfig["partName"],
+	isMultiSelect: boolean,
 ): Promise<string | null> {
 	return ctx.ui.custom<string | null>((tui, theme, keybindings, done) => {
-		let selectedIndex = items.length - 1;
+		const state = new PickerState(items.length);
 
 		return {
 			render(width: number): string[] {
@@ -66,44 +75,70 @@ async function pickPart(
 				const visibleCount = Math.min(items.length, MAX_VISIBLE_ITEMS);
 				const startIndex = Math.max(
 					0,
-					Math.min(selectedIndex - visibleCount + 1, items.length - visibleCount),
+					Math.min(state.selectedIndex - visibleCount + 1, items.length - visibleCount),
 				);
 				const endIndex = Math.min(items.length, startIndex + visibleCount);
 				const numberWidth = String(items.length).length;
 
 				for (let index = startIndex; index < endIndex; index++) {
-					const prefix = index === selectedIndex ? "▶" : " ";
+					const prefix = index === state.selectedIndex ? "▶" : " ";
+					const mark = isMultiSelect ? `${state.isMarked(index) ? "[x]" : "[ ]"} ` : "";
 					const number = String(index + 1).padStart(numberWidth);
-					const text = truncateToWidth(`${prefix} ${number}. ${compactPreview(items[index]!)}`, width, "…");
+					const text = truncateToWidth(
+						`${prefix} ${mark}${number}. ${compactPreview(items[index]!)}`,
+						width,
+						"…",
+					);
 					lines.push(
-						index === selectedIndex
+						index === state.selectedIndex
 							? theme.bg("selectedBg", theme.fg("accent", text))
 							: theme.fg("dim", text),
 					);
 				}
 
-				lines.push("", theme.fg("accent", `Selected ${partName} ${selectedIndex + 1}/${items.length}`));
+				const marked = isMultiSelect ? ` · Marked ${state.markedIndexes.size}` : "";
+				lines.push(
+					"",
+					theme.fg(
+						"accent",
+						`Selected ${partName} ${state.selectedIndex + 1}/${items.length}${marked}`,
+					),
+				);
 				const previewWidth = Math.max(1, width - 2);
-				const selected = theme.bg("selectedBg", theme.fg("text", items[selectedIndex]!));
+				const selected = theme.bg("selectedBg", theme.fg("text", items[state.selectedIndex]!));
 				lines.push(...wrapTextWithAnsi(selected, previewWidth).map((line) => `  ${line}`));
-				lines.push("", theme.fg("dim", "↑/↓ browse · Enter copy · Esc cancel"));
+				const help = isMultiSelect
+					? "↑/↓/j/k browse · Space mark · Enter copy · Esc cancel"
+					: "↑/↓/j/k browse · Enter copy · Esc cancel";
+				lines.push("", theme.fg("dim", help));
 
 				return lines.map((line) => truncateToWidth(line, width, ""));
 			},
 			invalidate() {},
 			handleInput(data: string) {
-				if (keybindings.matches(data, "tui.select.up")) {
-					selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+				if (keybindings.matches(data, "tui.select.up") || data === "k") {
+					state.move(-1);
 					tui.requestRender();
 					return;
 				}
-				if (keybindings.matches(data, "tui.select.down")) {
-					selectedIndex = (selectedIndex + 1) % items.length;
+				if (keybindings.matches(data, "tui.select.down") || data === "j") {
+					state.move(1);
+					tui.requestRender();
+					return;
+				}
+				if (isMultiSelect && matchesKey(data, Key.space)) {
+					state.toggleMark();
+					state.moveNext();
 					tui.requestRender();
 					return;
 				}
 				if (keybindings.matches(data, "tui.select.confirm")) {
-					done(items[selectedIndex]!);
+					const chosen = state.chosenItems(items);
+					const result =
+						isMultiSelect && state.markedIndexes.size > 0
+							? formatSentenceList(chosen)
+							: chosen[0]!;
+					done(result);
 					return;
 				}
 				if (keybindings.matches(data, "tui.select.cancel")) done(null);
@@ -166,7 +201,9 @@ export default function copyPartExtension(pi: ExtensionAPI) {
 			}
 
 			const item =
-				selection.kind === "picker" ? await pickPart(ctx, items, config.partName) : selection.item;
+				selection.kind === "picker"
+					? await pickPart(ctx, items, config.partName, config.isMultiSelect ?? false)
+					: selection.item;
 			if (item === null) return;
 
 			try {
