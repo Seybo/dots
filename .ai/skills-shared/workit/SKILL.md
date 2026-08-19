@@ -227,9 +227,21 @@ and select the matching ordinal workspace. Applied to `/workit`:
 
 9. **After completing implementation:**
    - re-read `task.md` and `steps.md` and verify nothing was missed
-   - re-read `~/.ai/rules/development-principles.md` and double-check the completed implementation against every principle before reporting completion
-   - explicitly list every part that does not follow a principle and explain why; if everything follows, say that there are no exceptions
-   - report what was done
+   - finish the task's application, integrity, test, lint, diff, and placeholder checks before review
+   - run the independent principles review once, after all numbered implementation steps are complete; do not run it after individual steps
+   - skip this final full-task review in `create_steps_only_mode` and `step_mode`; the invocation that completes the whole task owns it
+   - keep all Workit implementation changes unstaged until the review so the reviewer sees the complete task diff; do not unstage a pre-existing user checkpoint
+   - start one fresh isolated Pi process from the code working directory with no session, context files, skills, extensions, or prompt templates, using the current Pi model and reasoning level:
+     ```bash
+     pi -p --no-session --no-context-files --no-skills --no-extensions --no-prompt-templates --tools read,grep,find,ls,bash --model "$PI_PROVIDER/$PI_MODEL" --thinking "$PI_REASONING_LEVEL" "Review unstaged changes against $HOME/.ai/rules/development-principles.md"
+     ```
+   - capture and evaluate the complete review output; do not replace this process with a self-attestation or re-read ritual
+   - reject suggestions that conflict with `task.md`, settled user decisions, supported behavior, or the development principles; record each rejection and its reason
+   - after the review, verify that every unstaged file belongs to the active task and ask for permission to stage the implementation baseline unless the user has already explicitly authorized staging
+   - stage only the active task's implementation changes; never stage unrelated repository changes
+   - apply only agreed review suggestions after staging so review-driven changes remain unstaged for user inspection
+   - rerun checks affected by accepted review changes, but do not recursively launch another reviewer
+   - report what was done, the checks run, accepted review changes left unstaged, and rejected suggestions with reasons; when no review suggestion was accepted, state that the unstaged diff is empty
    - separately propose all improvements, findings, validations, edge cases, follow-up tasks, and behavior changes you noticed but intentionally did not implement because they were outside the current task/current behavior
 
 ## Important Notes
