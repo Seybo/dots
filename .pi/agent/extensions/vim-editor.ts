@@ -1,7 +1,7 @@
 // Based on Pi's official modal-editor extension example.
 
 import { CustomEditor, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { decodeKittyPrintable, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { decodeKittyPrintable, matchesKey, sliceByColumn, visibleWidth } from "@earendil-works/pi-tui";
 
 // These native inputs match this environment's Pi editor keybindings.
 const NORMAL_KEYS: Record<string, string> = {
@@ -169,10 +169,15 @@ class VimEditor extends CustomEditor {
 		const lines = super.render(width);
 		if (lines.length === 0) return lines;
 
-		const label = this.mode === "normal" ? " NORMAL " : " INSERT ";
+		const label = this.mode === "normal" ? "  " : "  ";
+		const labelWidth = visibleWidth(label);
 		const last = lines.length - 1;
-		if (visibleWidth(lines[last]!) >= label.length) {
-			lines[last] = truncateToWidth(lines[last]!, width - label.length, "") + label;
+		const lastWidth = visibleWidth(lines[last]!);
+		if (lastWidth >= labelWidth + 1) {
+			lines[last] =
+				sliceByColumn(lines[last]!, 0, 1) +
+				label +
+				sliceByColumn(lines[last]!, labelWidth + 1, lastWidth - labelWidth - 1);
 		}
 		return lines;
 	}
