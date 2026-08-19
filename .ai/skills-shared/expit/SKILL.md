@@ -2,7 +2,7 @@
 name: expit
 description: >-
   Explicit-only skill that explains a supplied or recent conversation subject
-  using ordered example approaches. Invoke only with /expit or /skill:expit.
+  using ordered example approaches. Invoke only with /skill:expit.
 disable-model-invocation: true
 ---
 
@@ -14,7 +14,6 @@ Explain one subject using the ordered examples in this skill. This is a command-
 
 ```text
 /skill:expit [subject]
-/expit [subject]
 ```
 
 Do not invoke this skill automatically from an ordinary explanation request. Wait for an explicit slash command. A new invocation always starts from the first explanation example.

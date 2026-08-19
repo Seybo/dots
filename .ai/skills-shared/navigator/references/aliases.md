@@ -55,7 +55,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 
 ## Explanation
 
-- `/expit`, `explain this differently`, `try another explanation approach` → `/skill:expit` (explicit invocation only)
+- `/skill:expit`, `explain this differently`, `try another explanation approach` → `/skill:expit` (explicit invocation only)
 - `explain file`, `walk through file` → `/skill:explain-file`
 - `explain flow`, `what happens when`, `walk me through feature` → `/skill:explain-flow`
 
