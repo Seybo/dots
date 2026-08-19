@@ -5,13 +5,55 @@ return {
     lazy = false,
     ---@type snacks.Config
     opts = {
+      bigfile = { enabled = true },
       debug = { enabled = true },
       dim = { enabled = false },
+      explorer = { enabled = true, replace_netrw = false },
       git = { enabled = true },
       gitbrowse = { enabled = true },
       input = { enabled = true },
       notifier = { enabled = true },
-      picker = { enabled = true },
+      picker = {
+        enabled = true,
+        sources = {
+          explorer = {
+            auto_close = true,
+            diagnostics_open = true,
+            git_status_open = true,
+            hidden = true,
+            jump = { close = true },
+            layout = {
+              fullscreen = true,
+              preview = true,
+              layout = {
+                backdrop = false,
+                box = 'horizontal',
+                border = 'none',
+                {
+                  box = 'vertical',
+                  width = 0.3,
+                  {
+                    win = 'input',
+                    height = 1,
+                    border = true,
+                    title = '{title} {live} {flags}',
+                    title_pos = 'center',
+                  },
+                  { win = 'list', border = 'none' },
+                },
+                {
+                  win = 'preview',
+                  width = 0.7,
+                  border = 'left',
+                  title = '{preview}',
+                  title_pos = 'center',
+                },
+              },
+            },
+          },
+        },
+      },
+      quickfile = { enabled = true },
       scroll = {
         enabled = true,
         animate = {
@@ -31,6 +73,15 @@ return {
     },
     config = function(_, opts)
       require('snacks').setup(opts)
+
+      local function set_explorer_highlights()
+        vim.api.nvim_set_hl(0, 'SnacksPickerPathHidden', { link = 'Normal' })
+      end
+      set_explorer_highlights()
+      vim.api.nvim_create_autocmd('ColorScheme', {
+        group = vim.api.nvim_create_augroup('snacks_explorer_highlights', { clear = true }),
+        callback = set_explorer_highlights,
+      })
 
       vim.g.autoformat = true
       require('snacks').toggle
@@ -87,6 +138,7 @@ return {
           branch = 'master',
         })
       end, mode = { 'n', 'v' }, desc = '[Snacks] Git blame' },
+      { '<leader>fo', function() Snacks.explorer.reveal() end, desc = '[Snacks] File explorer' },
       { '<leader>u', function() Snacks.picker.undo() end, desc = '[Snacks] Undo history' },
       { '<leader>n', function() Snacks.notifier.show_history() end, desc = '[Snacks] Show notifications history' },
     },

@@ -2,6 +2,7 @@
 
 ## Local sources
 - `~/.local/share/nvim/lazy/snacks.nvim/doc/snacks.nvim-notifier.txt`
+- `~/.local/share/nvim/lazy/snacks.nvim/docs/explorer.md`
 - `~/.local/share/nvim/lazy/snacks.nvim/README.md`
 
 ## Local configs
