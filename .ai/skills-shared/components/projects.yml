@@ -8,10 +8,25 @@ projects:
     checkout_layout: direct
     checkout_path: /Users/inseybo/.dots
     is_infrastructure: true
-  misc_kaamp:
+  misc_axel_be:
     checkout_layout: ordinal_workspaces
-    code_root: /Volumes/dev/projects/misc/misc_kaamp
-    tmux_layout: misc_kaamp
+    code_root: /Volumes/dev/projects/misc/axel_be
+    tmux_layout: misc_axel1
+    task_provider: local
+  misc_axel_fe:
+    checkout_layout: ordinal_workspaces
+    code_root: /Volumes/dev/projects/misc/axel_fe
+    tmux_layout: misc_axel1
+    task_provider: local
+  misc_kaamp_be:
+    checkout_layout: ordinal_workspaces
+    code_root: /Volumes/dev/projects/misc/kaamp_be
+    tmux_layout: misc_kaamp1
+    task_provider: local
+  misc_kaamp_fe:
+    checkout_layout: ordinal_workspaces
+    code_root: /Volumes/dev/projects/misc/kaamp_fe
+    tmux_layout: misc_kaamp1
     task_provider: local
   my_finance:
     checkout_layout: ordinal_workspaces
