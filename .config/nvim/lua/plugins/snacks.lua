@@ -138,7 +138,16 @@ return {
           branch = 'master',
         })
       end, mode = { 'n', 'v' }, desc = '[Snacks] Git blame' },
-      { '<leader>fo', function() Snacks.explorer.reveal() end, desc = '[Snacks] File explorer' },
+      {
+        '<leader>fo',
+        function()
+          local file = vim.api.nvim_buf_get_name(0)
+          -- Root Explorer at the file's repo instead of Neovim's unrelated cwd.
+          local cwd = file ~= '' and (Snacks.git.get_root(file) or vim.fs.dirname(file)) or vim.fn.getcwd()
+          Snacks.explorer.open({ cwd = cwd })
+        end,
+        desc = '[Snacks] File explorer',
+      },
       { '<leader>u', function() Snacks.picker.undo() end, desc = '[Snacks] Undo history' },
       { '<leader>n', function() Snacks.notifier.show_history() end, desc = '[Snacks] Show notifications history' },
     },
