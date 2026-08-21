@@ -103,6 +103,10 @@ Use this format:
 
 **Recommendation:** <recommended answer grounded in the plan and evidence>
 
+Treat the recommendation as the proposal the user should accept, reject, or
+correct. End the turn with the recommendation. Do not append another question,
+prompt, or restatement after it; that makes the decision target ambiguous.
+
 Ask one question at a time and wait for feedback. When the user explicitly defers a question or says they cannot answer it, record it for `# Deferred decisions`, do not ask it again, and continue with the next point.
 
 Cover material concerns such as boundaries, contracts, failure behavior, security, compatibility, and operations only when relevant to this plan. Prefer KISS/YAGNI; exhaustive grilling means finding all material unresolved decisions, not enumerating every imaginable design.
