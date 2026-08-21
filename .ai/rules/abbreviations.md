@@ -8,6 +8,9 @@ When the meaning is clear, act on them without asking for clarification.
 - `00ao` — Answer only: investigate what is needed, then answer the question.
   Do not make updates, edit files, run fix-up changes, or otherwise change state.
 
+- `00cc` — Copy the referenced content exactly to the system clipboard.
+  Do not modify the content or include surrounding commentary.
+
 - `00ex` — Explain the referenced text.
 
 - `00gf` — Give feedback on the referenced idea or text.

@@ -20,4 +20,3 @@ Team conventions for any Ruby/Rails project unless the project's own instruction
 
 - No raw SQL interpolation. Use parameterized queries (`?` placeholders, named params, or ORM query methods).
 - API keys, tokens, and other credentials live in environment variables — never in code or committed config.
-- Sensitive data (PII, credentials, raw provider responses with secrets) must not appear in logs, error messages, or stored debug artifacts. Sanitize before logging or persisting.

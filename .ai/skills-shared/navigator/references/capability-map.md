@@ -77,6 +77,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 ## Abbreviations
 
 - `00ao` — answer only after investigating; do not change files or state.
+- `00cc` — copy referenced content exactly to the system clipboard.
 - `00ex` — explain referenced text in simple, precise terms.
 - `00gf` — give feedback on referenced idea or text.
 - `00rvu` — review unstaged changes only; do not run specs or RuboCop.

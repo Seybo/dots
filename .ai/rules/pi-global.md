@@ -118,7 +118,6 @@ Team conventions for any Ruby/Rails project unless the project's own instruction
 
 - No raw SQL interpolation. Use parameterized queries (`?` placeholders, named params, or ORM query methods).
 - API keys, tokens, and other credentials live in environment variables — never in code or committed config.
-- Sensitive data (PII, credentials, raw provider responses with secrets) must not appear in logs, error messages, or stored debug artifacts. Sanitize before logging or persisting.
 
 <!-- Source: .ai/rules/agent-ops.md -->
 
@@ -212,6 +211,9 @@ When the meaning is clear, act on them without asking for clarification.
 
 - `00ao` — Answer only: investigate what is needed, then answer the question.
   Do not make updates, edit files, run fix-up changes, or otherwise change state.
+
+- `00cc` — Copy the referenced content exactly to the system clipboard.
+  Do not modify the content or include surrounding commentary.
 
 - `00ex` — Explain the referenced text.
 

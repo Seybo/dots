@@ -69,6 +69,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 ## Abbreviations
 
 - `00ao` → answer only after investigating; do not change files or state.
+- `00cc` → copy referenced content exactly to the system clipboard.
 - `00ex` → explain referenced text.
 - `00gf` → give feedback on referenced text or idea.
 - `00rvu` → review unstaged changes only; no specs or RuboCop.
