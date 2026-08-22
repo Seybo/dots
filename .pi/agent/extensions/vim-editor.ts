@@ -1,7 +1,15 @@
 // Based on Pi's official modal-editor extension example.
 
-import { CustomEditor, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { decodeKittyPrintable, matchesKey, sliceByColumn, visibleWidth } from "@earendil-works/pi-tui";
+import { CustomEditor, type ExtensionAPI, type Theme } from "@earendil-works/pi-coding-agent";
+import {
+	decodeKittyPrintable,
+	type EditorTheme,
+	type KeybindingsManager,
+	matchesKey,
+	sliceByColumn,
+	type TUI,
+	visibleWidth,
+} from "@earendil-works/pi-tui";
 
 // These native inputs match this environment's Pi editor keybindings.
 const NORMAL_KEYS: Record<string, string> = {
@@ -25,6 +33,15 @@ const UNDO = "\x1b[45;5u"; // ctrl+-
 class VimEditor extends CustomEditor {
 	private mode: "normal" | "insert" = "insert";
 	private pendingOperator: "d" | "c" | null = null;
+
+	constructor(
+		tui: TUI,
+		editorTheme: EditorTheme,
+		keybindings: KeybindingsManager,
+		private readonly getTheme: () => Theme,
+	) {
+		super(tui, editorTheme, keybindings);
+	}
 
 	handleInput(data: string): void {
 		if (matchesKey(data, "escape")) {
@@ -165,19 +182,31 @@ class VimEditor extends CustomEditor {
 		}
 	}
 
+	private applyNormalBackground(line: string, width: number, theme: Theme): string {
+		const paddedLine = line + " ".repeat(Math.max(0, width - visibleWidth(line)));
+		return paddedLine
+			.split("\x1b[0m")
+			.map((segment) => theme.bg("selectedBg", segment))
+			.join("\x1b[0m");
+	}
+
 	render(width: number): string[] {
 		const lines = super.render(width);
 		if (lines.length === 0) return lines;
 
-		const label = this.mode === "normal" ? "  " : "  ";
+		const label = this.mode === "normal" ? "  NORMAL " : "  INSERT ";
 		const labelWidth = visibleWidth(label);
 		const last = lines.length - 1;
 		const lastWidth = visibleWidth(lines[last]!);
-		if (lastWidth >= labelWidth + 1) {
-			lines[last] =
-				sliceByColumn(lines[last]!, 0, 1) +
-				label +
-				sliceByColumn(lines[last]!, labelWidth + 1, lastWidth - labelWidth - 1);
+		if (lastWidth >= labelWidth) {
+			lines[last] = sliceByColumn(lines[last]!, 0, lastWidth - labelWidth) + label;
+		}
+
+		if (this.mode === "normal") {
+			const theme = this.getTheme();
+			for (let index = 1; index < last; index++) {
+				lines[index] = this.applyNormalBackground(lines[index]!, width, theme);
+			}
 		}
 		return lines;
 	}
@@ -185,6 +214,8 @@ class VimEditor extends CustomEditor {
 
 export default function (pi: ExtensionAPI) {
 	pi.on("session_start", (_event, ctx) => {
-		ctx.ui.setEditorComponent((tui, theme, keybindings) => new VimEditor(tui, theme, keybindings));
+		ctx.ui.setEditorComponent(
+			(tui, theme, keybindings) => new VimEditor(tui, theme, keybindings, () => ctx.ui.theme),
+		);
 	});
 }
