@@ -98,6 +98,12 @@ class HanditSpec < Minitest::Test
     refute File.exist?(@summary_path)
   end
 
+  def test_tasks_root_uses_dev_root
+    dev_root = File.join(@root, "dev")
+
+    assert_equal File.join(dev_root, "_tasks"), Handit.tasks_root("DEV_ROOT" => dev_root)
+  end
+
   private
 
   def runner

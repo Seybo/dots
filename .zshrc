@@ -73,6 +73,7 @@ zle -N fancy-ctrl-z fancy-ctrl-z
 bindkey '^Z' fancy-ctrl-z
 
 # stow
+export DEV_ROOT="/Volumes/dev"
 export STOW_DIR="$HOME/.dots"
 source "$STOW_DIR/no_stow/.zsh_aliases_public"
 source "$STOW_DIR/no_stow/bash_utils.sh"
@@ -142,7 +143,7 @@ fi
 export PI_AGENT_SHAKACODE_SESSIONS_DIR=~/.pi/work/sessions
 export CODEX_DEFAULT_MODEL='openai-codex/gpt-5.6-sol:high'
 export CODEX_SECONDARY_MODEL='openai-codex/gpt-5.6-terra:high'
-export PATH="/Volumes/dev/bin:$HOME/.codex/bin:$HOME/.local/bin:$PATH"
+export PATH="$DEV_ROOT/bin:$HOME/.codex/bin:$HOME/.local/bin:$PATH"
 
 # bun completions
 [ -s "/Users/inseybo/.bun/_bun" ] && source "/Users/inseybo/.bun/_bun"

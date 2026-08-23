@@ -6,7 +6,7 @@ description: >-
   session for read-only reconciliation. Command-only skill. In Pi, invoke via
   /skill:handit; /handit is also accepted where that alias is exposed.
 allowed-tools:
-  - "bash(ruby /Users/inseybo/.ai/skills-shared/handit/scripts/handit.rb *)"
+  - "bash(ruby ~/.ai/skills-shared/handit/scripts/handit.rb *)"
 disable-model-invocation: true
 ---
 
@@ -38,7 +38,7 @@ Read and follow `../components/task-resolution.md` and `../components/projects.y
 Require exactly one existing canonical draft or numbered Task folder directly under:
 
 ```text
-/Volumes/dev/_tasks/<project>/
+$DEV_ROOT/_tasks/<project>/
 ```
 
 Use an exact Task path already established by the active Grillme, Draftit, Taskit, Workit, Autoimplement, or Autofix conversation when one exists. Otherwise use the shared current-checkout, workspace, and `sc-<digits>` branch rules. Verify the resolved folder and its `task.md` on disk.
@@ -59,7 +59,7 @@ If those sources do not identify exactly one draft or Task, stop. Do not show a 
 4. Run:
 
    ```text
-   ruby /Users/inseybo/.ai/skills-shared/handit/scripts/handit.rb pass <canonical-task-folder> <summary-file>
+   ruby ~/.ai/skills-shared/handit/scripts/handit.rb pass <canonical-task-folder> <summary-file>
    ```
 
    For the exact `pass --allow-sensitive` invocation, append `--allow-sensitive`. Never add the override on your own.
@@ -73,7 +73,7 @@ If those sources do not identify exactly one draft or Task, stop. Do not show a 
 2. Run:
 
    ```text
-   ruby /Users/inseybo/.ai/skills-shared/handit/scripts/handit.rb receive <canonical-task-folder>
+   ruby ~/.ai/skills-shared/handit/scripts/handit.rb receive <canonical-task-folder>
    ```
 
    The helper validates the bundle, original Pi session ID, and non-empty `TRANSIT.md`, then prints its path.
@@ -89,7 +89,7 @@ If those sources do not identify exactly one draft or Task, stop. Do not show a 
 7. After the complete transit content has been read and reconciliation is ready, run this as a separate tool call:
 
    ```text
-   ruby /Users/inseybo/.ai/skills-shared/handit/scripts/handit.rb complete <canonical-task-folder>
+   ruby ~/.ai/skills-shared/handit/scripts/handit.rb complete <canonical-task-folder>
    ```
 
 8. Present the reconciliation and wait for approval. If cleanup fails, retain the reconciliation but report the cleanup failure.

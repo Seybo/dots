@@ -9,11 +9,11 @@ After printing the Phase 3 markdown, ALWAYS persist the SAME markdown verbatim t
 **Where to write it** (first match wins):
 
 1. **Task folder** - resolve it deterministically, do NOT eyeball or improvise. Resolution follows the shared task-resolution logic (`~/.ai/skills-shared/components/task-resolution.md`):
-   - **Project**: if the user passed a `task.md` path or task-folder path, use that folder directly. Otherwise infer the project from the review's working dir using `~/.ai/skills-shared/components/projects.yml`. This supports both ordinal workspaces (for example `/Volumes/dev/projects/shaka/gtm/2nd/` → `shaka_gtm`) and registered direct checkouts (for example `/Volumes/dev/oss/rails/` → `rails`); task root is `/Volumes/dev/_tasks/<project>/`.
+   - **Project**: if the user passed a `task.md` path or task-folder path, use that folder directly. Otherwise infer the project from the review's working dir using `~/.ai/skills-shared/components/projects.yml`. This supports both ordinal workspaces (for example `$DEV_ROOT/projects/shaka/gtm/2nd/` → `shaka_gtm`) and registered direct checkouts (for example `$DEV_ROOT/oss/rails/` → `rails`); task root is `$DEV_ROOT/_tasks/<project>/`.
    - **Task ID**: from a branch `sc-<digits>` segment when available (e.g. `mikhail/sc-33672/...` → `33672`). For an arbitrary local branch, do not guess a task ID; the user must pass the task folder/path directly. Task folders are named `<id>-<slug>` with NO `sc-` prefix.
    - **Find the folder** with `find`, never a shell glob (a bare zsh glob aborts the whole command on a non-matching pattern and prints `no matches found`, which looks like a real negative but is a broken command):
      ```bash
-     find "/Volumes/dev/_tasks/<project>" -maxdepth 1 -type d -name '<id>-*'
+     find "$DEV_ROOT/_tasks/<project>" -maxdepth 1 -type d -name '<id>-*'
      ```
    - If `find` prints exactly one path, that is the task folder → write `<task-folder>/super-review.md`. If it prints nothing, the task folder genuinely does not exist → fall through to case 2/3. If it prints more than one, ask the user which. **A `find` that errored (non-zero exit) is not an empty result — re-run it before concluding "no task folder"; never route to the fallback on an unverified negative.**
 2. **PR review, no task folder** - write to `<repo-root>/super-review.md` in the user's main working dir (NOT the throwaway worktree - it gets removed in Phase 5). If that would clobber an existing unrelated file, use `super-review-pr<num>.md`.

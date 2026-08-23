@@ -22,7 +22,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `/skill:shortcut` — read Shortcut stories, create minimal Shortcut stories, and update story descriptions.
 - `/skill:projectit` — create a project task root, expected code directory, and git repo for the task workflow.
 - `/skill:featureit` — save a settled Grillme result as one optional `env` Feature, then propose and create an approved ordered draft split.
-- `/skill:taskit` — create task folders under `/Volumes/dev/_tasks`, or create a Shortcut story from `task.md`.
+- `/skill:taskit` — create task folders under `$DEV_ROOT/_tasks`, or create a Shortcut story from `task.md`.
 - `/skill:draftit` — save selected conversation context into a draft task folder.
 - `/skill:workit` — start work from an existing task folder.
 - `/skill:guideit` — walk through a completed Workit step's unstaged changes and stage approved work with permission.
@@ -39,8 +39,8 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `/skill:dots-commit` — review uncommitted dotfiles changes and suggest focused commit groups and messages.
 - `/skill:skills-manager` — audit and manage external Claude and Pi skills through the controlled installer.
 - `/skill:misc-helper` / `/misc-helper` — run small personal helper utilities, currently DaVinci Resolve process cleanup.
-- Dev-env refs — source: `/Users/inseybo/.dots/refs/dev-env`.
-- Dots repo rules — source: `/Users/inseybo/.dots/AGENTS.md` and `.ai/rules/pi-global.md`, loaded through every Pi profile's `AGENTS.md` symlink.
+- Dev-env refs — source: `~/.dots/refs/dev-env`.
+- Dots repo rules — source: `~/.dots/AGENTS.md` and `.ai/rules/pi-global.md`, loaded through every Pi profile's `AGENTS.md` symlink.
 
 ## Themes / UI environment
 

@@ -12,7 +12,7 @@ disable-model-invocation: true
 Helper:
 
 ```text
-/Volumes/dev/bin/skills/autoimplement
+$DEV_ROOT/bin/skills/autoimplement
 ```
 
 Supported invocations:
@@ -98,7 +98,7 @@ select the workspace. Resolve a direct project to its registered checkout.
 Never create a checkout or task root.
 
 When no Task ID can be inferred, list the 10 most recent first-level Task
-folders under `/Volumes/dev/_tasks/<project>/`:
+folders under `$DEV_ROOT/_tasks/<project>/`:
 
 - prefer filesystem creation/birth time, then modification time, then folder
   name ordering
@@ -146,7 +146,7 @@ active base is stored as a commit SHA; never guess `main`, `master`, or a remote
 After normal project and Task resolution, run from the canonical checkout:
 
 ```text
-/Volumes/dev/bin/skills/autoimplement rebase-task <canonical-task-path>
+$DEV_ROOT/bin/skills/autoimplement rebase-task <canonical-task-path>
 ```
 
 When a base ref was supplied, preserve it exactly and append it as the final
@@ -184,7 +184,7 @@ For this caller, run only this continuation command after resolving each current
 set of conflicts:
 
 ```text
-/Volumes/dev/bin/skills/autoimplement continue-task-rebase <canonical-task-path> <target-ref> <full-target-sha>
+$DEV_ROOT/bin/skills/autoimplement continue-task-rebase <canonical-task-path> <target-ref> <full-target-sha>
 ```
 
 The original explicit operation named by the shared policy is
@@ -226,13 +226,13 @@ Invoke Ruby from the canonical resolved checkout, shell-escaping the canonical
 Task path:
 
 ```text
-cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement initialize-task <canonical-task-path>
+cd <canonical-checkout> && $DEV_ROOT/bin/skills/autoimplement initialize-task <canonical-task-path>
 ```
 
 When `--super-review-agent` is present, instead run:
 
 ```text
-cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement initialize-task <canonical-task-path> <claude|codex>
+cd <canonical-checkout> && $DEV_ROOT/bin/skills/autoimplement initialize-task <canonical-task-path> <claude|codex>
 ```
 
 Pass the selection only to `initialize-task`. Do not pass it to `resume-task`,
@@ -255,14 +255,14 @@ checkout errors, database errors, and Git errors unchanged and stop.
 For a normal invocation, run:
 
 ```text
-cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement resume-task <id>
+cd <canonical-checkout> && $DEV_ROOT/bin/skills/autoimplement resume-task <id>
 ```
 
 For an invocation containing `--retry`, do not run `resume-task` on the retry
 path. Run exactly:
 
 ```text
-cd <canonical-checkout> && /Volumes/dev/bin/skills/autoimplement retry-task <id>
+cd <canonical-checkout> && $DEV_ROOT/bin/skills/autoimplement retry-task <id>
 ```
 
 The retry helper must authorize redispatch before any participant message and
@@ -291,7 +291,7 @@ Whenever helper stdout contains an exact `AutoImplementCycle <id>` line:
 
 1. Retain any Task, decision, or completed Work Cycle output before the control
    line. Do not display the control line.
-2. Run `/Volumes/dev/bin/skills/autoimplement show-work-cycle <id>` and treat
+2. Run `$DEV_ROOT/bin/skills/autoimplement show-work-cycle <id>` and treat
    its JSON as authoritative. Do not display the JSON.
 3. For `manager`/`review`, follow **Inline Manager review**. Never contact a
    participant pane for a Manager Work Cycle.
@@ -316,7 +316,7 @@ Whenever helper stdout contains an exact `AutoImplementCycle <id>` line:
    Autoimplement work while it blocks:
 
    ```text
-   /Volumes/dev/bin/skills/autoimplement wait-work-cycle <id>
+   $DEV_ROOT/bin/skills/autoimplement wait-work-cycle <id>
    ```
 
 9. Process wait stdout through **Continue helper output**.
@@ -371,7 +371,7 @@ For a persisted `manager`/`review` Work Cycle, run it inline in the current Mana
    mv /tmp/autoimplement-work-cycle-<id>.json.tmp /tmp/autoimplement-work-cycle-<id>.json
    ```
 
-8. Run `/Volumes/dev/bin/skills/autoimplement wait-work-cycle <id>` directly and
+8. Run `$DEV_ROOT/bin/skills/autoimplement wait-work-cycle <id>` directly and
    process its stdout through **Continue helper output**.
 
 If inline review is interrupted before publication, leave the Work Cycle
@@ -474,7 +474,7 @@ operator's next reply while the question is active:
 - Treat `yes`, `go`, `squash`, `approve`, or `approved` as approval and run:
 
   ```text
-  /Volumes/dev/bin/skills/autoimplement squash-task <task-id> <canonical-checkout> <subject>
+  $DEV_ROOT/bin/skills/autoimplement squash-task <task-id> <canonical-checkout> <subject>
   ```
 
 - Treat `no`, `skip`, or `leave` as declining. Run no helper and report that the
@@ -536,7 +536,7 @@ ask one precise question without persisting anything.
 For one clear decision with its required reason, run exactly one command:
 
 ```text
-/Volumes/dev/bin/skills/autoimplement store-decision <id> <approved|skipped> <shell-escaped-reason>
+$DEV_ROOT/bin/skills/autoimplement store-decision <id> <approved|skipped> <shell-escaped-reason>
 ```
 
 Preserve the helper's exact stored `Decision:` and `Reason:` lines. Process the

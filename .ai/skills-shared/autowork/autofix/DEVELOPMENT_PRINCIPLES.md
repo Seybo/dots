@@ -110,7 +110,7 @@ workflow; Autofix does not read, migrate, or resume Addressit state.
 ## Ruby conventions
 
 - Use the shared package-root `ServiceObject` mixin, originally copied from
-  `/Volumes/dev/projects/my/my_health/1st/app/services/service_object.rb`.
+  `$DEV_ROOT/projects/my/my_health/1st/app/services/service_object.rb`.
 - ServiceObjects expose `.call`, declare keyword arguments with `arguments`, keep
   instance `call` concise, delegate to private methods, and memoize private
   lookups where useful.

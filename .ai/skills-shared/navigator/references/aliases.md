@@ -27,7 +27,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 
 ## Local dev environment / dotfiles
 
-- `local dev environment`, `dev env`, `dev-env refs`, `refs/dev-env` → read `/Users/inseybo/.dots/refs/dev-env`
+- `local dev environment`, `dev env`, `dev-env refs`, `refs/dev-env` → read `~/.dots/refs/dev-env`
 - `permission`, `allowlist`, `approval prompt`, `agent permissions`, `pi permissions`, `claude permissions` → `/skill:agent-permissions`
 - `publish dots`, `secret scan`, `sensitive data`, `dotfiles check` → `/skill:dots-check`
 - `backup status`, `backup coverage`, `dotfiles backup` → `/skill:dots-backup`

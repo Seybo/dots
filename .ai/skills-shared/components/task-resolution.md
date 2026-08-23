@@ -8,7 +8,18 @@ tooling.
 Runtime files:
 
 - registry: `~/.ai/skills-shared/components/projects.yml`
-- task root: `/Volumes/dev/_tasks/<project>/`
+- task root: `$DEV_ROOT/_tasks/<project>/`
+- helper commands: `$DEV_ROOT/bin/skills/`
+
+## Development root
+
+`DEV_ROOT` is the machine's development tree. Squirrel uses `/Volumes/dev`;
+Oma uses `/home/svin/dev`.
+
+Registry paths beginning with `/` are absolute. Expand paths beginning with `~`
+against the current user's home. Resolve every other `checkout_path` or
+`code_root` relative to `DEV_ROOT`. Prefer relative registry paths for projects
+beneath `DEV_ROOT` so the registry remains portable.
 
 ## Project registry
 
@@ -26,7 +37,7 @@ clone:
 ```yaml
 rails:
   checkout_layout: direct
-  checkout_path: /Volumes/dev/oss/rails
+  checkout_path: oss/rails
   task_provider: local
 ```
 
@@ -41,7 +52,7 @@ Use `ordinal_workspaces` for the existing multi-checkout layout:
 ```yaml
 shaka_gtm:
   checkout_layout: ordinal_workspaces
-  code_root: /Volumes/dev/projects/shaka/gtm
+  code_root: projects/shaka/gtm
   task_provider: shortcut
 ```
 
@@ -52,7 +63,7 @@ Checkouts live below `code_root` in canonical ordinal folders such as `1st`,
 shaka_gtm2 -> project shaka_gtm, workspace 2nd
 ```
 
-`env` is a direct infrastructure project mapped to `/Users/inseybo/.dots`.
+`env` is a direct infrastructure project mapped to `~/.dots`.
 
 ## Registering a direct project
 
@@ -61,7 +72,7 @@ registry automatically. Add a direct entry to `projects.yml` with the friendly
 name and checkout path you choose.
 
 On first `/taskit` or `/draftit` use for a registered project, create its
-missing task root at `/Volumes/dev/_tasks/<project>/`. Task-consuming/reporting
+missing task root at `$DEV_ROOT/_tasks/<project>/`. Task-consuming/reporting
 skills never create missing task roots.
 
 ## Resolving a project
@@ -74,7 +85,7 @@ skills never create missing task roots.
 3. If no project matches, stop and ask the user to register the checkout in
    `projects.yml` or pass a registered project explicitly. Do not guess.
 
-An explicit project maps to `/Volumes/dev/_tasks/<project>/`. A direct project
+An explicit project maps to `$DEV_ROOT/_tasks/<project>/`. A direct project
 needs no workspace selection. An ordinal project selects a workspace in this
 order: explicit session alias, workspace inferred from the current directory,
 then user input.
@@ -84,7 +95,7 @@ then user input.
 Task folders remain directly below the project task root:
 
 ```text
-/Volumes/dev/_tasks/<project>/<task-id>-<slug>/
+$DEV_ROOT/_tasks/<project>/<task-id>-<slug>/
 ```
 
 Local/manual tasks use zero-padded four-digit IDs such as `0001`. Shortcut
@@ -122,7 +133,7 @@ project. Existing and simple drafts and Tasks remain unfeatured.
 Feature files live at:
 
 ```text
-/Volumes/dev/_tasks/env/features/<feature-slug>.md
+$DEV_ROOT/_tasks/env/features/<feature-slug>.md
 ```
 
 `<feature-slug>` follows Draftit's slug rules and matches
@@ -134,7 +145,7 @@ Feature: [<feature-slug>](../features/<feature-slug>.md)
 ```
 
 The relative path is stable because draft and numbered Task folders remain
-direct children of `/Volumes/dev/_tasks/env/`. Never nest those folders below
+direct children of `$DEV_ROOT/_tasks/env/`. Never nest those folders below
 `features/`.
 
 A Feature file contains its stable shared brief and this final first-level

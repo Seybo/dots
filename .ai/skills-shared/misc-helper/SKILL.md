@@ -6,7 +6,7 @@ description: >-
   where that alias is exposed. Currently supports davinci-kill, cache-clean,
   and tmux-bar-reset.
 allowed-tools:
-  - "bash(/Users/inseybo/.ai/skills-shared/misc-helper/scripts/misc-helper *)"
+  - "bash(~/.ai/skills-shared/misc-helper/scripts/misc-helper *)"
 disable-model-invocation: true
 ---
 
@@ -47,7 +47,7 @@ Clear stuck tmux agent attention/running markers.
 Run:
 
 ```bash
-/Users/inseybo/.ai/skills-shared/misc-helper/scripts/misc-helper tmux-bar-reset
+~/.ai/skills-shared/misc-helper/scripts/misc-helper tmux-bar-reset
 ```
 
 The script clears tmux window/global options used by the agent attention bar and stops `agent-attention-notify --pane` watcher processes.
@@ -59,7 +59,7 @@ Remove known-safe local cache/generated-data folders from this Mac.
 Run:
 
 ```bash
-/Users/inseybo/.ai/skills-shared/misc-helper/scripts/misc-helper cache-clean
+~/.ai/skills-shared/misc-helper/scripts/misc-helper cache-clean
 ```
 
 The script first asks the user to type `CLOSED` to confirm affected apps are closed.
@@ -103,7 +103,7 @@ Force-quit stuck DaVinci Resolve app processes.
 Run:
 
 ```bash
-/Users/inseybo/.ai/skills-shared/misc-helper/scripts/misc-helper davinci-kill
+~/.ai/skills-shared/misc-helper/scripts/misc-helper davinci-kill
 ```
 
 The script:

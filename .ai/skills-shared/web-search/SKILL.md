@@ -2,7 +2,7 @@
 name: web-search
 description: Search the web through the isolated local Brave Search broker. Use when the user asks to search the web, research a topic, find current public information, compare options, or verify up-to-date external facts.
 allowed-tools:
-  - bash(/Users/inseybo/.dots/no_stow/bin/agent-brave-search *)
+  - bash(~/.dots/no_stow/bin/agent-brave-search *)
 ---
 
 # Web search
@@ -27,7 +27,7 @@ The user may also invoke it explicitly via:
 2. Run the isolated agent-facing wrapper:
 
    ```sh
-   /Users/inseybo/.dots/no_stow/bin/agent-brave-search --count 5 "<query>"
+   ~/.dots/no_stow/bin/agent-brave-search --count 5 "<query>"
    ```
 
 3. Use the returned search results to answer concisely.

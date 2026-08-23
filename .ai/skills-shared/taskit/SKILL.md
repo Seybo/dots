@@ -1,7 +1,7 @@
 ---
 name: taskit
 description: >-
-  Create a new local task folder and task.md file under /Volumes/dev/_tasks,
+  Create a new local task folder and task.md file under $DEV_ROOT/_tasks,
   or create a Shortcut story from a story ID or a task.md whose Shortcut epic is present or supplied during conversion.
   Supports a manual task name, a Shortcut story ID, a task.md path, a draftNN reference,
   or inferring the project and Shortcut story ID from the current git branch.
@@ -37,7 +37,7 @@ With two or more tokens, treat the first token as `<project>` only when it match
 The selector/task name is interpreted as either:
 
 - a **Shortcut story ID** if the selected project has `task_provider: shortcut` and the selector is a single token of digits only (e.g. `12345`); for `task_provider: local` projects, numeric selectors remain local/manual task names
-- a **draft reference** if it is a single token matching `^draft\d{2}$`, resolved to `/Volumes/dev/_tasks/<project>/draftNN/task.md`; for a `task_provider: shortcut` project, Taskit obtains missing epic state when the file has `Name:`
+- a **draft reference** if it is a single token matching `^draft\d{2}$`, resolved to `$DEV_ROOT/_tasks/<project>/draftNN/task.md`; for a `task_provider: shortcut` project, Taskit obtains missing epic state when the file has `Name:`
 - a **task markdown path** if it is a single existing path ending in `.md` or `.markdown`; for a `task_provider: shortcut` project, Taskit obtains missing epic state when the file has `Name:`
 - a **manual task name** otherwise (preserve spaces)
 
@@ -50,7 +50,7 @@ Examples:
 /taskit misc_notes Set up notes sync
 /taskit shaka_gtm 147831
 /taskit shaka_gtm 22222 --base origin/mikhail/sc-11111/parent-task
-/taskit shaka_gtm /Volumes/dev/_tasks/shaka_gtm/123-foo/task.md
+/taskit shaka_gtm $DEV_ROOT/_tasks/shaka_gtm/123-foo/task.md
 /taskit shaka_gtm draft01
 /taskit my_budget_app draft01   # local conversion if task.md has no complete Story details
 /taskit draft01                 # project inferred from cwd when possible
@@ -81,7 +81,7 @@ Read that file whenever any of these must be inferred. In short:
 - An inferred story ID is handled exactly like Shortcut mode only when the project has `task_provider: shortcut`.
 - If a needed project cannot be inferred, ask the user to pass it explicitly. A story ID is needed only for no-argument or one-project Shortcut inference on `task_provider: shortcut` projects.
 
-`taskit` only creates task folders under `/Volumes/dev/_tasks/<project>/`; it never
+`taskit` only creates task folders under `$DEV_ROOT/_tasks/<project>/`; it never
 creates project roots or code checkouts.
 
 ## Optional env Feature membership
@@ -96,7 +96,7 @@ Feature: [<feature-slug>](../features/<feature-slug>.md)
 Follow the Feature contract in `../components/task-resolution.md`:
 
 - Feature membership is valid only for project `env`; validate the slug and
-  require the linked `/Volumes/dev/_tasks/env/features/<feature-slug>.md`
+  require the linked `$DEV_ROOT/_tasks/env/features/<feature-slug>.md`
 - the Task reference is authoritative; do not scan Feature files to infer
   membership
 - before mutation, require the Feature's final `# Drafts and tasks` section to
@@ -155,7 +155,7 @@ If the section contains any unresolved question:
    - decide the mode for the selector/task name in this order:
      - **Shortcut mode** if the project has `task_provider: shortcut` and the selector is a single token matching `^\d+$`
      - for a project with `task_provider: local`, never call Shortcut; use Manual mode for ordinary selectors and local task markdown
-     - **Draft reference mode** if it is a single token matching `^draft\d{2}$`; resolve it to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then handle it exactly like Task markdown path mode
+     - **Draft reference mode** if it is a single token matching `^draft\d{2}$`; resolve it to `$DEV_ROOT/_tasks/<project>/draftNN/task.md`, then handle it exactly like Task markdown path mode
      - **Task markdown path mode** if it is a single existing path ending in `.md` or `.markdown`
      - **Manual mode** otherwise
    - if the project or required selector is missing, ask the user to use:
@@ -172,7 +172,7 @@ If the section contains any unresolved question:
 2. **Resolve and validate project:**
    - resolve the project root as:
      ```text
-     /Volumes/dev/_tasks/<project>/
+     $DEV_ROOT/_tasks/<project>/
      ```
    - if the project is not registered, tell the user to add it to `~/.ai/skills-shared/components/projects.yml`
    - if the registered project root does not exist, create it before creating the task folder
@@ -181,7 +181,7 @@ If the section contains any unresolved question:
    - **Manual mode:** use the remainder as the task name
    - **Shortcut mode for `task_provider: shortcut` projects:** call `mcp__shortcut__stories-get-by-id` with the story ID; use the story's `name` as the task name and the story's `description` as the body. If the call fails or the story is missing, stop and report the error.
    - **Local/manual mode for `task_provider: local` projects:** do not call Shortcut, even if a selector is numeric or a task file contains Story details.
-   - **Draft reference mode:** resolve `draftNN` to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then follow Task markdown path mode.
+   - **Draft reference mode:** resolve `draftNN` to `$DEV_ROOT/_tasks/<project>/draftNN/task.md`, then follow Task markdown path mode.
    - **Task markdown path mode:** read the existing task file and resolve its optional Feature membership before deriving a name. For a `task_provider: shortcut` project whose first section named exactly `# Story details` has non-empty `Name:`, resolve epic state through the existing `Epic:` or the epic continuation below; use Shortcut conversion unless that continuation selected local conversion. Otherwise use Local task-file conversion. For local conversion, use a non-empty `Name:` from the first `# Story details` section when present; otherwise ignore the Feature metadata line and derive the task name from the first meaningful heading outside that section or the first non-empty non-metadata content line. If no useful name can be derived, ask the user for a task name. Projects with `task_provider: local` always use this local path even when `Epic:` is present.
    - slugify the task name:
      - lowercase everything
@@ -195,7 +195,7 @@ If the section contains any unresolved question:
 
 4. **Build the task folder name:**
    - **Manual mode:** `{local_id}-{slug}` where `local_id` is the next zero-padded 4-digit local task ID for this project
-     - choose `local_id` by scanning first-level folders under `/Volumes/dev/_tasks/<project>/` matching `^\d{4}-`, then using one greater than the highest existing local ID; if none exist, start at `0001`
+     - choose `local_id` by scanning first-level folders under `$DEV_ROOT/_tasks/<project>/` matching `^\d{4}-`, then using one greater than the highest existing local ID; if none exist, start at `0001`
      - ignore `draftNN` folders and Shortcut story ID folders when assigning local IDs
      - example: `0004-create-budget-tracking-app`
    - **Shortcut mode:** `{story_id}-{slug}`
@@ -207,15 +207,15 @@ If the section contains any unresolved question:
 5. **Create or update the folder and file:**
    - **Manual and Shortcut modes:** create directory:
      ```text
-     /Volumes/dev/_tasks/<project>/<folder-name>
+     $DEV_ROOT/_tasks/<project>/<folder-name>
      ```
    - **Manual and Shortcut modes:** create file:
      ```text
-     /Volumes/dev/_tasks/<project>/<folder-name>/task.md
+     $DEV_ROOT/_tasks/<project>/<folder-name>/task.md
      ```
    - **Task markdown path mode:** do not create a new task file. Rename the existing task folder to the resolved folder name:
      ```text
-     /Volumes/dev/_tasks/<project>/<story_id-or-local-id>-<slug>
+     $DEV_ROOT/_tasks/<project>/<story_id-or-local-id>-<slug>
      ```
 
 6. **Write the initial file contents:**
@@ -417,19 +417,19 @@ For Local task-file conversion, rename the existing task folder to use local seq
 
 Safety rules before renaming:
 
-- draft references must resolve to an existing `/Volumes/dev/_tasks/<project>/draftNN/task.md`
+- draft references must resolve to an existing `$DEV_ROOT/_tasks/<project>/draftNN/task.md`
 - the provided markdown path must exist
 - the file must be named `task.md`
-- the file must be inside `/Volumes/dev/_tasks/<project>/`
-- the parent task folder must be directly under `/Volumes/dev/_tasks/<project>/`
+- the file must be inside `$DEV_ROOT/_tasks/<project>/`
+- the parent task folder must be directly under `$DEV_ROOT/_tasks/<project>/`
 - the target folder must not already exist
 - do not overwrite anything
-- use a no-clobber rename shape for local draft conversion, e.g. `test ! -e /Volumes/dev/_tasks/<project>/<target> && mv -n /Volumes/dev/_tasks/<project>/draftNN /Volumes/dev/_tasks/<project>/<target>`
+- use a no-clobber rename shape for local draft conversion, e.g. `test ! -e $DEV_ROOT/_tasks/<project>/<target> && mv -n $DEV_ROOT/_tasks/<project>/draftNN $DEV_ROOT/_tasks/<project>/<target>`
 
 After successful rename, the task file path becomes:
 
 ```text
-/Volumes/dev/_tasks/<project>/<story_id-or-local-id>-<slug>/task.md
+$DEV_ROOT/_tasks/<project>/<story_id-or-local-id>-<slug>/task.md
 ```
 
 For a featured `env` draft, after the successful rename replace the validated
@@ -445,7 +445,7 @@ the duplicate-title cleanup for Shortcut conversion applies.
 - Manual and Shortcut modes are create-only; do not modify existing task folders or files in those modes
 - Task markdown path mode may rename the existing task folder after Shortcut or local conversion. After successful Shortcut creation it may record an epic supplied by the continuation and apply the defined duplicate-title cleanup, but must not otherwise modify `task.md` contents unless explicitly requested.
 - Preserve the original task name text only for slugification input; folder name uses the slugified form
-- Local task IDs use zero-padded 4-digit IDs (`0001`, `0002`, ...). To choose the next local ID, scan first-level task folders under `/Volumes/dev/_tasks/<project>/` matching `^\d{4}-`, then use one greater than the highest existing local ID; if none exist, start at `0001`. Ignore `draftNN` folders and Shortcut story ID folders when assigning local IDs.
+- Local task IDs use zero-padded 4-digit IDs (`0001`, `0002`, ...). To choose the next local ID, scan first-level task folders under `$DEV_ROOT/_tasks/<project>/` matching `^\d{4}-`, then use one greater than the highest existing local ID; if none exist, start at `0001`. Ignore `draftNN` folders and Shortcut story ID folders when assigning local IDs.
 - If the generated folder already exists, stop and ask the user how to proceed rather than overwriting anything
 - Do not register projects automatically; create a missing task root only for an already registered project
 - Do not add extra files except `config.json` when this Shortcut branch-setup step owns its creation

@@ -196,10 +196,14 @@ module Handit
     end
   end
 
+  def self.tasks_root(env)
+    File.join(env.fetch("DEV_ROOT"), "_tasks")
+  end
+
   def self.cli(argv, env: ENV, output: $stdout, error: $stderr)
     operation = argv.shift
     runner = Runner.new(
-      tasks_root: "/Volumes/dev/_tasks",
+      tasks_root: tasks_root(env),
       cloud_root: File.join(Dir.home, "Dropbox", "@docs", "pi-handoffs"),
       scanner_path: File.join(Dir.home, ".dots", ".agents", "skills", "dots-check", "scripts", "scan.rb"),
       session_file: env["PI_SESSION_FILE"],

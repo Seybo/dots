@@ -21,7 +21,7 @@ After grilling completes successfully and the final summary is ready:
 
 1. **Existing non-Feature file:** Grillme has saved the settled results in that
    file. If it matches exactly
-   `/Volumes/dev/_tasks/<project>/draftNN/task.md`, offer `taskit`, preserve the
+   `$DEV_ROOT/_tasks/<project>/draftNN/task.md`, offer `taskit`, preserve the
    project and draft path, and tell the user to reply with exact bare `taskit`.
    For any other existing non-Feature file, report the update and stop.
 2. **Feature file:** Keep the Feature unchanged and offer `draftit` to create one

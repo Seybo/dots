@@ -32,11 +32,11 @@ questions.
 
 ## File-backed and idea-only sessions
 
-At the start, determine whether the invocation identifies an existing source file. This includes an explicit file path or a selector such as `draft04` that unambiguously resolves to one plan or task file through the current workflow's established resolution rules. If a selector resolves to multiple files, ask which file is authoritative before grilling.
+At the start, determine whether the invocation identifies an existing source file. This includes an explicit file path or a selector such as `draft04` that unambiguously resolves to one plan or task file through the current workflow's established resolution rules. Read and follow [`task-resolution.md`](../components/task-resolution.md) when resolving a draft, Task, or Feature selector. If a selector resolves to multiple files, ask which file is authoritative before grilling.
 
 For a file-backed session, read the complete source file before interviewing. For a draft or Task with the exact leading Feature reference from [`task-resolution.md`](../components/task-resolution.md), load the linked Feature before `task.md` as shared goal, scope, and constraint context, then let the source file win conflicts.
 
-When the authoritative source matches `/Volumes/dev/_tasks/env/features/<feature-slug>.md`:
+When the authoritative source matches `$DEV_ROOT/_tasks/env/features/<feature-slug>.md`:
 
 - Grill exactly one capability per session. Use a capability named by the invocation or handoff; otherwise ask which capability to develop before continuing.
 - Preserve unrelated research and unresolved questions without asking about them or treating them as deferred by this session.

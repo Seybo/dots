@@ -103,10 +103,10 @@ Feature path, reference, inventory, membership, and precedence contract.
    - do not accept a manual name or slug override
 
 2. **Resolve the target:**
-   - use the fixed Feature root `/Volumes/dev/_tasks/env/features/`
+   - use the fixed Feature root `$DEV_ROOT/_tasks/env/features/`
    - create that directory when missing
    - resolve the target as
-     `/Volumes/dev/_tasks/env/features/<feature-slug>.md`
+     `$DEV_ROOT/_tasks/env/features/<feature-slug>.md`
    - the target Feature file must not already exist; stop rather than overwrite,
      merge, rename, or choose another slug
 

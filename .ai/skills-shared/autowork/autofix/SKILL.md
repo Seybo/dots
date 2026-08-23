@@ -12,7 +12,7 @@ disable-model-invocation: true
 Helper:
 
 ```text
-/Volumes/dev/bin/skills/autofix
+$DEV_ROOT/bin/skills/autofix
 ```
 
 Supported invocations:
@@ -84,13 +84,13 @@ orchestration during or after it.
 2. With no supplied base ref, run:
 
    ```text
-   /Volumes/dev/bin/skills/autofix rebase-task <canonical-task-path>
+   $DEV_ROOT/bin/skills/autofix rebase-task <canonical-task-path>
    ```
 
    With a supplied base ref, preserve it exactly and run:
 
    ```text
-   /Volumes/dev/bin/skills/autofix rebase-task <canonical-task-path> <base-ref>
+   $DEV_ROOT/bin/skills/autofix rebase-task <canonical-task-path> <base-ref>
    ```
 
 3. If the helper returns successful Task rebase output without conflict control
@@ -120,7 +120,7 @@ orchestration during or after it.
    current set of conflicts:
 
    ```text
-   /Volumes/dev/bin/skills/autofix continue-task-rebase <canonical-task-path> <target-ref> <full-target-sha>
+   $DEV_ROOT/bin/skills/autofix continue-task-rebase <canonical-task-path> <target-ref> <full-target-sha>
    ```
 
    The original explicit operation named by the shared policy is
@@ -134,7 +134,7 @@ Before collecting a GitHub or local source:
 2. Run:
 
    ```text
-   /Volumes/dev/bin/skills/autofix resume <canonical-task-path>
+   $DEV_ROOT/bin/skills/autofix resume <canonical-task-path>
    ```
 
 3. Continue to source collection only when stdout is exactly
@@ -209,7 +209,7 @@ With no source argument:
 10. Run:
 
     ```text
-    /Volumes/dev/bin/skills/autofix import-github-review /tmp/autofix-github-review.json <canonical-task-path>
+    $DEV_ROOT/bin/skills/autofix import-github-review /tmp/autofix-github-review.json <canonical-task-path>
     ```
 
 11. Delete `/tmp/autofix-github-review.json` after the helper returns, including
@@ -238,7 +238,7 @@ With `--local --task <task-id>`:
 5. Run:
 
    ```text
-   /Volumes/dev/bin/skills/autofix import-local-review /tmp/autofix-local-review.json <canonical-task-path>
+   $DEV_ROOT/bin/skills/autofix import-local-review /tmp/autofix-local-review.json <canonical-task-path>
    ```
 
 6. Delete `/tmp/autofix-local-review.json` after the helper returns, including
@@ -266,7 +266,7 @@ When helper stdout contains that pair:
    completed`, `Worker review completed`, or `Manager review completed`. Do not
    retain or display the `AutoFixCycle` or `AutoFixRole` control lines.
 2. For role `manager`, perform the review inline in this conversation:
-   - run `/Volumes/dev/bin/skills/autofix show-work-cycle <id>` and treat its
+   - run `$DEV_ROOT/bin/skills/autofix show-work-cycle <id>` and treat its
      JSON as authoritative
    - use the returned `task_path`, `feature_path`, and `feature_text`: when the Feature fields are non-null, apply that shared goal, scope, and constraint context before reading the complete Task files, ignore the Feature inventory, and do not persist or rediscover the Feature text; Task-specific requirements and Reported Issues win conflicts
    - when the Feature fields are null, do not perform a Feature lookup; read the Task files from `task_path` normally
@@ -286,7 +286,7 @@ When helper stdout contains that pair:
      fields
    - if the review cannot complete, write the common failed result with a
      concise sanitized `error`
-   - run `/Volumes/dev/bin/skills/autofix wait-work-cycle <id>` after writing
+   - run `$DEV_ROOT/bin/skills/autofix wait-work-cycle <id>` after writing
      the result
 3. For role `worker` or `reviewer`, map the role to the fixed pane title:
    - `worker` → `agent-worker`
@@ -311,7 +311,7 @@ When helper stdout contains that pair:
    without a tool timeout and perform no other Autofix work while it blocks:
 
    ```text
-   /Volumes/dev/bin/skills/autofix wait-work-cycle <id>
+   $DEV_ROOT/bin/skills/autofix wait-work-cycle <id>
    ```
 
 7. If wait-command stdout contains another paired handoff, retain its completed
@@ -352,7 +352,7 @@ For the operator's next reply while this question is active:
 - Treat `yes`, `go`, `squash`, `approve`, or `approved` as approval and run:
 
   ```text
-  /Volumes/dev/bin/skills/autofix squash-review <review-id>
+  $DEV_ROOT/bin/skills/autofix squash-review <review-id>
   ```
 
 - Treat `no`, `skip`, or `leave` as declining. Run no helper and report that the
@@ -429,7 +429,7 @@ Use the currently assessed issue ID for the operator's next clear decision:
 For a decision with its required reason, run:
 
 ```text
-/Volumes/dev/bin/skills/autofix store-decision <id> <approved|skipped> <shell-escaped-reason>
+$DEV_ROOT/bin/skills/autofix store-decision <id> <approved|skipped> <shell-escaped-reason>
 ```
 
 Preserve the helper's exact stored `Decision:` and `Reason:` lines.

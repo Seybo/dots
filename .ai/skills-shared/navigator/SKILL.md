@@ -31,7 +31,7 @@ For update mode:
 1. Run the update script from this skill directory:
 
    ```bash
-   cd /Users/inseybo/.dots/.ai/skills-shared/navigator && ruby scripts/update_inventory.rb
+   cd ~/.dots/.ai/skills-shared/navigator && ruby scripts/update_inventory.rb
    ```
 
 2. Read `references/uncategorized.generated.md`.
@@ -46,7 +46,7 @@ Never rewrite `SKILL.md` during update mode unless the user explicitly asks to c
 Source of truth:
 
 ```text
-/Users/inseybo/.dots/refs/dev-env/active-projects.md
+~/.dots/refs/dev-env/active-projects.md
 ```
 
 When the user explicitly invokes Navigator to list, explain, add, or remove active projects, read and update only this file.
@@ -56,9 +56,10 @@ For requests like `/skill:navigator add this project to active`:
 1. Resolve the current git repo root from the same agent session, using `git rev-parse --show-toplevel` or an explicit user-provided path.
 2. If no repo root can be resolved, ask the user for the path.
 3. Verify the resolved path is an actual repo root.
-4. Add the repo root under `## Projects` if absent.
-5. Keep project paths sorted.
-6. Do not scan `/Volumes/dev/projects` or infer additional projects unless the user explicitly asks to refresh the list.
+4. Expand existing `$DEV_ROOT` entries before comparison. Store a repo beneath the current development root as `$DEV_ROOT/<relative-path>`; keep paths outside it absolute.
+5. Add the normalized repo root under `## Projects` if absent.
+6. Keep project paths sorted.
+7. Do not scan `$DEV_ROOT/projects` or infer additional projects unless the user explicitly asks to refresh the list.
 
 ## Question-answering mode
 

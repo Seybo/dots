@@ -60,7 +60,7 @@ offer.
 Create the next available `draftNN` folder under:
 
 ```text
-/Volumes/dev/_tasks/<project>/
+$DEV_ROOT/_tasks/<project>/
 ```
 
 Then write `task.md` from the requested context. When an authorized handoff
@@ -76,14 +76,14 @@ command.
    - when no context argument remains, infer context from the immediately preceding coherent discussion; if it does not describe a useful task, show the invocation forms and ask for context
    - reject project, Feature, epic, name, slug, and other option-style arguments; Draftit derives identity and receives routing state only from the current checkout or an authorized handoff
    - for a direct slash command, resolve the project from the current registered checkout using [`task-resolution.md`](../components/task-resolution.md); stop when it cannot be inferred
-   - for a Grillme handoff, use its preserved project when available; use its Feature only when the authoritative source is `/Volumes/dev/_tasks/env/features/<feature-slug>.md`
+   - for a Grillme handoff, use its preserved project when available; use its Feature only when the authoritative source is `$DEV_ROOT/_tasks/env/features/<feature-slug>.md`
    - do not inspect Pi session logs, prompt templates, other task directories, Git history, older conversation, or persisted state to infer missing routing context
 
 2. **Resolve the project and optional Feature:**
    - read the project from `~/.ai/skills-shared/components/projects.yml`; if it is not registered, stop and tell the user to add it to the registry
-   - if its task root does not exist, create `/Volumes/dev/_tasks/<project>/`
+   - if its task root does not exist, create `$DEV_ROOT/_tasks/<project>/`
    - without Feature state from Grillme, create an unfeatured draft
-   - with Feature state, require the project is exactly `env`, validate the slug with `^[a-z][a-z0-9-]*$`, and resolve `/Volumes/dev/_tasks/env/features/<feature-slug>.md`
+   - with Feature state, require the project is exactly `env`, validate the slug with `^[a-z][a-z0-9-]*$`, and resolve `$DEV_ROOT/_tasks/env/features/<feature-slug>.md`
    - the Feature file must exist; read it completely and require its final first-level section to be `# Drafts and tasks` before creating the draft
 
 3. **Resolve context and derive the slug:**
@@ -130,8 +130,8 @@ command.
    - stop if all are used
 
 7. **Create the draft:**
-   - require `/Volumes/dev/_tasks/<project>/draftNN/` not to exist
-   - create `/Volumes/dev/_tasks/<project>/draftNN/`
+   - require `$DEV_ROOT/_tasks/<project>/draftNN/` not to exist
+   - create `$DEV_ROOT/_tasks/<project>/draftNN/`
    - create `task.md` only; never modify an existing draft
    - add exactly one trailing newline
    - for a featured draft, append `- [draftNN](../draftNN/task.md)` to the ordered Feature inventory only after `task.md` exists

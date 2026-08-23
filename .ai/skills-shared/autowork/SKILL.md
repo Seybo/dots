@@ -51,7 +51,7 @@ On `main`, `master`, a local-provider Task, or any arbitrary branch without that
 segment, stop with the usage text and require `--task <digits>`. Never infer a
 local Task from its branch.
 
-Resolve the numeric ID beneath `/Volumes/dev/_tasks/<project>/`. Require exactly
+Resolve the numeric ID beneath `$DEV_ROOT/_tasks/<project>/`. Require exactly
 one first-level Task folder whose name begins with that ID and require its
 `task.md`. Stop and list the matches when ambiguous; stop with the searched task
 root when none match. Never select the newest Task folder or a SQLite row.
@@ -62,7 +62,7 @@ Resolve the selected folder to its canonical absolute path.
 Shell-escape the canonical Task path and run exactly:
 
 ```text
-/Volumes/dev/bin/skills/autoimplement show-task-status <canonical-task-path>
+$DEV_ROOT/bin/skills/autoimplement show-task-status <canonical-task-path>
 ```
 
 Pass no project key, Task ID, checkout, branch, or other argument to the helper.

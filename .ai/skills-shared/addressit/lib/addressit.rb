@@ -10,8 +10,8 @@ require_relative '../../autowork/lib/autowork'
 module Addressit
   class Error < StandardError; end
 
-  TASK_ROOT = '/Volumes/dev/_tasks'
-  DOTS_REPO = '/Users/inseybo/.dots'
+  TASK_ROOT = File.join(File.expand_path(ENV.fetch('DEV_ROOT')), '_tasks')
+  DOTS_REPO = File.expand_path('~/.dots')
   WORKER_STATUS_TIMEOUT_SECONDS = 600
   REVIEW_AGENTS = %w[claude codex].freeze
   DEFAULT_REVIEW_AGENT = 'codex'
@@ -1417,7 +1417,7 @@ module Addressit
 
     def print_risk_reconciliation_gate
       round = @state.fetch('current_round')
-      registry = File.join(Autowork::TASK_ROOT, @context.project, 'review-risk-registry.json')
+      registry = File.join(TASK_ROOT, @context.project, 'review-risk-registry.json')
       puts "Addressit round #{round}: agent-manager must reconcile blind audits."
       puts "Now read the project risk registry: #{registry}"
       puts "Prioritize active, high-weight risks only when their tags/triggers match this diff."

@@ -17,7 +17,7 @@ participant and must not invoke addressit.
 Helper:
 
 ```text
-/Users/inseybo/.ai/skills-shared/addressit/bin/addressit
+~/.ai/skills-shared/addressit/bin/addressit
 ```
 
 ## Invocation state (mandatory)
@@ -69,15 +69,16 @@ explicit `/addressit` invocation.
 ## Task and branch preflight
 
 Addressit uses the current checkout and the same project/task resolution rules as
-`/autowork` and `/workit`:
+`/autowork` and `/workit`. Read and follow
+`../components/task-resolution.md` before resolving paths:
 
 1. infer the project from the current checkout using the shared registry
 2. use `--task <local-task-id>` for an arbitrary local/ad-hoc branch, or infer
    the task/story ID from an `sc-<digits>` branch segment
-3. require exactly one matching folder under `/Volumes/dev/_tasks/<project>/`
+3. require exactly one matching folder under `$DEV_ROOT/_tasks/<project>/`
 4. require that folder to contain `task.md`
 5. when starting a new addressit run (no `addressit-log/state.json`), go to the
-   related task repo root at `/Volumes/dev/_tasks/<project>/` and stage changes only
+   related task repo root at `$DEV_ROOT/_tasks/<project>/` and stage changes only
    from finished task folders. A task is finished when autowork state is `status:
    done` and `phase: complete`; an existing addressit state must also be
    `phase: complete`, but missing addressit state is allowed. Include

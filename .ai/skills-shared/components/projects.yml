@@ -6,50 +6,50 @@ version: 2
 projects:
   env:
     checkout_layout: direct
-    checkout_path: /Users/inseybo/.dots
+    checkout_path: ~/.dots
     is_infrastructure: true
   misc_axel_be:
     checkout_layout: ordinal_workspaces
-    code_root: /Volumes/dev/projects/misc/axel_be
+    code_root: projects/misc/axel_be
     tmux_layout: misc_axel1
     task_provider: local
   misc_axel_fe:
     checkout_layout: ordinal_workspaces
-    code_root: /Volumes/dev/projects/misc/axel_fe
+    code_root: projects/misc/axel_fe
     tmux_layout: misc_axel1
     task_provider: local
   misc_kaamp_be:
     checkout_layout: ordinal_workspaces
-    code_root: /Volumes/dev/projects/misc/kaamp_be
+    code_root: projects/misc/kaamp_be
     tmux_layout: misc_kaamp1
     task_provider: local
   misc_kaamp_fe:
     checkout_layout: ordinal_workspaces
-    code_root: /Volumes/dev/projects/misc/kaamp_fe
+    code_root: projects/misc/kaamp_fe
     tmux_layout: misc_kaamp1
     task_provider: local
   my_finance:
     checkout_layout: ordinal_workspaces
-    code_root: /Volumes/dev/projects/my/my_finance
+    code_root: projects/my/my_finance
     tmux_layout: my_finance
     task_provider: local
   my_health:
     checkout_layout: ordinal_workspaces
-    code_root: /Volumes/dev/projects/my/my_health
+    code_root: projects/my/my_health
     tmux_layout: my_health
     task_provider: local
   shaka_gtm:
     checkout_layout: ordinal_workspaces
-    code_root: /Volumes/dev/projects/shaka/gtm
+    code_root: projects/shaka/gtm
     tmux_layout: shaka_gtm
     task_provider: shortcut
   shaka_outreach:
     checkout_layout: ordinal_workspaces
-    code_root: /Volumes/dev/projects/shaka/outreach
+    code_root: projects/shaka/outreach
     tmux_layout: shaka_outreach
     task_provider: local
   shaka_trp:
     checkout_layout: ordinal_workspaces
-    code_root: /Volumes/dev/projects/shaka/trp
+    code_root: projects/shaka/trp
     tmux_layout: shaka_trp
     task_provider: local

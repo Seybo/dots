@@ -3,11 +3,12 @@
 
 require 'yaml'
 
+DEV_ROOT = File.expand_path(ENV.fetch('DEV_ROOT'))
 DOTS_DIR = ENV.fetch('STOW_DIR', File.expand_path('~/.dots'))
 REPO_REGISTRY_PATH = File.join(DOTS_DIR, '.ai', 'skills-shared', 'components', 'projects.yml')
 RUNTIME_REGISTRY_PATH = File.expand_path('~/.ai/skills-shared/components/projects.yml')
 REGISTRY_PATH = File.file?(REPO_REGISTRY_PATH) ? REPO_REGISTRY_PATH : RUNTIME_REGISTRY_PATH
-TASK_ROOT = ENV.fetch('TASK_ROOT', '/Volumes/dev/_tasks')
+TASK_ROOT = File.join(DEV_ROOT, '_tasks')
 BOOTSTRAP_LAYOUT_DIR = File.join(DOTS_DIR, 'no_stow', 'bin', 'tmux', 'layouts')
 TMUXINATOR_CONFIG_DIR = File.expand_path(ENV.fetch('TMUXINATOR_CONFIG', '~/.config/tmuxinator'))
 
@@ -95,7 +96,7 @@ def main
   layout_name = config.fetch('tmux_layout')
   layout_reference(layout_name)
 
-  code_dir = File.join(config.fetch('code_root'), workspace)
+  code_dir = File.join(File.expand_path(config.fetch('code_root'), DEV_ROOT), workspace)
   task_root = File.join(TASK_ROOT, project)
   raise WorkspaceError, "workspace does not exist: #{code_dir}" unless File.directory?(code_dir)
   raise WorkspaceError, "task project does not exist: #{task_root}" unless File.directory?(task_root)

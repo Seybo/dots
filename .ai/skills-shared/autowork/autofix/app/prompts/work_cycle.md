@@ -8,7 +8,7 @@ Follow these instructions only when the complete user message is exactly `AutoFi
 2. Run:
 
    ```text
-   /Volumes/dev/bin/skills/autofix show-work-cycle <id>
+   $DEV_ROOT/bin/skills/autofix show-work-cycle <id>
    ```
 
 3. Treat the returned JSON as authoritative. Do not query Autofix SQLite directly.

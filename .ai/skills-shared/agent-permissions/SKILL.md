@@ -12,7 +12,7 @@ Use this skill when changing or explaining agent permissions for Claude Code and
 Read this first:
 
 ```text
-/Users/inseybo/.dots/refs/dev-env/agent-permissions.md
+~/.dots/refs/dev-env/agent-permissions.md
 ```
 
 It records locations, Pi extension behavior, update workflow, and gotchas.
@@ -22,7 +22,7 @@ It records locations, Pi extension behavior, update workflow, and gotchas.
 Unless the user explicitly says **Pi only** or **Claude only**, update **both** permission systems:
 
 - Claude Code: `/Users/inseybo/.claude/settings.json` plus any relevant repo `.claude/settings*.json`.
-- Pi: `/Users/inseybo/.dots/.pi/agent/permission.settings.json` plus any relevant repo `.agents/permission.settings*.json`.
+- Pi: `~/.dots/.pi/agent/permission.settings.json` plus any relevant repo `.agents/permission.settings*.json`.
 
 ## Local vs global selection rule
 
@@ -31,7 +31,7 @@ Memoize the scope decision before editing:
 - Use **repo-local** permission files for command shapes tied to one checkout, repo layout, app folders, local scripts, local DBs, or workflow-specific paths. Prefer local files for relative path allows such as `find app*`, `find docs*`, `sqlite3 db/...`, or repo `_mydev` scripts.
 - Use **global** permission files for broadly reusable, low-risk command families that should work the same in most repos, such as `pwd`, `man *`, `col -b`, `git status`, `git diff`, `rg`, `grep`, `head`, `sed -n`, and `python3 -m json.tool`.
 - If the user asks to reduce prompts for commands seen in a specific repo and does not explicitly request global behavior, default to repo-local.
-- If the user asks to update repo-local permissions across all active projects, read `/Users/inseybo/.dots/refs/dev-env/active-projects.md` and update only the repo roots listed there.
+- If the user asks to update repo-local permissions across all active projects, read `~/.dots/refs/dev-env/active-projects.md`, expand its `$DEV_ROOT` entries with the current machine value, and update only those repo roots.
 - NEVER assume the repo path for repo-local rules from the agent's current working directory or from this dotfiles checkout. If the prompted command uses relative paths or otherwise needs repo-local permissions, first confirm the actual repo path from the prompt context, an explicit user-provided path, or a `pwd` from that same agent session. If the repo path is unknown, ask the user before editing any repo-local permission file.
 - If a repo-local file should stay private, use `.claude/settings.local.json` and `.agents/permission.settings.local.json`; ensure the Pi local file is ignored or excluded from git.
 
@@ -60,7 +60,7 @@ Memoize the scope decision before editing:
 10. Validate JSON with `python3 -m json.tool <file> >/dev/null` immediately after each permission-file edit, before continuing.
     - If a Pi permission JSON file becomes invalid, stop and repair it before any more permission work; the Pi permission extension can fail future tool calls while settings are invalid.
 11. QA with the exact command shape that prompted, if safe. If the original command is unsafe, QA the safer alternative instead.
-12. If a new gotcha is discovered, append it to `/Users/inseybo/.dots/refs/dev-env/agent-permissions.md`.
+12. If a new gotcha is discovered, append it to `~/.dots/refs/dev-env/agent-permissions.md`.
 13. If a discovery suggests the `agent-permissions` workflow itself should change, suggest a skill update to the user instead of silently changing this skill.
 
 ## Claude Code-specific reminder

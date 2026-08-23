@@ -41,28 +41,28 @@ Do not auto-use this skill from a general project-management request. Wait for t
 /projectit shaka p1
 
 project key: shaka_p1
-/Volumes/dev/_tasks/shaka_p1/
-/Volumes/dev/projects/shaka/p1/1st/
+$DEV_ROOT/_tasks/shaka_p1/
+$DEV_ROOT/projects/shaka/p1/1st/
 ```
 
 Group mappings:
 
 ```text
-my    -> project key my_<name>,    code root /Volumes/dev/projects/my/<name>/
-shaka -> project key shaka_<name>, code root /Volumes/dev/projects/shaka/<name>/
-misc  -> project key misc_<name>,  code root /Volumes/dev/projects/misc/<name>/
+my    -> project key my_<name>,    code root $DEV_ROOT/projects/my/<name>/
+shaka -> project key shaka_<name>, code root $DEV_ROOT/projects/shaka/<name>/
+misc  -> project key misc_<name>,  code root $DEV_ROOT/projects/misc/<name>/
 ```
 
 It initializes the `1st` workspace as a Git repository, registers an `ordinal_workspaces` project in:
 
 ```text
-/Users/inseybo/.ai/skills-shared/components/projects.yml
+~/.ai/skills-shared/components/projects.yml
 ```
 
 and adds the workspace repo root to:
 
 ```text
-/Users/inseybo/.dots/refs/dev-env/active-projects.md
+~/.dots/refs/dev-env/active-projects.md
 ```
 
 Additional workspaces use positive ordinals such as `2nd`, `7th`, and `28th`.
@@ -89,40 +89,41 @@ after explicit approval.
    - if invalid, stop and ask for a lowercase name such as `p1`, `budget_app`, or `notes`
 
 3. **Resolve paths:**
+   - read and follow `~/.ai/skills-shared/components/task-resolution.md`
    - task root:
      ```text
-     /Volumes/dev/_tasks/<project>/
+     $DEV_ROOT/_tasks/<project>/
      ```
    - code root and required first workspace:
      ```text
-     /Volumes/dev/projects/my/<name>/1st/     # group my
-     /Volumes/dev/projects/shaka/<name>/1st/  # group shaka
-     /Volumes/dev/projects/misc/<name>/1st/   # group misc
+     $DEV_ROOT/projects/my/<name>/1st/     # group my
+     $DEV_ROOT/projects/shaka/<name>/1st/  # group shaka
+     $DEV_ROOT/projects/misc/<name>/1st/   # group misc
      ```
    - project registry:
      ```text
-     /Users/inseybo/.ai/skills-shared/components/projects.yml
+     ~/.ai/skills-shared/components/projects.yml
      ```
    - active-project registry:
      ```text
-     /Users/inseybo/.dots/refs/dev-env/active-projects.md
+     ~/.dots/refs/dev-env/active-projects.md
      ```
    - tmux project bindings:
      ```text
-     /Users/inseybo/.dots/.tmux-projects.conf
+     ~/.dots/.tmux-projects.conf
      ```
    - Neovim project task bindings:
      ```text
-     /Users/inseybo/.dots/.config/nvim/lua/plugins/fzf-lua.lua
+     ~/.dots/.config/nvim/lua/plugins/fzf-lua.lua
      ```
 
 4. **Validate base directories:**
-   - require `/Volumes/dev/_tasks/` and the selected group’s code parent to exist
+   - require `$DEV_ROOT/_tasks/` and the selected group’s code parent to exist
    - selected group parents:
      ```text
-     my    -> /Volumes/dev/projects/my/
-     shaka -> /Volumes/dev/projects/shaka/
-     misc  -> /Volumes/dev/projects/misc/
+     my    -> $DEV_ROOT/projects/my/
+     shaka -> $DEV_ROOT/projects/shaka/
+     misc  -> $DEV_ROOT/projects/misc/
      ```
    - do not create those parent directories
 
@@ -149,21 +150,22 @@ after explicit approval.
      ```yaml
      <project>:
        checkout_layout: ordinal_workspaces
-       code_root: <code-root>
+       code_root: projects/<group>/<name>
        tmux_layout: <project>
        task_provider: local
      ```
    - do not create per-workspace configuration files; all ordinals reuse the project layout
 
 8. **Register the active workspace:**
-   - require `/Users/inseybo/.dots/refs/dev-env/active-projects.md`
+   - require `~/.dots/refs/dev-env/active-projects.md`
    - verify `<code-root>/1st/` is a Git repo root before registering it
-   - add the full `<code-root>/1st` path under `## Projects` when absent
+   - compare entries after expanding `$DEV_ROOT`
+   - add `$DEV_ROOT/projects/<group>/<name>/1st` under `## Projects` when absent
    - keep project paths sorted and preserve the rest of the file
    - never add inferred sibling workspaces or other projects
 
 9. **Offer an optional tmux shortcut:**
-   - read `/Users/inseybo/.dots/.tmux-projects.conf`
+   - read `~/.dots/.tmux-projects.conf`
    - inspect lowercase one-letter bindings in the `user-sessions` key table
    - show the available lowercase letters and suggest one meaningful available letter based on `<name>`
    - ask whether the user wants to add a shortcut and which letter to use
@@ -176,7 +178,7 @@ after explicit approval.
    - do not reload tmux automatically; tell the user to reload the config after adding a binding
 
 10. **Offer an optional Neovim task-search shortcut:**
-   - read `/Users/inseybo/.dots/.config/nvim/lua/plugins/fzf-lua.lua`
+   - read `~/.dots/.config/nvim/lua/plugins/fzf-lua.lua`
    - inspect lowercase one-letter suffixes already used by `<leader>tt<letter>` mappings
    - show the available lowercase letters and suggest one meaningful available letter based on `<name>`
    - tmux and Neovim letters are independent and may use the same letter when it is available in both

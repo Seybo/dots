@@ -10,7 +10,7 @@ allowed-tools:
   - "bash(hunk session context *)"
   - "bash(hunk session review *)"
   - "bash(hunk session navigate *)"
-  - "bash(ruby /Users/inseybo/.ai/skills-shared/hunkit/scripts/hunkit.rb)"
+  - "bash(ruby ~/.ai/skills-shared/hunkit/scripts/hunkit.rb)"
 disable-model-invocation: true
 ---
 
@@ -36,7 +36,7 @@ Usage: /hunkit
 1. Run:
 
    ```text
-   ruby /Users/inseybo/.ai/skills-shared/hunkit/scripts/hunkit.rb
+   ruby ~/.ai/skills-shared/hunkit/scripts/hunkit.rb
    ```
 
    The launcher validates the Git repository, Hunk-visible working-tree changes, and the existing left-Pi/right-idle-shell tmux layout before sending any keys. Do not launch Hunk yourself or modify the tmux layout if validation fails.

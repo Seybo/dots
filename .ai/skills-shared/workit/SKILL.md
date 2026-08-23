@@ -1,7 +1,7 @@
 ---
 name: workit
 description: >-
-  Start work on an existing task folder under /Volumes/dev/_tasks.
+  Start work on an existing task folder under $DEV_ROOT/_tasks.
   Reads the task's task.md and proceeds with the work it describes.
   Can infer the project and task/story ID from the current git branch.
   Supports plan-only, single-step, and non-stop modes.
@@ -81,7 +81,7 @@ Resolve `<project>`, the task/story ID, the code working directory, and the work
 using the shared rules in
 [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
 Read that file whenever any of these must be inferred or normalized. `<project>` resolves to two
-locations: the task folder root `/Volumes/dev/_tasks/<project>/` (where `task.md`
+locations: the task folder root `$DEV_ROOT/_tasks/<project>/` (where `task.md`
 lives) and the code working directory (see the shared registry's mapping). Registered session
 aliases such as `shaka_gtm1`, `shaka_gtm7`, and `shaka_trp28` normalize to their task project
 and select the matching ordinal workspace. Applied to `/workit`:
@@ -124,9 +124,9 @@ and select the matching ordinal workspace. Applied to `/workit`:
      number selects the matching ordinal workspace (`shaka_trp28` → `28th`)
    - resolve the task root from the normalized project as:
      ```text
-     /Volumes/dev/_tasks/<project>/
+     $DEV_ROOT/_tasks/<project>/
      ```
-   - never look for a session alias under `/Volumes/dev/_tasks/`; session aliases are not task roots
+   - never look for a session alias under `$DEV_ROOT/_tasks/`; session aliases are not task roots
    - if the project is not registered, tell the user to add it to `~/.ai/skills-shared/components/projects.yml`
    - if its task root does not exist, report that no tasks have been created for the registered project
    - do not create project folders automatically
@@ -170,7 +170,7 @@ and select the matching ordinal workspace. Applied to `/workit`:
      ```bash
      git -C <code-working-directory> branch --show-current
      ```
-   - **Treat `main` and `master` as protected except for the `env` project (`/Users/inseybo/.dots`) and registered projects whose project key starts with `my_`.** If the current branch is protected, stop before editing and switch to a task branch.
+   - **Treat `main` and `master` as protected except for the `env` project (`~/.dots`) and registered projects whose project key starts with `my_`.** If the current branch is protected, stop before editing and switch to a task branch.
    - Read and follow [`../components/task-branch-config.md`](../components/task-branch-config.md) completely before branch/config setup.
    - For registered workspace tasks whose registry entry has `task_provider: shortcut`, fetch the Shortcut story and generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from its current `name`. Do not use the task folder suffix. Apply the shared component's **Shortcut Task branch setup** rules with the resolved Task folder, selected workspace, generated branch name, and optional exact `base_ref`.
    - For `task_provider: local`, never fetch Shortcut stories or create/switch branches. Apply the shared component's **Local Task setup** rules immediately before planning and Autoimplement initialization.

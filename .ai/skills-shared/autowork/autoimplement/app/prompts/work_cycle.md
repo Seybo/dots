@@ -8,7 +8,7 @@ Follow these instructions only when the complete user message is exactly `AutoIm
 2. Run:
 
    ```text
-   /Volumes/dev/bin/skills/autoimplement show-work-cycle <id>
+   $DEV_ROOT/bin/skills/autoimplement show-work-cycle <id>
    ```
 
 3. Treat the returned JSON as authoritative. Do not query or write Autoimplement SQLite directly.
