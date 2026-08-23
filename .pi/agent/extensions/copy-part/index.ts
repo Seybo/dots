@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
-import { extractCodeBlocks } from "./code-blocks.ts";
+import { extractCodeParts } from "./code-blocks.ts";
 import { extractFilePaths } from "./file-paths.ts";
 import { extractLinks } from "./links.ts";
 import { PickerState } from "./picker-state.ts";
@@ -14,7 +14,7 @@ import { extractSentences } from "./sentences.ts";
 const MAX_VISIBLE_ITEMS = 8;
 
 type ModeConfig = {
-	partName: "sentence" | "code block" | "link" | "file path";
+	partName: "sentence" | "code" | "link" | "file path";
 	missing: string;
 	extract: (response: string) => string[];
 	isMultiSelect?: boolean;
@@ -27,7 +27,7 @@ const MODES = {
 		extract: extractSentences,
 		isMultiSelect: true,
 	},
-	c: { partName: "code block", missing: "fenced code block", extract: extractCodeBlocks },
+	c: { partName: "code", missing: "code block or inline code", extract: extractCodeParts },
 	l: { partName: "link", missing: "web link", extract: extractLinks },
 	f: { partName: "file path", missing: "file path", extract: extractFilePaths },
 } satisfies Record<string, ModeConfig>;
@@ -174,7 +174,7 @@ function copyToClipboard(text: string): Promise<void> {
 
 export default function copyPartExtension(pi: ExtensionAPI) {
 	pi.registerCommand("cp", {
-		description: "Browse and copy one sentence, code block, web link, or file path from the latest assistant response",
+		description: "Browse and copy one sentence, code part, web link, or file path from the latest assistant response",
 		handler: async (args, ctx) => {
 			const parsed = parseCopyArgs(args);
 			if (!parsed || !isMode(parsed.mode)) {

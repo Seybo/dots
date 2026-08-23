@@ -20,13 +20,15 @@ function isClosingFence(line: string, fence: Fence): boolean {
 
 const CANDIDATE_PATTERN =
 	/\[[^\]\n]*\]\((?<markdown>[^)\s]+)\)|`(?<inline>[^`\n]+)`|(?<url>https?:\/\/[^\s<>()\[\]{}"']+)|(?<bare>[^\s<>()\[\]{}"'`]+)/g;
-const PATH_PATTERN = /^(?<path>[A-Za-z0-9._@+%/-]+?)(?::\d+(?::\d+)?)?$/;
+const PATH_PATTERN = /^(?<path>[A-Za-z0-9._@+%~/-]+?)(?::\d+(?::\d+)?)?$/;
 
 function normalizePath(candidate: string): string | undefined {
 	const value = candidate.replace(/[.,;:!?]+$/, "");
 	const path = value.match(PATH_PATTERN)?.groups?.path;
 	if (!path || !path.includes("/") || path.includes("//") || path.endsWith("/")) return undefined;
 
+	if (path.startsWith("~/")) return value;
+	if (path.includes("~")) return undefined;
 	if (path.startsWith("/")) {
 		const remainder = path.slice(1);
 		return remainder.includes("/") || remainder.includes(".") ? value : undefined;

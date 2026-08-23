@@ -18,21 +18,32 @@ function isClosingFence(line: string, fence: Fence): boolean {
 	return Boolean(marker && marker[0] === fence.character && marker.length >= fence.length);
 }
 
-export function extractCodeBlocks(markdown: string): string[] {
-	const blocks: string[] = [];
+function inlineCode(line: string): string[] {
+	return Array.from(line.matchAll(/`([^`\n]+)`/g), (match) => match[1]!).filter((body) =>
+		body.trim(),
+	);
+}
+
+export function extractCodeParts(markdown: string): string[] {
+	const parts: string[] = [];
 	let fence: Fence | undefined;
 	let lines: string[] = [];
 
 	for (const line of markdown.split("\n")) {
 		if (!fence) {
-			fence = openingFence(line);
-			lines = [];
+			const opening = openingFence(line);
+			if (opening) {
+				fence = opening;
+				lines = [];
+			} else {
+				parts.push(...inlineCode(line));
+			}
 			continue;
 		}
 
 		if (isClosingFence(line, fence)) {
 			const body = lines.join("\n");
-			if (body.trim()) blocks.push(body);
+			if (body.trim()) parts.push(body);
 			fence = undefined;
 			lines = [];
 			continue;
@@ -41,5 +52,5 @@ export function extractCodeBlocks(markdown: string): string[] {
 		lines.push(line);
 	}
 
-	return blocks;
+	return parts;
 }

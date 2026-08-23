@@ -9,6 +9,7 @@ test("extracts supported file path forms in response order", () => {
 		"Inspect /Users/inseybo/project/app/main.ts:42:7 next.",
 		"Compare ../docs/guide.md with src/components/button.ts:18.",
 		"Read /README.md at the filesystem root.",
+		"Follow ~/.ai/skills-shared/workit/SKILL.md.",
 	].join("\n");
 
 	assert.deepEqual(extractFilePaths(markdown), [
@@ -17,6 +18,7 @@ test("extracts supported file path forms in response order", () => {
 		"../docs/guide.md",
 		"src/components/button.ts:18",
 		"/README.md",
+		"~/.ai/skills-shared/workit/SKILL.md",
 	]);
 });
 
