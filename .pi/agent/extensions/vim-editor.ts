@@ -11,6 +11,8 @@ import {
 	visibleWidth,
 } from "@earendil-works/pi-tui";
 
+import { inputLanguageFromDefaults } from "./input-language/input-source.ts";
+
 // These native inputs match this environment's Pi editor keybindings.
 const NORMAL_KEYS: Record<string, string> = {
 	h: "\x1b[D",
@@ -29,18 +31,28 @@ const DELETE_TO_LINE_END = "\x1b[107;5u"; // ctrl+k
 const BACKSPACE = "\x1b[127u";
 const NEW_LINE = "\x1b[106;5u"; // ctrl+j
 const UNDO = "\x1b[45;5u"; // ctrl+-
+const INPUT_LANGUAGE_POLL_INTERVAL_MS = 1000;
 
 class VimEditor extends CustomEditor {
 	private mode: "normal" | "insert" = "insert";
 	private pendingOperator: "d" | "c" | null = null;
+	private inputLanguage: string | undefined;
 
 	constructor(
 		tui: TUI,
 		editorTheme: EditorTheme,
 		keybindings: KeybindingsManager,
 		private readonly getTheme: () => Theme,
+		private readonly requestRender: () => void,
 	) {
 		super(tui, editorTheme, keybindings);
+	}
+
+	setInputLanguage(language: string | undefined): void {
+		if (language === this.inputLanguage) return;
+
+		this.inputLanguage = language;
+		this.requestRender();
 	}
 
 	handleInput(data: string): void {
@@ -194,7 +206,14 @@ class VimEditor extends CustomEditor {
 		const lines = super.render(width);
 		if (lines.length === 0) return lines;
 
-		const label = this.mode === "normal" ? "  NORMAL " : "  INSERT ";
+		const theme = this.getTheme();
+		const plainLanguageLabel = this.inputLanguage ? `  ${this.inputLanguage} ` : "";
+		const languageLabel =
+			this.inputLanguage === "Ru"
+				? theme.inverse(theme.fg("error", plainLanguageLabel))
+				: plainLanguageLabel;
+		const modeLabel = this.mode === "normal" ? "  NORMAL " : "  INSERT ";
+		const label = languageLabel + modeLabel;
 		const labelWidth = visibleWidth(label);
 		const last = lines.length - 1;
 		const lastWidth = visibleWidth(lines[last]!);
@@ -203,7 +222,6 @@ class VimEditor extends CustomEditor {
 		}
 
 		if (this.mode === "normal") {
-			const theme = this.getTheme();
 			for (let index = 1; index < last; index++) {
 				lines[index] = this.applyNormalBackground(lines[index]!, width, theme);
 			}
@@ -213,9 +231,45 @@ class VimEditor extends CustomEditor {
 }
 
 export default function (pi: ExtensionAPI) {
+	let timer: ReturnType<typeof setInterval> | undefined;
+
+	async function refreshInputLanguage(editor: VimEditor): Promise<void> {
+		try {
+			const result = await pi.exec(
+				"defaults",
+				["read", "com.apple.HIToolbox", "AppleSelectedInputSources"],
+				{ timeout: INPUT_LANGUAGE_POLL_INTERVAL_MS },
+			);
+			editor.setInputLanguage(inputLanguageFromDefaults(result.stdout));
+		} catch {
+			return;
+		}
+	}
+
 	pi.on("session_start", (_event, ctx) => {
-		ctx.ui.setEditorComponent(
-			(tui, theme, keybindings) => new VimEditor(tui, theme, keybindings, () => ctx.ui.theme),
-		);
+		ctx.ui.setEditorComponent((tui, theme, keybindings) => {
+			const editor = new VimEditor(
+				tui,
+				theme,
+				keybindings,
+				() => ctx.ui.theme,
+				() => tui.requestRender(),
+			);
+
+			if (process.platform === "darwin" && ctx.mode === "tui") {
+				void refreshInputLanguage(editor);
+				timer = setInterval(
+					() => void refreshInputLanguage(editor),
+					INPUT_LANGUAGE_POLL_INTERVAL_MS,
+				);
+			}
+
+			return editor;
+		});
+	});
+
+	pi.on("session_shutdown", () => {
+		if (timer) clearInterval(timer);
+		timer = undefined;
 	});
 }
