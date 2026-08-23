@@ -56,10 +56,12 @@ For role `worker` and action `review`:
    - a concrete cross-step bug or regression
    - a concrete security problem or data-loss risk
    - a meaningful performance defect
-6. Do not report style, nits, speculative improvements, or missing tests without a concrete defect.
-7. Do not edit, stage, commit, push, switch branches, run linters/specs/tests/checks, or write workflow state.
-8. Write a completed result with the common fields plus a `reported_issues` array. Use one self-contained actionable Reported Issue body per element, in review order. Use an empty array when the review reports no issues.
-9. Add no verdict, severity, summary, file list, issue ID, commit SHA, or other fields.
+6. Make sure implementation follows .ai/rules/development-principles.md
+7. Try to find things to simplify, remove or maybe even replace with simpler logic by adding some operator involvement (totally acceptable if the scenario is rare) if operator involvement is applicable to the reviewed task.
+8. Do not report style, nits, speculative improvements, or missing tests without a concrete defect.
+9. Do not edit, stage, commit, push, switch branches, run linters/specs/tests/checks, or write workflow state.
+10. Write a completed result with the common fields plus a `reported_issues` array. Use one self-contained actionable Reported Issue body per element, in review order. Use an empty array when the review reports no issues.
+11. Add no verdict, severity, summary, file list, issue ID, commit SHA, or other fields.
 
 ## Reviewer review
 
