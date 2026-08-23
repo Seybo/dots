@@ -65,7 +65,7 @@ In manual mode, create a local task folder inside the selected project and creat
 
 Shortcut is used only in explicit Shortcut mode for projects whose registry entry has `task_provider: shortcut`: a numeric story ID, an inferred branch story ID, or an existing `task.md` whose first `# Story details` section has `Name:` and either an existing `Epic:` or an epic supplied through Taskit's conversion continuation. Projects with `task_provider: local` never call Shortcut; all selectors and task files remain local/manual.
 
-For `draftNN` and task markdown path mode, inspect the existing file. In a `task_provider: shortcut` project, a file with `Name:` and resolved epic state creates a Shortcut story and renames the folder to `<story_id>-<slug>`; exact `local` at the epic continuation keeps local conversion available. A `task_provider: local` project never creates a Shortcut story and is renamed to a sequential local task folder such as `0004-<slug>`.
+For `draftNN` and task markdown path mode, inspect the existing file. In a `task_provider: shortcut` project, a file with `Name:` and resolved epic state creates a Shortcut story and renames the folder to `<story_id>-<slug>`; an unambiguous request for local conversion at the epic continuation keeps local conversion available. A `task_provider: local` project never creates a Shortcut story and is renamed to a sequential local task folder such as `0004-<slug>`.
 
 ## Project and branch resolution
 
@@ -182,7 +182,7 @@ If the section contains any unresolved question:
    - **Shortcut mode for `task_provider: shortcut` projects:** call `mcp__shortcut__stories-get-by-id` with the story ID; use the story's `name` as the task name and the story's `description` as the body. If the call fails or the story is missing, stop and report the error.
    - **Local/manual mode for `task_provider: local` projects:** do not call Shortcut, even if a selector is numeric or a task file contains Story details.
    - **Draft reference mode:** resolve `draftNN` to `/Volumes/dev/_tasks/<project>/draftNN/task.md`, then follow Task markdown path mode.
-   - **Task markdown path mode:** read the existing task file and resolve its optional Feature membership before deriving a name. For a `task_provider: shortcut` project whose first section named exactly `# Story details` has non-empty `Name:`, resolve epic state through the existing `Epic:` or the epic continuation below; use Shortcut conversion unless that continuation returned exact `local`. Otherwise use Local task-file conversion. For local conversion, use a non-empty `Name:` from the first `# Story details` section when present; otherwise ignore the Feature metadata line and derive the task name from the first meaningful heading outside that section or the first non-empty non-metadata content line. If no useful name can be derived, ask the user for a task name. Projects with `task_provider: local` always use this local path even when `Epic:` is present.
+   - **Task markdown path mode:** read the existing task file and resolve its optional Feature membership before deriving a name. For a `task_provider: shortcut` project whose first section named exactly `# Story details` has non-empty `Name:`, resolve epic state through the existing `Epic:` or the epic continuation below; use Shortcut conversion unless that continuation selected local conversion. Otherwise use Local task-file conversion. For local conversion, use a non-empty `Name:` from the first `# Story details` section when present; otherwise ignore the Feature metadata line and derive the task name from the first meaningful heading outside that section or the first non-empty non-metadata content line. If no useful name can be derived, ask the user for a task name. Projects with `task_provider: local` always use this local path even when `Epic:` is present.
    - slugify the task name:
      - lowercase everything
      - replace spaces with `-`
@@ -322,10 +322,12 @@ contents. For `task_provider: shortcut` projects, a missing section or missing
 
 For a `task_provider: shortcut` project with `Name:` but without `Epic:`, make no
 file, Shortcut, folder, branch, or inventory change. Preserve the conversion and
-ask the user for a numeric Shortcut epic ID, an epic URL containing `/epic/<id>/`,
-or exact `local`. A valid epic response resumes Shortcut conversion with the
-normalized numeric ID. Exact `local` resumes Local task-file conversion. Any
-other response ends the continuation without mutation.
+ask the user for a Shortcut epic or local conversion.
+
+Infer the selection from normal language. Continue when the reply unambiguously
+selects one Shortcut epic or local conversion. Normalize a selected epic to its
+numeric ID. If the reply is ambiguous, ask for clarification without ending the
+continuation.
 
 Do not add an epic command-line argument or persist active epic state. The
 preserved current-conversation continuation is the only source.
@@ -386,7 +388,7 @@ cleanup and folder rename. Do not write the epic when story creation fails.
 
 ### Local task-file conversion
 
-When `# Story details` or `Name:` is absent, or the missing epic continuation returned exact `local`, do not call Shortcut. Convert the existing folder into a local task folder:
+When `# Story details` or `Name:` is absent, or the missing epic continuation selected local conversion, do not call Shortcut. Convert the existing folder into a local task folder:
 
 - use a non-empty `Name:` from the first `# Story details` section when present
 - otherwise ignore the Feature metadata line and derive the task name from the first meaningful heading outside `# Story details` or the first non-empty non-metadata content line in `task.md`
