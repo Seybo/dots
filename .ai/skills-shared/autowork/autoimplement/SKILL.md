@@ -24,9 +24,9 @@ Supported invocations:
 /skill:autoimplement --retry
 /skill:autoimplement <task_id> --retry
 /skill:autoimplement <project-or-session> [task_id] --retry
-/skill:autoimplement --super-review-agent claude|codex
-/skill:autoimplement <task_id> --super-review-agent claude|codex
-/skill:autoimplement <project-or-session> [task_id] --super-review-agent claude|codex
+/skill:autoimplement --super-review-agent claude|codex|none
+/skill:autoimplement <task_id> --super-review-agent claude|codex|none
+/skill:autoimplement <project-or-session> [task_id] --super-review-agent claude|codex|none
 /skill:autoimplement --rebase-base
 /skill:autoimplement --rebase-base <base-ref>
 /skill:autoimplement <task_id> --rebase-base <base-ref>
@@ -41,11 +41,11 @@ This explicit Task selector is required when a local branch cannot identify its
 Task. Follow **Rebase Task** without initializing or resuming it.
 
 For normal workflow invocations, accept at most one `--retry` flag and at most
-one `--super-review-agent claude|codex` pair in any position alongside an
+one `--super-review-agent claude|codex|none` pair in any position alongside an
 otherwise valid invocation.
 Treat `--retry` as confirmation that the previous participant or inline Manager execution has stopped.
 Reject duplicate `--retry` flags. Reject duplicate `--super-review-agent` flags,
-a missing agent value, and every value except exact `claude` or `codex`.
+a missing agent value, and every value except exact `claude`, `codex`, or `none`.
 Before Task resolution on a normal invocation, remove `--retry` and
 remove the flag and its value before applying the existing Task argument parser. Reject
 `--base`, every other option,
@@ -232,19 +232,21 @@ cd <canonical-checkout> && $DEV_ROOT/bin/skills/autoimplement initialize-task <c
 When `--super-review-agent` is present, instead run:
 
 ```text
-cd <canonical-checkout> && $DEV_ROOT/bin/skills/autoimplement initialize-task <canonical-task-path> <claude|codex>
+cd <canonical-checkout> && $DEV_ROOT/bin/skills/autoimplement initialize-task <canonical-task-path> <claude|codex|none>
 ```
 
 Pass the selection only to `initialize-task`. Do not pass it to `resume-task`,
 `retry-task`, or any participant command. Pass no project key, expected checkout,
 branch, Task contents, hashes, step details, prompts, or other runtime controls.
 
-A new Task defaults to Claude when the option is omitted. An existing Task keeps
-its persisted selection when the option is omitted and accepts an explicit
-selection only when it matches. Surface a conflicting or unsupported selection
-unchanged and stop without mutation. The operator must run the matching
-application in `agent-reviewer`; never inspect that pane to infer an agent,
-change providers, or fall back.
+A new Task requires either the explicit option or
+`AUTOIMPLEMENT_SUPER_REVIEW_AGENT=claude|codex|none`; the explicit option wins.
+An existing Task keeps its persisted selection when the option is omitted,
+ignores later environment changes, and accepts an explicit selection only when
+it matches. Surface a missing, conflicting, or unsupported selection unchanged
+and stop without mutation. `none` skips only the one whole-task super-review;
+the independent Reviewer passes still require `agent-reviewer`. Never inspect
+that pane to infer an agent, change providers, or fall back.
 
 Retain the helper output and require its exact `Task: <id>` line. A first
 invocation creates one initialized Task only when Git is clean. Reinvoking the
@@ -401,13 +403,14 @@ Process helper stdout in this order:
 The persisted lifecycle order is:
 
 1. independent Reviewer review for every authored step
-2. one whole-task super-review
+2. one whole-task super-review for persisted `claude` or `codex`; skip it for `none`
 3. one whole-task Worker self-review
 4. Manager-context review and its correction loops
 5. final checks
 6. durable completion
 
-The super-review and Worker self-review each run exactly once. Findings from any
+When enabled, the super-review runs exactly once. The Worker self-review always
+runs exactly once. Findings from any
 final review use ordinary Reported Issue Fix, Skip, or Unclear assessment.
 Approved findings are batched into a nil-step Worker implementation committed as
 `Final review correction N`; each correction receives a scoped independent
@@ -416,7 +419,7 @@ scoped pass after a Manager correction starts a fresh Manager review with the
 complete updated history. Corrections never rerun either one-time whole-task
 gate. Do not suppress duplicate concerns; rely on Manager judgment.
 
-The super-review uses the persisted agent and exact
+An enabled super-review uses the persisted agent and exact
 `Task.starting_commit_sha..HEAD` range. Its `super-review.md` is temporary and
 non-authoritative: remove it before result publication, never commit it, and
 store no raw candidates or adjudication prose in SQLite.

@@ -15,7 +15,8 @@ RSpec.describe WaitTaskWorkCycle do
       task_path: task_path,
       project_path: project_path,
       starting_commit_sha: 'starting-sha',
-      state: 'initialized'
+      state: 'initialized',
+      super_review_agent: 'claude'
     )
   end
 

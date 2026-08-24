@@ -14,6 +14,14 @@ RSpec.describe 'InitializeTask' do
   let(:project_path) { File.join(root_path, 'project') }
   let(:task_path) { File.join(root_path, 'tasks', '0025-task') }
 
+  around do |example|
+    original_agent = ENV.fetch('AUTOIMPLEMENT_SUPER_REVIEW_AGENT', nil)
+    ENV['AUTOIMPLEMENT_SUPER_REVIEW_AGENT'] = 'claude'
+    example.run
+  ensure
+    ENV['AUTOIMPLEMENT_SUPER_REVIEW_AGENT'] = original_agent
+  end
+
   before do
     initialize_git_project(project_path)
     write_authored_task(task_path)
@@ -24,7 +32,7 @@ RSpec.describe 'InitializeTask' do
     FileUtils.remove_entry(root_path)
   end
 
-  it 'creates one initialized Task from the actual checkout' do
+  it 'creates one initialized Task using the environment super-review agent' do
     task = service_class.call(task_path: task_path)
 
     expect(task).to include(
@@ -39,15 +47,36 @@ RSpec.describe 'InitializeTask' do
     expect(ResolveProjectPath).to have_received(:call)
   end
 
-  it 'persists an explicit supported super-review agent' do
-    task = service_class.call(task_path: task_path, super_review_agent: 'codex')
+  it 'persists an explicit supported super-review agent before the environment value' do
+    ENV['AUTOIMPLEMENT_SUPER_REVIEW_AGENT'] = 'claude'
 
-    expect(task.fetch(:super_review_agent)).to eq('codex')
-    expect(db[:tasks].where(id: task.fetch(:id)).get(:super_review_agent)).to eq('codex')
+    task = service_class.call(task_path: task_path, super_review_agent: 'none')
+
+    expect(task.fetch(:super_review_agent)).to eq('none')
+    expect(db[:tasks].where(id: task.fetch(:id)).get(:super_review_agent)).to eq('none')
+  end
+
+  it 'accepts none from the environment' do
+    ENV['AUTOIMPLEMENT_SUPER_REVIEW_AGENT'] = 'none'
+
+    task = service_class.call(task_path: task_path)
+
+    expect(task.fetch(:super_review_agent)).to eq('none')
+  end
+
+  it 'requires a super-review policy for a new Task' do
+    ENV.delete('AUTOIMPLEMENT_SUPER_REVIEW_AGENT')
+
+    expect { service_class.call(task_path: task_path) }.
+      to raise_error(
+        'AUTOIMPLEMENT_SUPER_REVIEW_AGENT must be claude, codex, or none for a new Task'
+      )
+    expect(db[:tasks].count).to eq(0)
   end
 
   it 'resumes the same canonical Task without changing its super-review agent' do
     first_task = service_class.call(task_path: task_path, super_review_agent: 'codex')
+    ENV['AUTOIMPLEMENT_SUPER_REVIEW_AGENT'] = 'none'
     second_task = service_class.call(task_path: task_path)
     matching_task = service_class.call(task_path: task_path, super_review_agent: 'codex')
 
@@ -56,12 +85,18 @@ RSpec.describe 'InitializeTask' do
     expect(db[:tasks].count).to eq(1)
   end
 
-  it 'rejects an unsupported or conflicting super-review agent without mutation' do
+  it 'rejects an unsupported explicit or environment super-review agent without mutation' do
     expect do
       service_class.call(task_path: task_path, super_review_agent: 'terra')
-    end.to raise_error('Unsupported super-review agent terra; expected claude or codex')
+    end.to raise_error('Unsupported super-review agent terra; expected claude, codex, or none')
     expect(db[:tasks].count).to eq(0)
 
+    ENV['AUTOIMPLEMENT_SUPER_REVIEW_AGENT'] = 'terra'
+    expect { service_class.call(task_path: task_path) }.
+      to raise_error('Unsupported super-review agent terra; expected claude, codex, or none')
+    expect(db[:tasks].count).to eq(0)
+
+    ENV['AUTOIMPLEMENT_SUPER_REVIEW_AGENT'] = 'none'
     task = service_class.call(task_path: task_path, super_review_agent: 'codex')
 
     expect do

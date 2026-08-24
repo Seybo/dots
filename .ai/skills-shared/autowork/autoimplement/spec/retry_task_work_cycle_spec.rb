@@ -14,7 +14,8 @@ RSpec.describe RetryTaskWorkCycle do
       task_path: File.join(project_path, 'task'),
       project_path: project_path,
       starting_commit_sha: git!('rev-parse', 'HEAD').strip,
-      state: 'initialized'
+      state: 'initialized',
+      super_review_agent: 'claude'
     )
   end
   let(:work_cycle_id) { insert_work_cycle }

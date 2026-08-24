@@ -110,7 +110,7 @@ class AutoimplementCli
   end
 
   def usage
-    'Usage: autoimplement [initialize-task <canonical-task-path> [super-review-agent] | ' \
+    'Usage: autoimplement [initialize-task <canonical-task-path> [claude|codex|none] | ' \
       'resume-task <task-id> | ' \
       'retry-task <task-id> | store-decision <issue-id> <decision> <reason> | ' \
       'squash-task <task-id> <canonical-project-path> <subject> | ' \

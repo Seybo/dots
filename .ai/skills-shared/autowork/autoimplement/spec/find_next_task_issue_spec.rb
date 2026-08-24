@@ -10,7 +10,8 @@ RSpec.describe FindNextTaskIssue do
       task_path: '/tasks/28',
       project_path: '/project',
       starting_commit_sha: 'starting-sha',
-      state: 'initialized'
+      state: 'initialized',
+      super_review_agent: 'claude'
     )
   end
 

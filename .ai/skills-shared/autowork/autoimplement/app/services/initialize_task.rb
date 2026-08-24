@@ -5,14 +5,15 @@ require 'open3'
 class InitializeTask
   include ServiceObject
 
-  SUPER_REVIEW_AGENTS = %w[claude codex].freeze
+  SUPER_REVIEW_AGENTS = %w[claude codex none].freeze
+  SUPER_REVIEW_AGENT_ENV = 'AUTOIMPLEMENT_SUPER_REVIEW_AGENT'
 
   arguments :task_path, super_review_agent: nil
 
   def call
-    validate_super_review_agent
     return resume_task unless existing_task.nil?
 
+    validate_new_task_super_review_agent
     create_task
   end
 
@@ -24,6 +25,7 @@ class InitializeTask
             "expected #{existing_task.fetch(:project_path)}, got #{project_path}"
     end
     validate_current_branch(existing_task.fetch(:id))
+    validate_super_review_agent(super_review_agent) unless super_review_agent.nil?
     if !super_review_agent.nil? && existing_task.fetch(:super_review_agent) != super_review_agent
       raise "Task #{existing_task.fetch(:id)} super-review agent mismatch: " \
             "expected #{existing_task.fetch(:super_review_agent)}, got #{super_review_agent}"
@@ -50,16 +52,29 @@ class InitializeTask
         project_path: project_path,
         starting_commit_sha: starting_commit_sha,
         state: 'initialized',
-        super_review_agent: super_review_agent || 'claude'
+        super_review_agent: resolved_super_review_agent
       )
     end
     tasks.where(id: task_id).first
   end
 
-  def validate_super_review_agent
-    return if super_review_agent.nil? || SUPER_REVIEW_AGENTS.include?(super_review_agent)
+  def validate_new_task_super_review_agent
+    if resolved_super_review_agent.nil?
+      raise "#{SUPER_REVIEW_AGENT_ENV} must be claude, codex, or none for a new Task"
+    end
 
-    raise "Unsupported super-review agent #{super_review_agent}; expected claude or codex"
+    validate_super_review_agent(resolved_super_review_agent)
+  end
+
+  def validate_super_review_agent(agent)
+    return if SUPER_REVIEW_AGENTS.include?(agent)
+
+    raise "Unsupported super-review agent #{agent}; expected claude, codex, or none"
+  end
+
+  def resolved_super_review_agent
+    @resolved_super_review_agent ||=
+      super_review_agent || ENV.fetch(SUPER_REVIEW_AGENT_ENV, nil)
   end
 
   def existing_task

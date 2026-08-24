@@ -14,7 +14,8 @@ RSpec.describe 'ResumeTask' do
       task_path: task_path,
       project_path: '/project',
       starting_commit_sha: 'starting-sha',
-      state: 'initialized'
+      state: 'initialized',
+      super_review_agent: 'claude'
     )
   end
 
@@ -226,6 +227,26 @@ RSpec.describe 'ResumeTask' do
     )
     expect(db[:tasks].where(id: task_id).get(:state)).to eq('super_review')
     expect(db[:work_cycles].count).to eq(3)
+  end
+
+  it 'skips the whole-task super-review when its persisted agent is none' do
+    File.write(File.join(task_path, 'steps.md'), "# Steps\n\n## Step 1: First\n")
+    db[:tasks].where(id: task_id).update(super_review_agent: 'none')
+    insert_implementation(completed_at: Time.now)
+    insert_review(completed_at: Time.now)
+
+    output = service_class.call(task_id: task_id)
+    worker_review = db[:work_cycles].order(:id).last
+
+    expect(output).to eq("Step 1 accepted.\nAutoImplementCycle #{worker_review.fetch(:id)}")
+    expect(worker_review).to include(
+      role: 'worker',
+      action: 'review',
+      step_number: nil,
+      completed_at: nil
+    )
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('worker_final_review')
+    expect(db[:work_cycles].where(role: 'reviewer', action: 'review').count).to eq(1)
   end
 
   it 'starts final Worker review exactly once after a clean super-review' do

@@ -163,8 +163,16 @@ class ResumeTask
   def continue_after_accepted_step
     step_number = latest_implementation_work_cycle.fetch(:step_number)
     work_cycle_id = StartTaskImplementationWorkCycle.call(task_id: task_id)
-    work_cycle_id ||= StartTaskSuperReviewWorkCycle.call(task_id: task.fetch(:id))
+    work_cycle_id ||= start_final_reviews
     "Step #{step_number} accepted.\n#{render_handoff(work_cycle_id)}"
+  end
+
+  def start_final_reviews
+    if task.fetch(:super_review_agent) == 'none'
+      return StartTaskFinalWorkerReviewWorkCycle.call(task_id: task.fetch(:id))
+    end
+
+    StartTaskSuperReviewWorkCycle.call(task_id: task.fetch(:id))
   end
 
   def latest_implementation_work_cycle

@@ -45,6 +45,18 @@ RSpec.describe StartTaskFinalWorkerReviewWorkCycle do
     )
   end
 
+  it 'transitions directly from initialized when super-review is disabled' do
+    db[:tasks].where(id: task_id).update(state: 'initialized', super_review_agent: 'none')
+
+    work_cycle_id = described_class.call(task_id: task_id)
+
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('worker_final_review')
+    expect(db[:work_cycles].where(id: work_cycle_id).first).to include(
+      role: 'worker',
+      action: 'review'
+    )
+  end
+
   it 'creates nothing and preserves super-review state when Git is dirty' do
     db[:tasks].where(id: task_id).update(state: 'super_review')
     allow(ValidateCleanGitState).to receive(:call).and_raise('Working tree is not clean')
@@ -65,7 +77,18 @@ RSpec.describe StartTaskFinalWorkerReviewWorkCycle do
     expect(db[:work_cycles].count).to eq(1)
   end
 
-  it 'requires a settled super-review or final Worker-review state' do
+  it 'preserves initialized state when direct final Worker review finds dirty Git' do
+    db[:tasks].where(id: task_id).update(state: 'initialized', super_review_agent: 'none')
+    allow(ValidateCleanGitState).to receive(:call).and_raise('Working tree is not clean')
+
+    expect { described_class.call(task_id: task_id) }.
+      to raise_error(RuntimeError, 'Working tree is not clean')
+
+    expect(db[:tasks].where(id: task_id).get(:state)).to eq('initialized')
+    expect(db[:work_cycles].count).to eq(0)
+  end
+
+  it 'requires a settled super-review unless the persisted agent is none' do
     db[:tasks].where(id: task_id).update(state: 'initialized')
 
     expect { described_class.call(task_id: task_id) }.

@@ -16,7 +16,8 @@ RSpec.describe SquashTask do
       task_path: task_path,
       project_path: project_path,
       starting_commit_sha: starting_commit_sha,
-      state: 'final_checks_passed'
+      state: 'final_checks_passed',
+      super_review_agent: 'claude'
     )
   end
 

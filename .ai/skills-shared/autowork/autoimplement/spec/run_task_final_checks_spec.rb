@@ -10,7 +10,8 @@ RSpec.describe RunTaskFinalChecks do
       task_path: '/tasks/1',
       project_path: '/project',
       starting_commit_sha: 'starting-sha',
-      state: 'manager_review'
+      state: 'manager_review',
+      super_review_agent: 'claude'
     )
   end
   let(:manager_work_cycle_id) do

@@ -167,7 +167,8 @@ RSpec.describe 'LoadTaskStatus' do
       task_path: File.realpath(task_path),
       project_path: '/checkout',
       starting_commit_sha: 'starting-sha',
-      state: state
+      state: state,
+      super_review_agent: 'claude'
     )
   end
 

@@ -52,12 +52,12 @@ RSpec.describe 'AutoimplementCli' do
 
   it 'initializes with an explicit super-review agent' do
     expect do
-      service_class.call(cli_args: ['initialize-task', task_path, 'codex'])
+      service_class.call(cli_args: ['initialize-task', task_path, 'none'])
     end.to output("Task: 7\n").to_stdout
 
     expect(InitializeTask).to have_received(:call).with(
       task_path: task_path,
-      super_review_agent: 'codex'
+      super_review_agent: 'none'
     )
   end
 
@@ -196,7 +196,7 @@ RSpec.describe 'AutoimplementCli' do
       expect { service_class.call(cli_args: cli_args) }.
         to raise_error(
           ArgumentError,
-          'Usage: autoimplement [initialize-task <canonical-task-path> [super-review-agent] | ' \
+          'Usage: autoimplement [initialize-task <canonical-task-path> [claude|codex|none] | ' \
           'resume-task <task-id> | ' \
           'retry-task <task-id> | store-decision <issue-id> <decision> <reason> | ' \
           'squash-task <task-id> <canonical-project-path> <subject> | ' \

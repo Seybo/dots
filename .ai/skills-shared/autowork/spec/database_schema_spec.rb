@@ -11,6 +11,7 @@ RSpec.describe 'database schema' do
       [
         '20260729115455_create_reported_issues.rb',
         '20260813160000_add_rebase_review_flag.rb',
+        '20260823170000_require_super_review_policy.rb',
       ]
     )
   end
@@ -206,6 +207,7 @@ RSpec.describe 'database schema' do
     ].each do |name|
       expect(column(:tasks, name)).to include(allow_null: false)
     end
+    expect(column(:tasks, :super_review_agent).fetch(:ruby_default)).to be_nil
 
     task_id = db[:tasks].insert(task_attributes)
 
@@ -235,13 +237,22 @@ RSpec.describe 'database schema' do
     end
     expect do
       db[:tasks].insert(
-        task_attributes(task_path: '/tasks/6', project_path: '/running-project', state: 'running')
+        task_attributes(
+          task_path: '/tasks/6',
+          project_path: '/no-super-review-project',
+          super_review_agent: 'none'
+        )
+      )
+    end.not_to raise_error
+    expect do
+      db[:tasks].insert(
+        task_attributes(task_path: '/tasks/7', project_path: '/running-project', state: 'running')
       )
     end.to raise_error(Sequel::CheckConstraintViolation)
     expect do
       db[:tasks].insert(
         task_attributes(
-          task_path: '/tasks/7',
+          task_path: '/tasks/8',
           project_path: '/unsupported-agent-project',
           super_review_agent: 'terra'
         )
@@ -402,8 +413,10 @@ RSpec.describe 'database schema' do
 
         expect(upgrade_db[:tasks].where(id: task_id).first).to include(
           state: 'manager_review',
+          super_review_agent: 'claude',
           is_manager_review_required: false
         )
+        expect(upgrade_db.schema(:tasks).to_h.fetch(:super_review_agent).fetch(:ruby_default)).to be_nil
       ensure
         upgrade_db.disconnect
       end
@@ -443,6 +456,7 @@ RSpec.describe 'database schema' do
           [
             '20260729115455_create_reported_issues.rb',
             '20260813160000_add_rebase_review_flag.rb',
+            '20260823170000_require_super_review_policy.rb',
           ]
         )
         expect(rollback_db.tables).to include(:reported_issues, :tasks, :reviews, :work_cycles)
@@ -499,7 +513,8 @@ RSpec.describe 'database schema' do
       task_path: '/tasks/1',
       project_path: '/project',
       starting_commit_sha: 'starting-sha',
-      state: 'initialized'
+      state: 'initialized',
+      super_review_agent: 'claude'
     }.merge(overrides)
   end
 
