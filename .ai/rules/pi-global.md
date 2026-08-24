@@ -138,6 +138,12 @@ Language- and project-neutral rules for all agents unless a project's local inst
 - Staging files (`git add`) is also a git state mutation. Ask first unless the user explicitly asked to commit or prepare a commit.
 - If approval is ambiguous, stop and ask.
 
+### Commit subjects
+
+- Use `<area>: <change>`. For a specific named component, use `<area>: <component>. <Change>`.
+- Add the component only when it names a concrete skill, plugin, extension, or subsystem. Omit it when it merely repeats the area or subject.
+- Keep the change concise and imperative. Example: `ai: autoimplement. Require explicit super-review policy`.
+
 ## Tmux process and layout safety
 
 - Never run a tmux command or command sequence that terminates, replaces, respawns, recreates, resets, or closes an existing pane, window, session, shell, or pane process. This prohibition includes `respawn-pane`, `respawn-window`, `kill-pane`, `kill-window`, and `kill-session`, plus any command, option, signal, or workaround with an equivalent effect.

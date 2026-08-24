@@ -85,8 +85,8 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
      ```bash
      git -C /Users/inseybo/.dots log --oneline -50
      ```
-   - Match the existing style: short imperative-ish subject, usually `<area>: <change>`.
-   - Prefer scopes already present in recent history when they fit, such as `ai:`, `tmux:`, `nvim:`, `theme:`, `monit:`, or `env:`.
+   - Follow the commit-subject rules in the global agent instructions.
+   - Use history to choose established area and component names, such as `ai`, `autoimplement`, `pi`, `copy-part`, `nvim`, or `snacks`.
 
 6. **Prepare and present focused commits**
    - Group changes by purpose, not by file extension.
