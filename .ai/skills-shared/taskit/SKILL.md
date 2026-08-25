@@ -132,13 +132,33 @@ If the section contains any unresolved question:
 
 1. Show the section and remind the user that deferred decisions remain.
 2. Do not convert the draft yet.
-3. Ask the user to reply with the exact bare keyword `approve` to continue
-   without resolving them, or to resolve the questions in `task.md` and rerun
-   Taskit.
-4. Treat only the next exact `approve` reply as explicit approval for the
-   preserved Taskit invocation. Any other reply ends this continuation.
-5. After approval, continue normally and preserve the deferred section. Approval
-   permits conversion; it does not mark the decisions resolved.
+3. Offer both ways to continue the preserved Taskit invocation:
+   - reply with the exact bare keyword `approve` to convert without resolving
+     the decisions
+   - answer one or more displayed questions directly in normal language
+4. Treat exact bare `approve` as explicit approval. Continue normally and
+   preserve the deferred section; approval permits conversion but does not mark
+   the decisions resolved.
+5. Treat any other reply that clearly answers a displayed question as an
+   explicit resolution instruction for `task.md`:
+   - incorporate the answer as a concise requirement or decision in the most
+     relevant non-deferred section, updating existing text instead of adding a
+     duplicate when practical
+   - remove the resolved question's complete Question / Why this is open /
+     Recommendation block from `# Deferred decisions`
+   - remove the heading and section when no deferred questions remain
+   - do not add details beyond the user's answer
+6. After updating `task.md`, run this gate again automatically. If every question
+   is resolved, continue the preserved conversion without requiring the user to
+   rerun Taskit. If questions remain, show only the remaining questions and keep
+   this continuation active.
+7. If a reply appears to answer a question but is ambiguous or incomplete, ask
+   one focused clarification and keep the continuation active. An unrelated
+   request ends the continuation.
+
+A direct answer to a displayed question authorizes only the corresponding
+`task.md` update and the conversion already requested. Never tell the user to
+edit and rerun Taskit when their reply itself clearly resolves the decision.
 
 ## Instructions
 
@@ -443,7 +463,7 @@ the duplicate-title cleanup for Shortcut conversion applies.
 ## Important Notes
 
 - Manual and Shortcut modes are create-only; do not modify existing task folders or files in those modes
-- Task markdown path mode may rename the existing task folder after Shortcut or local conversion. After successful Shortcut creation it may record an epic supplied by the continuation and apply the defined duplicate-title cleanup, but must not otherwise modify `task.md` contents unless explicitly requested.
+- Task markdown path mode may rename the existing task folder after Shortcut or local conversion. It may update `task.md` when the user resolves a deferred decision through the active gate. After successful Shortcut creation it may also record an epic supplied by the continuation and apply the defined duplicate-title cleanup, but must not otherwise modify `task.md` contents unless explicitly requested.
 - Preserve the original task name text only for slugification input; folder name uses the slugified form
 - Local task IDs use zero-padded 4-digit IDs (`0001`, `0002`, ...). To choose the next local ID, scan first-level task folders under `$DEV_ROOT/_tasks/<project>/` matching `^\d{4}-`, then use one greater than the highest existing local ID; if none exist, start at `0001`. Ignore `draftNN` folders and Shortcut story ID folders when assigning local IDs.
 - If the generated folder already exists, stop and ask the user how to proceed rather than overwriting anything

@@ -140,7 +140,7 @@ command.
 8. **Report and offer continuation:**
    - show the draft name, draft folder, and `task.md` path; show the Feature path when present
    - preserve the resolved project, `draftNN`, and full `task.md` path for the next turn
-   - inspect the final `# Deferred decisions` section when present; if it contains any question, remind the user that decisions remain unresolved and that Taskit will require explicit approval before conversion
+   - inspect the final `# Deferred decisions` section when present; if it contains any question, remind the user that Taskit will pause before conversion so they can either approve preserving the unresolved decisions or answer them directly
    - when invoked from Grillme's continuation, offer only `taskit` and tell the user to reply with exact bare `taskit`
    - otherwise offer both next steps and tell the user to reply with exactly one bare keyword:
      - `grillme` to grill the new `task.md`
