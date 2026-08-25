@@ -49,3 +49,10 @@ option_as_alt = 'Both'
 [window.padding]
 x = 10
 y = 6
+
+[keyboard]
+bindings = [
+  # Use Oma's existing tmux prefix bindings for window navigation.
+  { key = 'U', mods = 'Command', chars = "\u0002p" },
+  { key = 'M', mods = 'Command', chars = "\u0002n" },
+]
