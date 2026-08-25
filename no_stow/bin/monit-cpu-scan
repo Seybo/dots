@@ -54,6 +54,10 @@ while IFS=$'\t' read -r pid ppid cpu comm; do
   [[ -n "${pid:-}" ]] || continue
   print -r -- "$pid" >> "$hot_pids_file"
 
+  process_path=$(ps -ww -p "$pid" -o comm= 2>/dev/null)
+  process_name=${process_path:t}
+  [[ -n "$process_name" ]] || process_name=${comm:t}
+
   state_file="$state_dir/$pid.state"
   first_seen=$now
   notified_at=0
@@ -70,13 +74,13 @@ while IFS=$'\t' read -r pid ppid cpu comm; do
   since_notification=$(( now - notified_at ))
 
   if (( duration >= seconds && since_notification >= cooldown_seconds )); then
-    MONIT_SERVICE="$name" \
+    MONIT_SERVICE="$process_name" \
     MONIT_PROCESS_PID="$pid" \
     MONIT_PROCESS_CPU_PERCENT="$cpu" \
-    MONIT_DESCRIPTION="Process matched '$regex' exceeded ${threshold}% CPU for ${duration}s" \
+    MONIT_DESCRIPTION="Process matched '$process_name' exceeded ${threshold}% CPU for ${duration}s" \
     "$notify_script"
     notified_at=$now
-    printf '%s\t%s\tpid=%s\tcpu=%s\tduration=%ss\tcomm=%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$name" "$pid" "$cpu" "$duration" "$comm" >> "$log_file"
+    printf '%s\t%s\tpid=%s\tcpu=%s\tduration=%ss\tprocess=%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$name" "$pid" "$cpu" "$duration" "$process_name" >> "$log_file"
   fi
 
   printf '%s\n%s\n' "$first_seen" "$notified_at" > "$state_file"
