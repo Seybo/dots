@@ -1,5 +1,9 @@
 // Based on Pi's official modal-editor extension example.
 
+import { watch, type FSWatcher } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 import { CustomEditor, type ExtensionAPI, type Theme } from "@earendil-works/pi-coding-agent";
 import {
 	decodeKittyPrintable,
@@ -31,7 +35,10 @@ const DELETE_TO_LINE_END = "\x1b[107;5u"; // ctrl+k
 const BACKSPACE = "\x1b[127u";
 const NEW_LINE = "\x1b[106;5u"; // ctrl+j
 const UNDO = "\x1b[45;5u"; // ctrl+-
-const INPUT_LANGUAGE_POLL_INTERVAL_MS = 1000;
+const INPUT_LANGUAGE_READ_TIMEOUT_MS = 1000;
+const INPUT_LANGUAGE_REFRESH_DEBOUNCE_MS = 100;
+const INPUT_SOURCE_PREFERENCES_DIR = join(homedir(), "Library/Preferences");
+const INPUT_SOURCE_PREFERENCES_FILE = "com.apple.HIToolbox.plist";
 
 class VimEditor extends CustomEditor {
 	private mode: "normal" | "insert" = "insert";
@@ -231,22 +238,57 @@ class VimEditor extends CustomEditor {
 }
 
 export default function (pi: ExtensionAPI) {
-	let timer: ReturnType<typeof setInterval> | undefined;
+	let activeEditor: VimEditor | undefined;
+	let inputLanguage: string | undefined;
+	let isInputLanguageRefreshRunning = false;
+	let inputSourceWatcher: FSWatcher | undefined;
+	let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
-	async function refreshInputLanguage(editor: VimEditor): Promise<void> {
+	async function refreshInputLanguage(): Promise<void> {
+		if (isInputLanguageRefreshRunning) return;
+
+		isInputLanguageRefreshRunning = true;
 		try {
 			const result = await pi.exec(
 				"defaults",
 				["read", "com.apple.HIToolbox", "AppleSelectedInputSources"],
-				{ timeout: INPUT_LANGUAGE_POLL_INTERVAL_MS },
+				{ timeout: INPUT_LANGUAGE_READ_TIMEOUT_MS },
 			);
-			editor.setInputLanguage(inputLanguageFromDefaults(result.stdout));
+			inputLanguage = inputLanguageFromDefaults(result.stdout);
+			activeEditor?.setInputLanguage(inputLanguage);
 		} catch {
 			return;
+		} finally {
+			isInputLanguageRefreshRunning = false;
 		}
 	}
 
+	function scheduleInputLanguageRefresh(): void {
+		if (refreshTimer) clearTimeout(refreshTimer);
+		refreshTimer = setTimeout(() => {
+			refreshTimer = undefined;
+			void refreshInputLanguage();
+		}, INPUT_LANGUAGE_REFRESH_DEBOUNCE_MS);
+	}
+
+	// Watch the directory because cfprefsd may replace the plist rather than update its inode.
+	// The old one-second poll spawned `defaults` from every Pi session, multiplying
+	// macOS policy validations and driving high syspolicyd CPU usage.
+	function startInputSourceWatcher(): void {
+		if (inputSourceWatcher) return;
+
+		inputSourceWatcher = watch(
+			INPUT_SOURCE_PREFERENCES_DIR,
+			{ persistent: false },
+			(_eventType, filename) => {
+				if (filename && filename.toString() !== INPUT_SOURCE_PREFERENCES_FILE) return;
+				scheduleInputLanguageRefresh();
+			},
+		);
+	}
+
 	pi.on("session_start", (_event, ctx) => {
+		const isInputLanguageEnabled = process.platform === "darwin" && ctx.mode === "tui";
 		ctx.ui.setEditorComponent((tui, theme, keybindings) => {
 			const editor = new VimEditor(
 				tui,
@@ -256,20 +298,27 @@ export default function (pi: ExtensionAPI) {
 				() => tui.requestRender(),
 			);
 
-			if (process.platform === "darwin" && ctx.mode === "tui") {
-				void refreshInputLanguage(editor);
-				timer = setInterval(
-					() => void refreshInputLanguage(editor),
-					INPUT_LANGUAGE_POLL_INTERVAL_MS,
-				);
+			if (isInputLanguageEnabled) {
+				activeEditor = editor;
+				editor.setInputLanguage(inputLanguage);
 			}
 
 			return editor;
 		});
+
+		if (isInputLanguageEnabled) {
+			startInputSourceWatcher();
+			void refreshInputLanguage();
+		}
 	});
 
 	pi.on("session_shutdown", () => {
-		if (timer) clearInterval(timer);
-		timer = undefined;
+		inputSourceWatcher?.close();
+		if (refreshTimer) clearTimeout(refreshTimer);
+		activeEditor = undefined;
+		inputLanguage = undefined;
+		isInputLanguageRefreshRunning = false;
+		inputSourceWatcher = undefined;
+		refreshTimer = undefined;
 	});
 }
