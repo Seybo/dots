@@ -9,7 +9,7 @@ Everything lives in the dotfiles repo and is stow-linked into `$HOME` (via `stow
 ```
 ~/.dots/.claude/                    # Claude-specific package → stow-linked into ~/.claude/
 ├── README.md                       # this file
-├── settings.json                   # CANONICAL COPY — deliberately NOT stow-linked (see below)
+├── settings.json                   # ignored local baseline — not tracked or stow-linked
 ├── keybindings.json                # keyboard shortcuts
 ├── statusline-command.sh           # starship-based status line
 ├── rules/                          # → ~/.claude/rules (always-loaded global rules)
@@ -44,9 +44,9 @@ Everything lives in the dotfiles repo and is stow-linked into `$HOME` (via `stow
 
 ## Key mechanisms
 
-### settings.json (canonical copy, not linked)
+### settings.json (ignored local baseline)
 
-Claude Code rewrites `~/.claude/settings.json` itself (permission grants, `/model`), so it is excluded from stow (`.stow-local-ignore`). The tracked canonical copy is `~/.dots/.claude/settings.json`. After a deliberate settings change, copy the live file over the canonical one; the `dots-commit` skill diffs them and flags drift.
+Claude Code rewrites `~/.claude/settings.json` itself (permission grants, `/model`), so it is excluded from Stow and Git. The ignored repo-local baseline is `~/.dots/.claude/settings.json`. The `dots-commit` skill detects drift, confirms live changes with the operator, updates the baseline, and scans it with `dots-check`. The baseline is never committed.
 
 Highlights: read-only Bash/git allowlist, the exact read-only Autofix participant command `/Volumes/dev/bin/skills/autofix show-work-cycle <id>`, `find`-mutation ask-rules, `additionalDirectories` for `/Volumes/dev/_tasks` + `/tmp`, both PreToolUse hooks, statusline, skill overrides.
 
