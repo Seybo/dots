@@ -129,7 +129,7 @@ Do not create project folders, task folders, or files.
    - keep the wording concise and concrete
    - do not invent implementation details, deployment steps, tests, or behavior not grounded in the task text, `steps.md`, or explicit decisions in the current manager conversation
    - preserve important terminology from the task, especially domain names, provider names, command names, state names, and file/artifact names
-   - include every material, still-active reviewer decision from the current manager conversation; place production and rollout facts under Deployment and issue-skip rationale under Gotchas
+   - include material, still-active reviewer decisions from the current manager conversation, but put an item under Deployment only when it passes the Deployment gate below; an explored option is not a required rollout step; place issue-skip rationale under Gotchas
    - state both the confirmed fact and its review implication when the implication is not obvious
    - include nuance that matters to an AI reviewer agent, especially:
      - intentional non-goals or deferred behavior
@@ -201,17 +201,24 @@ Extract acceptance criteria from sections like `# Acceptance Criteria`, `# AC`, 
 
 ### Deployment
 
-Include deployment steps only when present or clearly implied by the task, such as:
+Default to `None.` Add a deployment item only when all four conditions are proven:
 
-- migrations
-- feature flags
-- config or environment variables
-- backfills
-- one-off operator commands
-- rollout order
-- manual verification after deploy
+1. A person must perform it manually outside the project's established deployment automation.
+2. This PR introduces the requirement.
+3. It is required to deploy or activate the change safely, not merely to use the feature afterward.
+4. The task or the operator's latest explicit decision makes it a required rollout step.
 
-If none are present, say `None.`
+Before adding an item, inspect project evidence for existing automation and conventions. Do not infer manual work merely because the diff contains a migration, environment-variable reference, command, or operational workflow.
+
+Apply these rules:
+
+- A migration file is not a deployment step when the normal deployment process applies migrations automatically.
+- An existing environment variable is not new deployment configuration.
+- First-use commands, approval flows, and ordinary feature operation belong in AC or Gotchas, not Deployment.
+- A possible backfill, workaround, or one-time correction belongs in Deployment only when the operator explicitly confirms it as required for this rollout. Discussion or agreement that it could work is not confirmation that it must be done.
+- Local development warnings are not production deployment steps.
+- Do not convert exploratory manager conversation into rollout instructions.
+- When a potentially required manual action cannot be verified, ask one precise question instead of inventing a step.
 
 ### Gotchas
 
