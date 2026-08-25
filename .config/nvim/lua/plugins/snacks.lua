@@ -21,6 +21,9 @@ return {
             diagnostics_open = true,
             git_status_open = true,
             hidden = true,
+            formatters = {
+              file = { git_status_hl = false },
+            },
             jump = { close = true },
             layout = {
               fullscreen = true,
