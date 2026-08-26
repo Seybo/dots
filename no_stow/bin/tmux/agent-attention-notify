@@ -43,8 +43,8 @@ def ghostty_frontmost?
   frontmost_application_name == 'ghostty'
 end
 
-def notify(pane_id, pane_label, is_force: false)
-  if !is_force && ghostty_frontmost?
+def notify(pane_id, pane_label)
+  if ghostty_frontmost?
     log_event("skip notification pane=#{pane_id || '-'} label=#{pane_label} reason=ghostty_frontmost")
     return
   end
@@ -243,7 +243,7 @@ if ARGV[0] == '--manager-set'
   pane_id = ARGV[1] || ENV['TMUX_PANE']
   unless pane_id.nil? || pane_id.empty?
     set_tmux_attention_marker(pane_id)
-    notify(pane_id, pane_label(pane_id), is_force: true)
+    notify(pane_id, pane_label(pane_id))
   end
   exit 0
 end
