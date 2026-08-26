@@ -55,4 +55,9 @@ bindings = [
   # Use Oma's existing tmux prefix bindings for window navigation.
   { key = 'U', mods = 'Command', chars = "\u0002p" },
   { key = 'M', mods = 'Command', chars = "\u0002n" },
+  # Use Oma's existing tmux prefix bindings for pane navigation over direct SSH.
+  { key = 'H', mods = 'Command', chars = "\u0002\u001B[D" },
+  { key = 'J', mods = 'Command', chars = "\u0002\u001B[B" },
+  { key = 'K', mods = 'Command', chars = "\u0002\u001B[A" },
+  { key = 'L', mods = 'Command', chars = "\u0002\u001B[C" },
 ]
