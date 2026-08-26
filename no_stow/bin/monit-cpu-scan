@@ -3,11 +3,12 @@ set -u
 
 PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-name=${1:?usage: monit-cpu-scan <name> <process-regex> [cpu_percent] [seconds] [cooldown_seconds]}
-regex=${2:?usage: monit-cpu-scan <name> <process-regex> [cpu_percent] [seconds] [cooldown_seconds]}
+name=${1:?usage: monit-cpu-scan <name> <process-regex> [cpu_percent] [seconds] [cooldown_seconds] [exclude_regex]}
+regex=${2:?usage: monit-cpu-scan <name> <process-regex> [cpu_percent] [seconds] [cooldown_seconds] [exclude_regex]}
 threshold=${3:-30}
 seconds=${4:-60}
 cooldown_seconds=${5:-300}
+exclude_regex=${6:-}
 
 state_dir="$HOME/Library/Application Support/monit/cpu-scan-state/$name"
 log_file="$HOME/Library/Logs/monit-cpu-scan.log"
@@ -26,6 +27,7 @@ trap cleanup EXIT
 
 if ! ps -axo pid=,ppid=,pcpu=,comm=,args= | awk \
   -v regex="$regex" \
+  -v exclude_regex="$exclude_regex" \
   -v threshold="$threshold" \
   -v self="$$" '
     {
@@ -40,6 +42,7 @@ if ! ps -axo pid=,ppid=,pcpu=,comm=,args= | awk \
 
       if (pid == self) next
       if (args ~ /monit-cpu-scan/ || args ~ /monit-cpu-alerts/) next
+      if (exclude_regex != "" && (comm ~ exclude_regex || args ~ exclude_regex)) next
 
       if ((comm ~ regex || args ~ regex) && (cpu + 0) > (threshold + 0)) {
         printf "%s\t%s\t%.1f\t%s\n", pid, ppid, cpu, comm

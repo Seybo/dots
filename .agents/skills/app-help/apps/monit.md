@@ -32,7 +32,7 @@
 
 - Install/render runtime config: `~/.dots/no_stow/bin/monit-cpu-alerts install`
 - Add unique-process CPU rule: `~/.dots/no_stow/bin/monit-cpu-alerts add <name> <regex> [pct] [sec] [cpu|total_cpu]`
-- Add multi-process CPU scan: `~/.dots/no_stow/bin/monit-cpu-alerts add-scan <name> <regex> [pct] [sec] [cooldown_sec]`
+- Add multi-process CPU scan: `~/.dots/no_stow/bin/monit-cpu-alerts add-scan <name> <regex> [pct] [sec] [cooldown_sec] [exclude_regex]`
 - Validate/reload/status: `~/.dots/no_stow/bin/monit-cpu-alerts test|reload|status|paths|edit`
 - Start/stop LaunchAgent: `~/.dots/no_stow/bin/monit-cpu-alerts load|unload`
 

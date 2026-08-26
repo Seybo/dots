@@ -23,7 +23,7 @@ Commands:
   install                         Install runtime Monit config + LaunchAgent plist
   add <name> <regex> [pct] [sec] [cpu|total_cpu]
                                   Add a single-process CPU alert rule (default: 30 60 total_cpu)
-  add-scan <name> <regex> [pct] [sec] [cooldown_sec]
+  add-scan <name> <regex> [pct] [sec] [cooldown_sec] [exclude_regex]
                                   Alert when any matching process exceeds CPU for long enough
   load                            Load/restart the LaunchAgent
   unload                          Unload the LaunchAgent
@@ -183,8 +183,8 @@ shell_quote() {
 }
 
 add_scan() {
-  local monit_path=$1 name=$2 regex=$3 pct=${4:-30} seconds=${5:-60} cooldown=${6:-300}
-  local backup tmp wrapper escaped_wrapper quoted_scan quoted_name quoted_regex quoted_pct quoted_seconds quoted_cooldown
+  local monit_path=$1 name=$2 regex=$3 pct=${4:-30} seconds=${5:-60} cooldown=${6:-300} exclude_regex=${7:-}
+  local backup tmp wrapper escaped_wrapper quoted_scan quoted_name quoted_regex quoted_pct quoted_seconds quoted_cooldown quoted_exclude_regex
 
   ensure_runtime "$monit_path"
   validate_rule_args "$name" "$pct" "$seconds"
@@ -206,11 +206,12 @@ add_scan() {
   quoted_pct=$(shell_quote "$pct")
   quoted_seconds=$(shell_quote "$seconds")
   quoted_cooldown=$(shell_quote "$cooldown")
+  quoted_exclude_regex=$(shell_quote "$exclude_regex")
 
   cat > "$wrapper" <<EOF
 #!/bin/zsh
 export STOW_DIR=$(shell_quote "$repo_dir")
-exec $quoted_scan $quoted_name $quoted_regex $quoted_pct $quoted_seconds $quoted_cooldown
+exec $quoted_scan $quoted_name $quoted_regex $quoted_pct $quoted_seconds $quoted_cooldown $quoted_exclude_regex
 EOF
   chmod 700 "$wrapper"
 
@@ -235,7 +236,7 @@ EOF
   fi
   rm -f "$backup"
 
-  print -r -- "Added scan '$name': regex='$regex', threshold=${pct}% for ${seconds}s, cooldown=${cooldown}s"
+  print -r -- "Added scan '$name': regex='$regex', threshold=${pct}% for ${seconds}s, cooldown=${cooldown}s, exclude='$exclude_regex'"
   print -r -- "Apply to running Monit with: $script_path reload"
 }
 

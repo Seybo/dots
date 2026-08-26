@@ -61,6 +61,9 @@ Arguments:
 3. CPU percent, default `30`
 4. seconds over threshold, default `60`
 5. notification cooldown seconds, default `300`
+6. optional exclusion regex
+
+When a specific tier overlaps a catch-all scan, exclude the tier's process regex from the catch-all scan so each process uses only one threshold.
 
 ## Start at login
 
