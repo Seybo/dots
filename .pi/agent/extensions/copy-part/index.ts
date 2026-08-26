@@ -6,6 +6,7 @@ import { Key, matchesKey, truncateToWidth, wrapTextWithAnsi } from "@earendil-wo
 import { extractCodeParts } from "./code-blocks.ts";
 import { extractFilePaths } from "./file-paths.ts";
 import { extractLinks } from "./links.ts";
+import { openFileInAdjacentPane } from "./open-file.ts";
 import { PickerState } from "./picker-state.ts";
 import { formatSentenceList } from "./sentence-list.ts";
 import { parseCopyArgs, resolveSelection } from "./selection.ts";
@@ -18,6 +19,7 @@ type ModeConfig = {
 	missing: string;
 	extract: (response: string) => string[];
 	isMultiSelect?: boolean;
+	action?: "open";
 };
 
 const MODES = {
@@ -30,6 +32,7 @@ const MODES = {
 	c: { partName: "code", missing: "code block or inline code", extract: extractCodeParts },
 	l: { partName: "link", missing: "web link", extract: extractLinks },
 	f: { partName: "file path", missing: "file path", extract: extractFilePaths },
+	v: { partName: "file path", missing: "file path", extract: extractFilePaths, action: "open" },
 } satisfies Record<string, ModeConfig>;
 
 type Mode = keyof typeof MODES;
@@ -65,13 +68,15 @@ async function pickPart(
 	items: string[],
 	partName: ModeConfig["partName"],
 	isMultiSelect: boolean,
+	action: "copy" | "open",
 ): Promise<string | null> {
 	return ctx.ui.custom<string | null>((tui, theme, keybindings, done) => {
 		const state = new PickerState(items.length);
 
 		return {
 			render(width: number): string[] {
-				const lines = [theme.fg("accent", theme.bold(`Copy ${partName}`)), ""];
+				const title = action === "open" ? `Open ${partName}` : `Copy ${partName}`;
+				const lines = [theme.fg("accent", theme.bold(title)), ""];
 				const visibleCount = Math.min(items.length, MAX_VISIBLE_ITEMS);
 				const startIndex = Math.max(
 					0,
@@ -107,9 +112,10 @@ async function pickPart(
 				const previewWidth = Math.max(1, width - 2);
 				const selected = theme.bg("selectedBg", theme.fg("text", items[state.selectedIndex]!));
 				lines.push(...wrapTextWithAnsi(selected, previewWidth).map((line) => `  ${line}`));
+				const confirmAction = action === "open" ? "open" : "copy";
 				const help = isMultiSelect
-					? "↑/↓/j/k browse · Space mark · Enter copy · Esc cancel"
-					: "↑/↓/j/k browse · Enter copy · Esc cancel";
+					? `↑/↓/j/k browse · Space mark · Enter ${confirmAction} · Esc cancel`
+					: `↑/↓/j/k browse · Enter ${confirmAction} · Esc cancel`;
 				lines.push("", theme.fg("dim", help));
 
 				return lines.map((line) => truncateToWidth(line, width, ""));
@@ -174,11 +180,11 @@ function copyToClipboard(text: string): Promise<void> {
 
 export default function copyPartExtension(pi: ExtensionAPI) {
 	pi.registerCommand("cp", {
-		description: "Browse and copy one sentence, code part, web link, or file path from the latest assistant response",
+		description: "Browse and copy response parts, or open a referenced file in Neovim",
 		handler: async (args, ctx) => {
 			const parsed = parseCopyArgs(args);
 			if (!parsed || !isMode(parsed.mode)) {
-				ctx.ui.notify("Usage: /cp <s|c|l|f> [number|l]", "warning");
+				ctx.ui.notify("Usage: /cp <s|c|l|f|v> [number|l]", "warning");
 				return;
 			}
 			if (ctx.mode !== "tui") {
@@ -202,9 +208,26 @@ export default function copyPartExtension(pi: ExtensionAPI) {
 
 			const item =
 				selection.kind === "picker"
-					? await pickPart(ctx, items, config.partName, config.isMultiSelect ?? false)
+					? await pickPart(
+							ctx,
+							items,
+							config.partName,
+							config.isMultiSelect ?? false,
+							config.action ?? "copy",
+						)
 					: selection.item;
 			if (item === null) return;
+
+			if (config.action === "open") {
+				try {
+					await openFileInAdjacentPane(item, process.cwd());
+					ctx.ui.notify("Opened file in adjacent Neovim pane", "info");
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error);
+					ctx.ui.notify(`Failed to open file: ${message}`, "error");
+				}
+				return;
+			}
 
 			try {
 				await copyToClipboard(item);
