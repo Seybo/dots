@@ -1,13 +1,13 @@
 ---
 name: dots-commit
-description: Prepare focused commits for the dotfiles repo and its nested dev-environment references repo. Runs dots-check, reviews repo fit, presents focused commit groups, waits for approval, then creates the approved commits in the correct repository.
+description: Prepare focused commits for the active dotfiles repo from STOW_DIR and its nested dev-environment references repo. Runs dots-check, reviews repo fit, presents focused commit groups, waits for approval, then creates the approved commits in the correct repository.
 ---
 
 # Dots Commit
 
-Prepare focused commits for `/Users/inseybo/.dots` and its nested `/Users/inseybo/.dots/refs/dev-env` repository, show them, wait for approval, then create the approved commits.
+Prepare focused commits for `$STOW_DIR` and its nested `$STOW_DIR/refs/dev-env` repository, show them, wait for approval, then create the approved commits.
 
-This skill is repo-specific and lives in `.dots` at `.agents/skills/dots-commit`.
+This shared skill lives in `.dots` at `.agents/skills/dots-commit`.
 
 ## Invocation
 
@@ -21,7 +21,9 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
 
 ## Hard rules
 
-- Treat `.dots` and `refs/dev-env` as separate Git repositories. Never combine their paths in one commit.
+- Require `STOW_DIR`; stop if it is missing or not a Git repository.
+- Treat `$STOW_DIR` and `$STOW_DIR/refs/dev-env` as separate Git repositories. Never combine their paths in one commit.
+- When `STOW_DIR=$HOME/.omadots`, never mutate `$HOME/.dots`; it is a pull-only shared source.
 - Prepare and present commit groups first; wait for explicit user approval before staging or committing.
 - Do not mutate git history, branches, tags, stashes, remotes, or commit state before approval.
 - After approval, stage and commit only the approved paths and groups in their stated repository.
@@ -33,18 +35,18 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
 1. **Resolve repositories and status**
    - Use these repositories:
      ```text
-     dots: /Users/inseybo/.dots
-     refs: /Users/inseybo/.dots/refs/dev-env
+     dots: $STOW_DIR
+     refs: $STOW_DIR/refs/dev-env
      ```
    - Record each starting commit before any later approved commit work:
      ```bash
-     git -C /Users/inseybo/.dots rev-parse HEAD
-     git -C /Users/inseybo/.dots/refs/dev-env rev-parse HEAD
+     git -C "$STOW_DIR" rev-parse HEAD
+     git -C "$STOW_DIR/refs/dev-env" rev-parse HEAD
      ```
    - Run status in both repositories:
      ```bash
-     git -C /Users/inseybo/.dots status --short
-     git -C /Users/inseybo/.dots/refs/dev-env status --short
+     git -C "$STOW_DIR" status --short
+     git -C "$STOW_DIR/refs/dev-env" status --short
      ```
    - If neither repository has staged, unstaged, or untracked changes, report that there is nothing to commit and stop.
    - Continue with only the repositories that have changes.
@@ -52,8 +54,8 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
 2. **Run dots-check before reviewing content**
    - In every changed repository, scan unstaged tracked changes and untracked files. Run the scanner from that repository so it resolves the correct Git root:
      ```bash
-     cd /Users/inseybo/.dots && ./.agents/skills/dots-check/scripts/scan.rb --unstaged --untracked
-     cd /Users/inseybo/.dots/refs/dev-env && /Users/inseybo/.dots/.agents/skills/dots-check/scripts/scan.rb --unstaged --untracked
+     cd "$STOW_DIR" && "$HOME/.dots/.agents/skills/dots-check/scripts/scan.rb" --unstaged --untracked
+     cd "$STOW_DIR/refs/dev-env" && "$HOME/.dots/.agents/skills/dots-check/scripts/scan.rb" --unstaged --untracked
      ```
    - If a changed repository has staged changes, also run its default staged scan from that repository.
    - Interpret exit codes separately for each repository:
@@ -71,23 +73,26 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
      ```
    - Read diffs for tracked changes. Use targeted `git -C <repo> diff -- <paths>` / `git -C <repo> diff --cached -- <paths>` commands when the full diff is large.
    - For untracked files, list the files first, then read only relevant text files. Do not dump large binaries or generated artifacts.
-   - Check Claude settings drift. `~/.claude/settings.json` is deliberately not stow-linked because Claude Code rewrites it. Its ignored repo-local baseline is `.claude/settings.json`:
+   - Only when `STOW_DIR=$HOME/.dots`, check Claude settings drift. `~/.claude/settings.json` is deliberately not stow-linked because Claude Code rewrites it. Its ignored repo-local baseline is `.claude/settings.json`:
      ```bash
-     diff /Users/inseybo/.claude/settings.json /Users/inseybo/.dots/.claude/settings.json
+     diff "$HOME/.claude/settings.json" "$STOW_DIR/.claude/settings.json"
      ```
      If they differ, show the diff and ask whether the live changes are intentional. After the operator confirms, copy the live file over the baseline, then scan it:
      ```bash
-     ./.agents/skills/dots-check/scripts/scan.rb --file /Users/inseybo/.dots/.claude/settings.json
+     "$HOME/.dots/.agents/skills/dots-check/scripts/scan.rb" --file "$STOW_DIR/.claude/settings.json"
      ```
      Apply the dots-check exit-code rules from step 2. The baseline is ignored and must not be staged or included in a commit group.
 
 4. **Check repo fit**
-   - Treat `.dots` as the user's dotfiles repository: shell/editor/terminal/tmux/zellij/Ghostty/Hammerspoon config, themes, local helper scripts, and agent skills/config belong there.
+   - Run `$STOW_DIR/bin/stow_check`. Stop on any conflict.
+   - Treat `$STOW_DIR` as the machine's active dotfiles repository.
+   - When `STOW_DIR=$HOME/.dots`, shell/editor/terminal/tmux/zellij/Ghostty/Hammerspoon config, themes, local helper scripts, and shared agent skills/config belong there.
+   - When `STOW_DIR=$HOME/.omadots`, only Oma-specific wiring and config belong there; shared rules and skills belong in pull-only `$HOME/.dots`.
    - Treat `refs/dev-env` as the development-environment reference repository. Documentation belongs there; executable configuration, credentials, and runtime state do not.
    - Flag changes as questionable if they look like:
      - secrets, credentials, auth/session files, raw provider responses, or private tokens
      - runtime caches, generated archives, logs, screenshots, or app data
-     - project-specific application code that belongs under `/Volumes/dev/projects/...`
+     - project-specific application code that belongs under `$DEV_ROOT/projects/...`
      - local-only settings that should live in `.git/info/exclude`, `private/`, or an ignored local file instead of the shared dotfiles history
    - If any change does not clearly fit its repository's purpose, call it out and ask the user before suggesting it in a commit group.
 
@@ -132,8 +137,8 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
      ```
    - If the count is greater than zero, run the scanner from that repository:
      ```bash
-     cd /Users/inseybo/.dots && ./.agents/skills/dots-check/scripts/scan.rb --last-commits <dots-count>
-     cd /Users/inseybo/.dots/refs/dev-env && /Users/inseybo/.dots/.agents/skills/dots-check/scripts/scan.rb --last-commits <refs-count>
+     cd "$STOW_DIR" && "$HOME/.dots/.agents/skills/dots-check/scripts/scan.rb" --last-commits <dots-count>
+     cd "$STOW_DIR/refs/dev-env" && "$HOME/.dots/.agents/skills/dots-check/scripts/scan.rb" --last-commits <refs-count>
      ```
    - If the scan returns `0`, report that repository's post-commit dots-check passed.
    - If the scan returns `1`, compare findings against findings the user explicitly approved ignoring during the pre-commit scan. Treat a finding as expected only when the repository, rule, path, and relevant snippet clearly match the approved finding. Stop and ask the user about any new or changed finding.
