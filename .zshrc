@@ -85,6 +85,7 @@ source "$STOW_DIR/private/.env"
 source "$STOW_DIR/themes/active/fzf.zsh"
 
 export EDITOR='nvim'
+export OPENER='open'
 eval "$(gdircolors -b ~/.dircolors)"
 eval "$(thefuck --alias)"
 # zoxide

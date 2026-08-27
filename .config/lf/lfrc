@@ -3,7 +3,15 @@ map D delete
 map <enter> open
 map Y copy-path
 
-cmd copy-path $printf '%s\n' "$fx" | pbcopy
+cmd copy-path ${{
+    if [ -n "$TMUX" ]; then
+        printf '%s\n' "$fx" | tmux load-buffer -w -
+    elif command -v pbcopy >/dev/null 2>&1; then
+        printf '%s\n' "$fx" | pbcopy
+    else
+        printf '%s\n' "$fx" | wl-copy
+    fi
+}}
 
 cmd open ${{
     mime="$(file --mime-type -Lb "$f")"
