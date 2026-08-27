@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { decideToolCall, parseRuleList, type PermissionMode, type RepositoryState } from "./policy.ts";
+import {
+	decideToolCall,
+	getSshDestination,
+	parseRuleList,
+	type PermissionMode,
+	type RepositoryState,
+} from "./policy.ts";
 import { discoverRepository } from "./repository.ts";
 
 const STATUS_ID = "repo-permissions";
@@ -18,6 +24,7 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 	let repository: RepositoryState | undefined;
 	let hasGitRoot = false;
 	let skillRules: string[] | undefined;
+	const sshDestinations = new Set<string>();
 
 	function renderStatus(ctx: ExtensionContext): void {
 		const label = mode === "repository" ? "repo" : mode;
@@ -61,6 +68,7 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 		repository = undefined;
 		hasGitRoot = false;
 		skillRules = undefined;
+		sshDestinations.clear();
 		await loadRepository(ctx);
 	});
 
@@ -69,13 +77,17 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
+		const input = event.input as Record<string, unknown>;
+		const command = event.toolName === "bash" && typeof input.command === "string" ? input.command : undefined;
+		const sshDestination = command ? getSshDestination(command) : undefined;
 		const decision = decideToolCall({
 			mode,
 			toolName: event.toolName,
-			input: event.input as Record<string, unknown>,
+			input,
 			cwd: ctx.cwd,
 			repository,
 			skillRules: (skillRules ??= getSkillRules(pi, parseFrontmatter)),
+			sshDestinations,
 		});
 
 		if (decision.kind === "allow") return;
@@ -92,11 +104,17 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 			};
 		}
 
-		const choice = await ctx.ui.select(
-			formatPrompt(event.toolName, event.input as Record<string, unknown>, decision.reason),
-			PROMPT_CHOICES,
-		);
+		const sshChoice = sshDestination ? `Allow SSH to ${sshDestination} for this session` : undefined;
+		const choices = sshChoice
+			? ["Allow once", sshChoice, "Allow everything for this session", "Reject"]
+			: PROMPT_CHOICES;
+		const choice = await ctx.ui.select(formatPrompt(event.toolName, input, decision.reason), choices);
 		if (choice === "Allow once") return;
+		if (sshDestination && sshChoice && choice === sshChoice) {
+			sshDestinations.add(sshDestination);
+			ctx.ui.notify(`SSH to ${sshDestination} is allowed for this session.`, "info");
+			return;
+		}
 		if (choice === "Allow everything for this session") {
 			setMode("unrestricted", ctx);
 			return;

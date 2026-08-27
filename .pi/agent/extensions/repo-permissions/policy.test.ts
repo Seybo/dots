@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
 	decideToolCall,
+	getSshDestination,
 	matchRule,
 	parseProtectedPaths,
 	parseRuleList,
@@ -49,7 +50,8 @@ const call = (
 	cwd: string,
 	repository?: RepositoryState,
 	skillRules: string[] = [],
-) => decideToolCall({ mode, toolName, input, cwd, repository, skillRules });
+	sshDestinations: Set<string> = new Set(),
+) => decideToolCall({ mode, toolName, input, cwd, repository, skillRules, sshDestinations });
 
 test("repository mode allows in-repo reads and ordinary edits", () => {
 	withRepository((repository) => {
@@ -181,6 +183,57 @@ test("ask and unrestricted modes have one obvious behavior", () => {
 			call("unrestricted", "bash", { command: "rm -rf /" }, repository.root, repository).kind,
 			"allow",
 		);
+	});
+});
+
+test("session SSH grants allow one exact destination without relaxing local commands", () => {
+	withRepository((repository) => {
+		const destination = "dev@192.0.2.10";
+		const grants = new Set([destination]);
+
+		for (const mode of ["repository", "ask"] as const) {
+			assert.equal(
+				call(
+					mode,
+					"bash",
+					{ command: `ssh ${destination} 'sudo touch /tmp/remote'` },
+					repository.root,
+					repository,
+					[],
+					grants,
+				).kind,
+				"allow",
+			);
+		}
+		assert.equal(
+			call(
+				"repository",
+				"bash",
+				{ command: `ssh ${destination} true && ssh ${destination} 'rm /tmp/remote'` },
+				repository.root,
+				repository,
+				[],
+				grants,
+			).kind,
+			"allow",
+		);
+		for (const command of [
+			"ssh other@192.0.2.10 true",
+			`ssh ${destination} true && rm tracked.txt`,
+			`ssh -J jump.example ${destination} true`,
+			`ssh ${destination} "echo $HOME"`,
+		]) {
+			assert.equal(
+				call("repository", "bash", { command }, repository.root, repository, [], grants).kind,
+				"ask",
+				command,
+			);
+		}
+
+		assert.equal(getSshDestination(`ssh ${destination} 'sudo reboot'`), destination);
+		assert.equal(getSshDestination(`ssh ${destination} true && ssh ${destination} false`), destination);
+		assert.equal(getSshDestination(`ssh ${destination} true && rm tracked.txt`), undefined);
+		assert.equal(getSshDestination(`ssh -J jump.example ${destination} true`), undefined);
 	});
 });
 

@@ -169,6 +169,54 @@ test("approval prompts truncate large Bash and custom-tool details", async () =>
 	}
 });
 
+test("SSH destination approval is scoped to the current session", async () => {
+	const destination = "dev@192.0.2.10";
+	const sshChoice = `Allow SSH to ${destination} for this session`;
+	const harness = createHarness([gitResult(1), gitResult(1)]);
+	const context = createContext("/tmp");
+	await harness.handlers.get("session_start")!({}, context);
+
+	context.answers.push(sshChoice);
+	assert.equal(
+		await harness.handlers.get("tool_call")!(
+			{ toolName: "bash", input: { command: `ssh ${destination} 'sudo touch /tmp/remote'` } },
+			context,
+		),
+		undefined,
+	);
+	assert.deepEqual(context.selections.at(-1), [
+		"Allow once",
+		sshChoice,
+		"Allow everything for this session",
+		"Reject",
+	]);
+	assert.match(context.notifications.at(-1) ?? "", new RegExp(destination.replaceAll(".", "\\.")));
+
+	const selectionCount = context.selections.length;
+	assert.equal(
+		await harness.handlers.get("tool_call")!(
+			{ toolName: "bash", input: { command: `ssh ${destination} 'anything > /tmp/remote'` } },
+			context,
+		),
+		undefined,
+	);
+	assert.equal(context.selections.length, selectionCount);
+
+	for (const command of ["ssh other@192.0.2.10 true", "rm local-file"]) {
+		context.answers.push("Allow once");
+		await harness.handlers.get("tool_call")!({ toolName: "bash", input: { command } }, context);
+	}
+	assert.equal(context.selections.length, selectionCount + 2);
+
+	await harness.handlers.get("session_start")!({}, context);
+	context.answers.push("Reject");
+	const reset = await harness.handlers.get("tool_call")!(
+		{ toolName: "bash", input: { command: `ssh ${destination} true` } },
+		context,
+	);
+	assert.deepEqual(reset, { block: true, reason: "Rejected by user" });
+});
+
 test("noninteractive approval is blocked while interactive unrestricted approval is session-only", async () => {
 	const harness = createHarness([gitResult(1), gitResult(1)]);
 	const noninteractive = createContext("/tmp", false);

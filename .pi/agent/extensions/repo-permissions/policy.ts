@@ -21,6 +21,7 @@ type ToolCall = {
 	cwd: string;
 	repository?: RepositoryState;
 	skillRules: string[];
+	sshDestinations?: Set<string>;
 };
 
 type PathInfo = {
@@ -138,6 +139,13 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 	}
 
 	if (call.mode === "ask") {
+		if (
+			call.toolName === "bash" &&
+			argValue &&
+			isAllowedBySessionSsh(argValue, call.sshDestinations ?? new Set())
+		) {
+			return ALLOW;
+		}
 		return isAllowedBySkill(call.toolName, argValue, call.skillRules)
 			? ALLOW
 			: { kind: "ask", reason: "Ask mode requires approval." };
@@ -155,7 +163,13 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 
 	if (call.toolName === "bash") {
 		if (!argValue) return { kind: "ask", reason: "Bash has no command to validate." };
-		return decideBash(argValue, call.cwd, call.repository, call.skillRules);
+		return decideBash(
+			argValue,
+			call.cwd,
+			call.repository,
+			call.skillRules,
+			call.sshDestinations ?? new Set(),
+		);
 	}
 
 	return isAllowedBySkill(call.toolName, argValue, call.skillRules)
@@ -200,6 +214,7 @@ function decideBash(
 	cwd: string,
 	repository: RepositoryState,
 	skillRules: string[],
+	sshDestinations: Set<string>,
 ): PermissionDecision {
 	const segments = splitShellCommand(command);
 	if (!segments || /[\r\n]/.test(command)) {
@@ -207,6 +222,7 @@ function decideBash(
 	}
 
 	for (const segment of segments) {
+		if (isAllowedSshSegment(segment, sshDestinations)) continue;
 		if (isAllowedBySkill("bash", segment, skillRules)) continue;
 
 		const suggestion = suggestedAlternative(segment);
@@ -390,6 +406,39 @@ function pathStaysInside(value: string, cwd: string, root: string): boolean {
 	const info = resolvePathInfo(value, cwd);
 	const canonicalRoot = canonicalPath(root);
 	return Boolean(info && canonicalRoot && isInside(canonicalRoot, info.canonical));
+}
+
+export function getSshDestination(command: string): string | undefined {
+	if (/[\r\n]/.test(command)) return undefined;
+	const segments = splitShellCommand(command);
+	if (!segments) return undefined;
+
+	const destinations = segments.map(parseSshSegment);
+	const destination = destinations[0];
+	return destination && destinations.every((candidate) => candidate === destination) ? destination : undefined;
+}
+
+function isAllowedBySessionSsh(command: string, destinations: Set<string>): boolean {
+	if (/[\r\n]/.test(command)) return false;
+	const segments = splitShellCommand(command);
+	return Boolean(segments && segments.every((segment) => isAllowedSshSegment(segment, destinations)));
+}
+
+function isAllowedSshSegment(segment: string, destinations: Set<string>): boolean {
+	const destination = parseSshSegment(segment);
+	return Boolean(destination && destinations.has(destination));
+}
+
+function parseSshSegment(segment: string): string | undefined {
+	if (hasUnsafeShellSyntax(segment)) return undefined;
+	const tokens = tokenizeShellSegment(segment);
+	if (!tokens || tokens[0] !== "ssh" || tokens.length < 2) return undefined;
+
+	const destination = tokens[1]!;
+	if (destination.startsWith("-")) return undefined;
+	return /^(?:[a-z0-9._-]+@)?(?:[a-z0-9._-]+|\[[0-9a-f:]+\])$/i.test(destination)
+		? destination
+		: undefined;
 }
 
 function isAllowedBySkill(toolName: string, argValue: string, rules: string[]): boolean {
