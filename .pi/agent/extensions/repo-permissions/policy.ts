@@ -1,5 +1,5 @@
 import { existsSync, lstatSync, readlinkSync, realpathSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export type PermissionMode = "repository" | "ask" | "unrestricted";
@@ -30,6 +30,7 @@ type PathInfo = {
 
 const ALLOW: PermissionDecision = { kind: "allow" };
 const PATH_TOOLS = new Set(["read", "edit", "write"]);
+const PI_CLIPBOARD_IMAGE = /^pi-clipboard-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.png$/i;
 const READ_ONLY_COMMANDS = new Set(["pwd", "ls", "rg", "grep", "head", "tail", "wc", "nl", "sort", "test", "cmp"]);
 const READ_ONLY_GIT_COMMANDS = new Set([
 	"status",
@@ -130,6 +131,7 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 	if (call.mode === "unrestricted") return ALLOW;
 
 	const argValue = getMatchValue(call.toolName, call.input);
+	if (call.toolName === "read" && argValue && isPiClipboardImage(argValue, call.cwd)) return ALLOW;
 	if ((call.toolName === "edit" || call.toolName === "write") && call.repository && argValue) {
 		const pathDecision = decidePathTool(call.toolName, argValue, call.cwd, call.repository);
 		if (pathDecision.kind === "ask" && /protected/i.test(pathDecision.reason)) return pathDecision;
@@ -504,6 +506,17 @@ function tokenizeShellSegment(segment: string): string[] | undefined {
 	if (quote || isEscaped) return undefined;
 	if (hasToken) tokens.push(current);
 	return tokens;
+}
+
+function isPiClipboardImage(rawPath: string, cwd: string): boolean {
+	const pathInfo = resolvePathInfo(rawPath, cwd);
+	const tempRoot = canonicalPath(tmpdir());
+	return Boolean(
+		pathInfo &&
+			tempRoot &&
+			PI_CLIPBOARD_IMAGE.test(basename(pathInfo.lexical)) &&
+			isInside(tempRoot, pathInfo.canonical),
+	);
 }
 
 function resolvePathInfo(rawPath: string, cwd: string): PathInfo | undefined {

@@ -9,6 +9,7 @@ const STATUS_ID = "repo-permissions";
 const PROMPT_CHOICES = ["Allow once", "Allow everything for this session", "Reject"];
 const REPOSITORY_MODE_CHOICES = ["Repository", "Ask", "Unrestricted"];
 const BASIC_MODE_CHOICES = ["Ask", "Unrestricted"];
+const MAX_PROMPT_DETAIL_LENGTH = 1200;
 
 type FrontmatterParser = (content: string) => Record<string, unknown>;
 
@@ -113,7 +114,12 @@ function formatPrompt(toolName: string, input: Record<string, unknown>, reason: 
 			: typeof input.path === "string"
 				? input.path
 				: JSON.stringify(input);
-	return `${toolName}: ${detail}\n\n${reason}`;
+	return `${toolName}: ${truncatePromptDetail(detail)}\n\n${reason}`;
+}
+
+function truncatePromptDetail(detail: string): string {
+	if (detail.length <= MAX_PROMPT_DETAIL_LENGTH) return detail;
+	return `${detail.slice(0, MAX_PROMPT_DETAIL_LENGTH)}\n… <truncated ${detail.length - MAX_PROMPT_DETAIL_LENGTH} chars>`;
 }
 
 function getSkillRules(pi: ExtensionAPI, parseFrontmatter: FrontmatterParser): string[] {

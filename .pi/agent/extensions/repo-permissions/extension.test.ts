@@ -31,6 +31,7 @@ function createContext(cwd: string, hasUI = true) {
 	const statuses: Array<string | undefined> = [];
 	const notifications: string[] = [];
 	const selections: string[][] = [];
+	const selectionTitles: string[] = [];
 	const answers: Array<string | undefined> = [];
 	let isAborted = false;
 
@@ -40,6 +41,7 @@ function createContext(cwd: string, hasUI = true) {
 		statuses,
 		notifications,
 		selections,
+		selectionTitles,
 		answers,
 		get isAborted() {
 			return isAborted;
@@ -51,7 +53,8 @@ function createContext(cwd: string, hasUI = true) {
 			theme: { fg: (_color: string, text: string) => text },
 			setStatus: (_id: string, value: string | undefined) => statuses.push(value),
 			notify: (message: string) => notifications.push(message),
-			select: async (_title: string, choices: string[]) => {
+			select: async (title: string, choices: string[]) => {
+				selectionTitles.push(title);
 				selections.push(choices);
 				return answers.shift();
 			},
@@ -146,6 +149,23 @@ test("standard scalar allowed-tools rules are loaded from trusted local skills",
 		);
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
+	}
+});
+
+test("approval prompts truncate large Bash and custom-tool details", async () => {
+	const harness = createHarness([gitResult(1)]);
+	const context = createContext("/tmp");
+	await harness.handlers.get("session_start")!({}, context);
+
+	for (const event of [
+		{ toolName: "bash", input: { command: `unknown ${"x".repeat(20_000)}` } },
+		{ toolName: "custom", input: { payload: "x".repeat(20_000) } },
+	]) {
+		context.answers.push("Reject");
+		await harness.handlers.get("tool_call")!(event, context);
+		const title = context.selectionTitles.at(-1) ?? "";
+		assert.ok(title.length < 1_500, `${event.toolName} title was ${title.length} characters`);
+		assert.match(title, /truncated/i);
 	}
 });
 

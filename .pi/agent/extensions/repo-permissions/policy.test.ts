@@ -106,6 +106,24 @@ test("repository mode prompts when paths escape through traversal or symlinks", 
 	});
 });
 
+test("Pi clipboard screenshots are readable outside the repository", () => {
+	withRepository((repository, outside) => {
+		const screenshot = join(outside, "pi-clipboard-23ad9380-9712-47c5-9b53-9ef475e99db1.png");
+		const arbitraryImage = join(outside, "screenshot.png");
+		const escapedScreenshot = join(outside, "pi-clipboard-11111111-2222-4333-8444-555555555555.png");
+		writeFileSync(screenshot, "image\n");
+		writeFileSync(arbitraryImage, "image\n");
+		symlinkSync(process.execPath, escapedScreenshot);
+
+		assert.equal(call("repository", "read", { path: screenshot }, repository.root, repository).kind, "allow");
+		assert.equal(call("ask", "read", { path: screenshot }, repository.root, repository).kind, "allow");
+		assert.equal(call("ask", "read", { path: arbitraryImage }, repository.root, repository).kind, "ask");
+		assert.equal(call("ask", "edit", { path: screenshot }, repository.root, repository).kind, "ask");
+		assert.equal(call("ask", "write", { path: screenshot }, repository.root, repository).kind, "ask");
+		assert.equal(call("ask", "read", { path: escapedScreenshot }, repository.root, repository).kind, "ask");
+	});
+});
+
 test("unreadable path parents fail closed when the filesystem enforces permissions", (context) => {
 	withRepository((repository) => {
 		const blockedDirectory = join(repository.root, "blocked");
