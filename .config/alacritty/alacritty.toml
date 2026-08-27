@@ -60,4 +60,6 @@ bindings = [
   { key = 'J', mods = 'Command', chars = "\u0002\u001B[B" },
   { key = 'K', mods = 'Command', chars = "\u0002\u001B[A" },
   { key = 'L', mods = 'Command', chars = "\u0002\u001B[C" },
+  # Enter tmux copy mode using the same shortcut as Squirrel Ghostty.
+  { key = ';', mods = 'Command', chars = "\u0002[" },
 ]
