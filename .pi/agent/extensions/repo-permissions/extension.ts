@@ -1,0 +1,145 @@
+import { readFileSync } from "node:fs";
+
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+
+import { decideToolCall, parseRuleList, type PermissionMode, type RepositoryState } from "./policy.ts";
+import { discoverRepository } from "./repository.ts";
+
+const STATUS_ID = "repo-permissions";
+const PROMPT_CHOICES = ["Allow once", "Allow everything for this session", "Reject"];
+const REPOSITORY_MODE_CHOICES = ["Repository", "Ask", "Unrestricted"];
+const BASIC_MODE_CHOICES = ["Ask", "Unrestricted"];
+
+type FrontmatterParser = (content: string) => Record<string, unknown>;
+
+export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: FrontmatterParser): void {
+	let mode: PermissionMode = "ask";
+	let repository: RepositoryState | undefined;
+	let hasGitRoot = false;
+	let skillRules: string[] | undefined;
+
+	function renderStatus(ctx: ExtensionContext): void {
+		const label = mode === "repository" ? "repo" : mode;
+		ctx.ui.setStatus(STATUS_ID, ctx.ui.theme.fg("accent", `permissions: ${label}`));
+	}
+
+	function setMode(nextMode: PermissionMode, ctx: ExtensionContext): void {
+		mode = nextMode;
+		renderStatus(ctx);
+	}
+
+	async function loadRepository(ctx: ExtensionContext): Promise<boolean> {
+		const discovery = await discoverRepository(ctx.cwd, (command, args, options) =>
+			pi.exec(command, args, options),
+		);
+		hasGitRoot = discovery.hasGitRoot;
+		repository = discovery.repository;
+		setMode(repository ? "repository" : "ask", ctx);
+		if (discovery.warning) ctx.ui.notify(discovery.warning, "warning");
+		return Boolean(repository);
+	}
+
+	pi.registerCommand("permissions", {
+		description: "Select the permission mode for this session",
+		handler: async (_args, ctx) => {
+			const choices = hasGitRoot ? REPOSITORY_MODE_CHOICES : BASIC_MODE_CHOICES;
+			const choice = await ctx.ui.select("Permission mode", choices);
+			if (choice === "Repository") {
+				if (await loadRepository(ctx) && repository) {
+					ctx.ui.notify(`Repository mode: ${repository.root}`, "info");
+				}
+				return;
+			}
+			if (choice === "Ask") setMode("ask", ctx);
+			if (choice === "Unrestricted") setMode("unrestricted", ctx);
+		},
+	});
+
+	pi.on("session_start", async (_event, ctx) => {
+		mode = "ask";
+		repository = undefined;
+		hasGitRoot = false;
+		skillRules = undefined;
+		await loadRepository(ctx);
+	});
+
+	pi.on("session_shutdown", async (_event, ctx) => {
+		ctx.ui.setStatus(STATUS_ID, undefined);
+	});
+
+	pi.on("tool_call", async (event, ctx) => {
+		const decision = decideToolCall({
+			mode,
+			toolName: event.toolName,
+			input: event.input as Record<string, unknown>,
+			cwd: ctx.cwd,
+			repository,
+			skillRules: (skillRules ??= getSkillRules(pi, parseFrontmatter)),
+		});
+
+		if (decision.kind === "allow") return;
+		if (decision.kind === "suggest") {
+			return {
+				block: true,
+				reason: `${decision.reason} Retry with the ${decision.tool} tool.`,
+			};
+		}
+		if (!ctx.hasUI) {
+			return {
+				block: true,
+				reason: `Blocked because approval is unavailable: ${decision.reason}`,
+			};
+		}
+
+		const choice = await ctx.ui.select(
+			formatPrompt(event.toolName, event.input as Record<string, unknown>, decision.reason),
+			PROMPT_CHOICES,
+		);
+		if (choice === "Allow once") return;
+		if (choice === "Allow everything for this session") {
+			setMode("unrestricted", ctx);
+			return;
+		}
+
+		ctx.abort();
+		return { block: true, reason: "Rejected by user" };
+	});
+}
+
+function formatPrompt(toolName: string, input: Record<string, unknown>, reason: string): string {
+	const detail =
+		toolName === "bash" && typeof input.command === "string"
+			? input.command
+			: typeof input.path === "string"
+				? input.path
+				: JSON.stringify(input);
+	return `${toolName}: ${detail}\n\n${reason}`;
+}
+
+function getSkillRules(pi: ExtensionAPI, parseFrontmatter: FrontmatterParser): string[] {
+	const skills = pi
+		.getCommands()
+		.filter(
+			(command) =>
+				command.source === "skill" &&
+				command.sourceInfo.origin === "top-level" &&
+				(command.sourceInfo.scope === "user" || command.sourceInfo.scope === "project"),
+		)
+		.sort((left, right) => left.sourceInfo.path.localeCompare(right.sourceInfo.path));
+
+	return [
+		...new Set(
+			skills.flatMap((skill) => {
+				try {
+					const frontmatter = parseFrontmatter(readFileSync(skill.sourceInfo.path, "utf8"));
+					return [
+						...parseRuleList(frontmatter.allowed_tools),
+						...parseRuleList(frontmatter["allowed-tools"]),
+					];
+				} catch {
+					return [];
+				}
+			}),
+		),
+	];
+}

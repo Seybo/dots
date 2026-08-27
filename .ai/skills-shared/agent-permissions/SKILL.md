@@ -15,68 +15,62 @@ Read this first:
 ~/.dots/refs/dev-env/agent-permissions.md
 ```
 
-It records locations, Pi extension behavior, update workflow, and gotchas.
+It records the current permission models, source locations, update workflow, and gotchas.
 
 ## Default rule
 
-Unless the user explicitly says **Pi only** or **Claude only**, update **both** permission systems:
+Unless the user explicitly says **Pi only** or **Claude only**, consider both systems. They no longer share the same configuration model:
 
-- Claude Code: `/Users/inseybo/.claude/settings.json` plus any relevant repo `.claude/settings*.json`.
-- Pi: `~/.dots/.pi/agent/permission.settings.json` plus any relevant repo `.agents/permission.settings*.json`.
+- Claude Code uses permission rules in `~/.claude/settings.json` and repository `.claude/settings*.json` files.
+- Pi uses the owned `repo-permissions` extension at `~/.dots/.pi/agent/extensions/repo-permissions/`.
 
-## Local vs global selection rule
+Do not create or restore `permission.settings.json` files for Pi.
 
-Memoize the scope decision before editing:
+## Pi choices
 
-- Use **repo-local** permission files for command shapes tied to one checkout, repo layout, app folders, local scripts, local DBs, or workflow-specific paths. Prefer local files for relative path allows such as `find app*`, `find docs*`, `sqlite3 db/...`, or repo `_mydev` scripts.
-- Use **global** permission files for broadly reusable, low-risk command families that should work the same in most repos, such as `pwd`, `man *`, `col -b`, `git status`, `git diff`, `rg`, `grep`, `head`, `sed -n`, and `python3 -m json.tool`.
-- If the user asks to reduce prompts for commands seen in a specific repo and does not explicitly request global behavior, default to repo-local.
-- If the user asks to update repo-local permissions across all active projects, read `~/.dots/refs/dev-env/active-projects.md`, expand its `$DEV_ROOT` entries with the current machine value, and update only those repo roots.
-- NEVER assume the repo path for repo-local rules from the agent's current working directory or from this dotfiles checkout. If the prompted command uses relative paths or otherwise needs repo-local permissions, first confirm the actual repo path from the prompt context, an explicit user-provided path, or a `pwd` from that same agent session. If the repo path is unknown, ask the user before editing any repo-local permission file.
-- If a repo-local file should stay private, use `.claude/settings.local.json` and `.agents/permission.settings.local.json`; ensure the Pi local file is ignored or excluded from git.
+Choose the smallest option that matches the request:
+
+1. **One operation:** use **Allow once** when Pi prompts.
+2. **Temporary unrestricted work:** select **Unrestricted** from `/permissions` or the prompt. It lasts only for the current session.
+3. **Trusted skill command:** add the narrow command shape to that local skill's `allowed-tools` frontmatter.
+4. **Reusable read-only Bash family:** add it to the extension's built-in policy only when it is broadly safe, useful across repositories, and has behavior-focused specs.
+5. **Mutating, executing, or repository-specific Bash:** keep the prompt. Prefer a path-aware `read`, `edit`, or `write` operation when one is equivalent.
+
+Repository mode is not a general allowlist. It automatically handles path-aware operations inside the current Git root and only a small set of validated read-only Bash commands. Mutations to Git metadata such as `.git/config`, worktree `.git` files, and hooks still require approval.
 
 ## Procedure
 
-1. Read the canonical reference above.
-2. Inspect the current permission files before editing.
-3. If the prompted command is unsafe or intentionally restricted, do **not** allowlist it. Instead:
-   - explain briefly why it should stay restricted
-   - find a safer read-only alternative command shape when possible
-   - QA the safer alternative if it is safe
-   - if the alternative is reusable, update the current repo's `AGENTS.md` with a concise safe-command substitution note so future agents avoid the unsafe shape
-4. Choose repo-local vs global using the selection rule above; when in doubt for repo-specific prompts, use repo-local.
-5. Prefer safe, read-only command shapes at the right level of generality:
-   - Do **not** over-narrow universally safe documentation/inspection commands to one subject. For example, if prompted for `man tmux`, suggest/allow `man *` globally, not `man tmux` only.
-   - Use broad global rules for non-mutating documentation/listing/filtering helpers such as `man *`, `col -b`, `pwd`, `ls`, `rg`, `grep`, `head`, `tail`, and `sed -n`.
-   - Use narrower rules when a command is repo-specific, path-specific, writes files, shells out, executes code, or has dangerous flags.
-6. Avoid broad executor allow rules unless explicitly approved (`python*`, `pytest*`, `xargs*`, `sh -c*`, arbitrary `bash(*)`).
-7. Preserve existing `deny` / `ask` safety rules.
-8. On every update, perform a redundancy check before and after editing:
-   - Remove exact duplicate rules in the edited files.
-   - Do not add a repo-local rule that is already covered by a global rule unless the local rule intentionally narrows or documents repo-specific behavior.
-   - Do not add a narrower rule when an existing same-scope broader rule already safely covers the command shape.
-   - Keep intentional overlap when `ask` / `deny` rules override broad `allow` rules for safety.
-9. Edit JSON carefully.
-10. Validate JSON with `python3 -m json.tool <file> >/dev/null` immediately after each permission-file edit, before continuing.
-    - If a Pi permission JSON file becomes invalid, stop and repair it before any more permission work; the Pi permission extension can fail future tool calls while settings are invalid.
-11. QA with the exact command shape that prompted, if safe. If the original command is unsafe, QA the safer alternative instead.
-12. If a new gotcha is discovered, append it to `~/.dots/refs/dev-env/agent-permissions.md`.
-13. If a discovery suggests the `agent-permissions` workflow itself should change, suggest a skill update to the user instead of silently changing this skill.
+1. Read the canonical reference.
+2. Determine whether the request concerns Claude Code, Pi, or both.
+3. Inspect the prompted operation and identify why it was not approved automatically.
+4. If the command is unsafe or intentionally restricted, do not make it automatic. Explain why and suggest a safer command or path-aware tool when possible.
+5. For Claude Code, follow its existing global versus repository-local settings convention. Preserve deny/ask rules and avoid broad executor allows.
+6. For Pi, use the smallest applicable choice from **Pi choices** above:
+   - do not add project-specific persistent permission configuration
+   - do not add broad mutating Bash validation
+   - do not let a skill rule bypass direct protected-file checks unless the trusted wrapper itself is the intentional boundary
+7. When changing a skill's `allowed-tools`, keep the rule scoped to the exact trusted wrapper or command family the skill owns. Pi's standard space-delimited scalar and the existing YAML list form are both supported.
+8. When changing Pi's built-in read-only policy:
+   - update `.pi/agent/extensions/repo-permissions/`
+   - add or update the relevant `*.test.ts` file
+   - run the complete extension specs
+   - verify Pi loads the extension without diagnostics
+9. QA the safer or newly supported operation shape.
+10. Update the canonical reference when behavior or a durable gotcha changes.
 
-## Claude Code-specific reminder
+## Claude Code reminders
 
-When updating Claude Code permissions from outside Claude Code, remind the user to run `/doctor` in Claude Code after changes, especially after adding or removing `Bash(...)` rules.
+- Prefer global rules only for broadly reusable, low-risk read-only commands.
+- Prefer repository-local rules for checkout-specific paths and workflows.
+- Avoid broad executor rules such as arbitrary Python, shell wrappers, `pytest`, or `xargs`.
+- Run `/doctor` after adding or removing `Bash(...)` rules.
 
-## Pi-specific reminder
+## Pi reminders
 
-Pi permission prompts in this setup come from the `agentic-af` permission extension, not Pi core. The extension loads:
-
-```text
-~/.pi/agent/permission.settings.json
-<repo>/.agents/permission.settings.json
-<repo>/.agents/permission.settings.local.json
-```
-
-Bash pipelines are split and checked segment-by-segment; the strictest segment wins.
-
-Avoid `?` wildcards in Pi permission patterns. They can compile to invalid regexes in the permission extension, e.g. `bash(mv -n .../????-*)` can fail with `Nothing to repeat`. Prefer `*`-based path constraints plus safety flags such as `mv -n`.
+- Repository mode starts automatically only when Pi can resolve the Git root and snapshot existing ignored/excluded files.
+- Ask mode is the safe fallback outside Git or after repository discovery failure.
+- Unrestricted mode explicitly allows everything for the current session.
+- Trusted top-level local skills may contribute `allowed-tools`; third-party package skills do not.
+- Unknown or mutating Bash commands prompt instead of being guessed safe.
+- Recursive commands that follow symlinks, shell brace expansion, mutating Git flags, and Git targets escaping through chained `-C` options prompt.
+- In non-interactive modes, operations requiring approval are blocked.
