@@ -75,6 +75,7 @@ bindkey '^Z' fancy-ctrl-z
 # stow
 export DEV_ROOT="/Volumes/dev"
 export STOW_DIR="$HOME/.dots"
+export PATH="$STOW_DIR/bin:$PATH"
 source "$STOW_DIR/no_stow/.zsh_aliases_public"
 source "$STOW_DIR/no_stow/bash_utils.sh"
 source "$STOW_DIR/no_stow/rage_utils.sh"

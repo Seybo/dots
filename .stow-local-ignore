@@ -5,6 +5,7 @@
 .gitmodules
 private
 no_stow
+^/bin$
 ^/themes$
 .ai/skills/
 .ai/external-skills/

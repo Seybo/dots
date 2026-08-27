@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${STOW_DIR:?STOW_DIR must point to the active dotfiles repository}"
+
+exec stow -n -v -d "$STOW_DIR" -t "$HOME" .

@@ -83,11 +83,6 @@ alias gsta='git stash save' # overwriting oh-my-zsh that uses git stash push
 alias gstt='git stash save temp'
 
 
-### stow ###
-alias stow_check="cd $STOW_DIR && stow -n -v ."
-alias stow_do="cd $STOW_DIR && stow -v ."
-
-
 ### rails ###
 alias ber='bundle exec rspec'
 alias breset='bundle && rdrs'
