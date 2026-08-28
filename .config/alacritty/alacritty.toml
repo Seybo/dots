@@ -55,6 +55,12 @@ bindings = [
   # Use Oma's existing tmux prefix bindings for window navigation.
   { key = 'U', mods = 'Command', chars = "\u0002p" },
   { key = 'M', mods = 'Command', chars = "\u0002n" },
+  # Enter tmux window mode using the same shortcut as Squirrel Ghostty.
+  { key = 'T', mods = 'Command', chars = "\u0002T" },
+  # Match Squirrel Ghostty's tmux session navigation shortcuts.
+  { key = 'U', mods = 'Command|Shift', chars = "\u27E8" },
+  { key = 'M', mods = 'Command|Shift', chars = "\u27E9" },
+  { key = '/', mods = 'Command|Shift', chars = "\u27EE" },
   # Match Squirrel Ghostty's active-pane zoom shortcut over direct SSH.
   { key = 'F', mods = 'Command|Shift', chars = "\uF436" },
   # Use Oma's existing tmux prefix bindings for pane navigation over direct SSH.
@@ -62,6 +68,11 @@ bindings = [
   { key = 'J', mods = 'Command', chars = "\u0002\u001B[B" },
   { key = 'K', mods = 'Command', chars = "\u0002\u001B[A" },
   { key = 'L', mods = 'Command', chars = "\u0002\u001B[C" },
+  # Match Squirrel Ghostty's direct pane resizing shortcuts.
+  { key = 'H', mods = 'Command|Shift', chars = "\uF432" },
+  { key = 'J', mods = 'Command|Shift', chars = "\uF433" },
+  { key = 'K', mods = 'Command|Shift', chars = "\uF434" },
+  { key = 'L', mods = 'Command|Shift', chars = "\uF435" },
   # Enter tmux pane mode using the same shortcut as Squirrel Ghostty.
   { key = 'P', mods = 'Command', chars = "\u0002P" },
   # Enter tmux copy mode using the same shortcut as Squirrel Ghostty.
