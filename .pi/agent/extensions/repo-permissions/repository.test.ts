@@ -27,7 +27,7 @@ test("repository discovery fails closed when the reported root cannot be resolve
 	assert.match(discovered.warning ?? "", /could not be resolved/i);
 });
 
-test("repository discovery fails closed when the protected snapshot fails", async () => {
+test("repository discovery fails closed when the Git-ignored file snapshot fails", async () => {
 	let callCount = 0;
 	const discovered = await discoverRepository(process.cwd(), async () => {
 		callCount++;
@@ -59,7 +59,9 @@ test("real Git snapshots include standard excludes but not files created later",
 		assert.equal(discovered.hasGitRoot, true);
 		assert.ok(discovered.repository);
 		assert.deepEqual(
-			[...discovered.repository.protectedPaths].map((path) => path.slice(discovered.repository!.root.length + 1)).sort(),
+			[...discovered.repository.startupIgnoredPaths]
+				.map((path) => path.slice(discovered.repository!.root.length + 1))
+				.sort(),
 			[".env", "global.tmp", "local.txt"],
 		);
 
@@ -72,6 +74,7 @@ test("real Git snapshots include standard excludes but not files created later",
 				cwd: root,
 				repository: discovered.repository,
 				skillRules: [],
+				sshDestinations: new Set(),
 			}).kind,
 			"allow",
 		);

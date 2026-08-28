@@ -19,58 +19,90 @@ It records the current permission models, source locations, update workflow, and
 
 ## Default rule
 
-Unless the user explicitly says **Pi only** or **Claude only**, consider both systems. They no longer share the same configuration model:
+Unless the user explicitly says **Pi only** or **Claude only**, consider both systems. They do not share a configuration model:
 
 - Claude Code uses permission rules in `~/.claude/settings.json` and repository `.claude/settings*.json` files.
 - Pi uses the owned `repo-permissions` extension at `~/.dots/.pi/agent/extensions/repo-permissions/`.
 
 Do not create or restore `permission.settings.json` files for Pi.
 
-## Pi choices
+## Pi modes
 
-Choose the smallest option that matches the request:
+Choose the smallest mode that matches the request:
 
-1. **One operation:** use **Allow once** when Pi prompts.
-2. **Temporary unrestricted work:** select **Unrestricted** from `/permissions` or the prompt. It lasts only for the current session.
-3. **Trusted skill command:** add the narrow command shape to that local skill's `allowed-tools` frontmatter.
-4. **Reusable read-only Bash family:** add it to the extension's built-in policy only when it is broadly safe, useful across repositories, and has behavior-focused specs.
-5. **Mutating, executing, or repository-specific Bash:** keep the prompt. Prefer a path-aware `read`, `edit`, or `write` operation when one is equivalent.
+1. **Repository** — default inside Git. Allows ordinary tools and commands while prompting for explicit high-impact operations.
+2. **Unattended** — uses Repository policy but blocks approval-required operations immediately so work never waits for input.
+3. **Ask** — prompts for every operation except narrow trusted-skill allowances and Pi clipboard screenshot reads.
+4. **Unrestricted** — allows everything for the current session.
 
-Repository mode is not a general allowlist. It automatically handles path-aware operations inside the current Git root and only a small set of validated read-only Bash commands. Mutations to Git metadata such as `.git/config`, worktree `.git` files, and hooks still require approval.
+Mode choices and approvals never persist.
+
+## Pi policy
+
+Repository mode is default-allow so normal skills, interpreters, tests, helpers, task paths, and custom tools do not require per-skill exceptions.
+
+Keep the ask list short. Add a command family only when it represents a concrete, high-impact operation in this environment, such as:
+
+- privilege or host service changes
+- host/global package changes
+- mass or irreversible filesystem operations
+- process or tmux destruction
+- destructive Git history, branch, stash, worktree, config, or remote operations
+- external mutations and package publishing
+
+Normal `git add`, `git rm`, and ordinary `git commit` remain allowed. Literal `rm` targets are allowed when their resolved deletion paths stay inside the repository.
+
+Direct `edit` and `write` calls still prompt for files that were untracked and Git-ignored when Repository mode started, and for Git metadata. Literal `rm` also prompts for those targets, repository escapes, and dynamic targets that cannot be resolved safely. Skill rules cannot bypass these checks or the high-impact Bash ask list.
+
+Repository mode is not a sandbox. Unknown executables are allowed and can hide operations that the visible command matcher cannot inspect. Use Ask mode for operation-by-operation approval and an OS sandbox for untrusted code.
+
+## Trusted skill rules
+
+Trusted top-level user and project skills may declare narrow `allowed-tools` rules for Ask mode. Pi's standard space-delimited scalar and the existing YAML list form are supported:
+
+```yaml
+allowed-tools: read grep
+```
+
+```yaml
+allowed-tools:
+  - "bash(~/.dots/no_stow/bin/agent-brave-search *)"
+```
+
+Keep these rules scoped to the exact trusted wrapper or tool family the skill owns. Third-party package skills are not eligible.
+
+Do not add skill rules for ordinary Repository-mode work; it is already allowed.
 
 ## Procedure
 
 1. Read the canonical reference.
 2. Determine whether the request concerns Claude Code, Pi, or both.
-3. Inspect the prompted operation and identify why it was not approved automatically.
-4. If the command is unsafe or intentionally restricted, do not make it automatic. Explain why and suggest a safer command or path-aware tool when possible.
-5. For Claude Code, follow its existing global versus repository-local settings convention. Preserve deny/ask rules and avoid broad executor allows.
-6. For Pi, use the smallest applicable choice from **Pi choices** above:
-   - do not add project-specific persistent permission configuration
-   - do not add broad mutating Bash validation
-   - do not let a skill rule bypass direct protected-file checks unless the trusted wrapper itself is the intentional boundary
-7. When changing a skill's `allowed-tools`, keep the rule scoped to the exact trusted wrapper or command family the skill owns. Pi's standard space-delimited scalar and the existing YAML list form are both supported.
-8. When changing Pi's built-in read-only policy:
-   - update `.pi/agent/extensions/repo-permissions/`
-   - add or update the relevant `*.test.ts` file
-   - run the complete extension specs
-   - verify Pi loads the extension without diagnostics
-9. QA the safer or newly supported operation shape.
-10. Update the canonical reference when behavior or a durable gotcha changes.
+3. Inspect the prompted operation and identify the rule that caused it.
+4. For Pi Repository mode:
+   - remove stale or overly broad ask rules when ordinary work is prompting
+   - add an ask rule only for a concrete high-impact operation
+   - prefer path-aware `read`, `edit`, or `write` when one clearly expresses the same action
+5. For Pi Ask mode, use a narrow trusted-skill allowance only when a trusted wrapper or tool is the intended boundary.
+6. For Claude Code, preserve deny/ask protection and follow its global versus repository-local settings convention.
+7. Add behavior-focused specs for every Pi policy or lifecycle change.
+8. Run the complete Pi extension specs and verify Pi loads without diagnostics.
+9. Update the canonical reference when durable behavior changes.
 
 ## Claude Code reminders
 
 - Prefer global rules only for broadly reusable, low-risk read-only commands.
 - Prefer repository-local rules for checkout-specific paths and workflows.
-- Avoid broad executor rules such as arbitrary Python, shell wrappers, `pytest`, or `xargs`.
-- Run `/doctor` after adding or removing `Bash(...)` rules.
+- Avoid broad executor allows such as arbitrary Python, shell wrappers, `pytest`, or `xargs`.
+- Run `/doctor` after adding or removing Claude Code `Bash(...)` rules.
 
 ## Pi reminders
 
-- Repository mode starts automatically only when Pi can resolve the Git root and snapshot existing ignored/excluded files.
-- Ask mode is the safe fallback outside Git or after repository discovery failure.
-- Unrestricted mode explicitly allows everything for the current session.
-- Trusted top-level local skills may contribute `allowed-tools`; third-party package skills do not.
-- Unknown or mutating Bash commands prompt instead of being guessed safe.
-- Recursive commands that follow symlinks, shell brace expansion, mutating Git flags, and Git targets escaping through chained `-C` options prompt.
-- In non-interactive modes, operations requiring approval are blocked.
+- Repository mode starts automatically only after Git root and startup Git-ignored file discovery succeeds.
+- Ask mode is the fallback outside Git or after discovery failure.
+- Unattended mode is available only after Repository discovery and blocks instead of prompting.
+- Unrestricted mode is session-only.
+- Repository mode allows ordinary outside task/workflow paths; it is not filesystem confinement.
+- Pi clipboard images named `pi-clipboard-<UUID>.png` are readable from the OS temporary directory in Repository and Ask modes.
+- SSH may be approved for one exact destination for the current session.
+- High-impact commands prompt even when a trusted skill rule matches.
+- Unattended and non-interactive operations that require approval are blocked.

@@ -25,12 +25,13 @@
 
 - For permission prompts / allowlist changes, read `refs/dev-env/agent-permissions.md` or use the shared `agent-permissions` skill. Default: update both Claude Code and Pi permissions unless the user explicitly scopes to one.
 - For browser CPU spike investigations from this repo, use the exact approved wrapper commands: `/Users/inseybo/.dots/no_stow/bin/browser-spike-investigate brave` or `/Users/inseybo/.dots/no_stow/bin/browser-spike-investigate chrome`. Do not run ad-hoc `ps`/`sample`/`lsof`/`awk` investigation chains unless the wrapper is insufficient and the user approves.
-- Pi's repository permission mode auto-approves only validated read-only Bash shapes. Prefer path-aware `read`, `edit`, and `write` operations when they express the same work.
-- In particular, avoid `find ... -exec`, `find ... -delete`, `find ... -ok`, and `find ... -execdir`; prefer separate `find`, `ls`, `rg`, or shell-safe follow-up commands.
+- Pi's Repository mode allows ordinary commands and tools by default but prompts for explicit high-impact operations. Unattended mode uses the same policy but blocks approval-required operations immediately. Prefer path-aware `read`, `edit`, and `write` when they express the work clearly and preserve startup ignored-file and Git-metadata checks.
+- Literal `rm` targets that resolve inside the repository are allowed. Dynamic or escaping targets require approval, and are blocked in Unattended mode.
+- `find ... -exec`, `find ... -delete`, `find ... -ok`, and `find ... -execdir` require approval. Prefer separate `find`, `ls`, `rg`, or shell-safe follow-up commands.
 
-### Safe command substitutions
+### Preferred command shapes
 
-When a command would trigger avoidable permission prompts, prefer an already-safe read-only shape instead of requesting new permissions.
+Prefer simple read-only shapes when they express the same work.
 
 - Avoid `find DIR -maxdepth 1 -type d -exec basename {} \; | sort`.
   - Prefer `ls -1 DIR | sort` when first-level non-hidden names are enough.

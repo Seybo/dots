@@ -88,9 +88,11 @@ test("snapshot failure stays in Ask mode and reports the failure", async () => {
 	await harness.handlers.get("session_start")!({}, context);
 	assert.equal(context.statuses.at(-1), "permissions: ask");
 	assert.match(context.notifications.at(-1) ?? "", /snapshot failed/i);
+	await harness.commands.get("permissions")!.handler({}, context);
+	assert.deepEqual(context.selections.at(-1), ["Repository", "Ask", "Unrestricted"]);
 });
 
-test("Repository selection refreshes protected paths", async () => {
+test("Repository selection refreshes startup ignored paths", async () => {
 	const root = process.cwd();
 	const harness = createHarness([
 		gitResult(0, `${root}\n`),
@@ -108,17 +110,55 @@ test("Repository selection refreshes protected paths", async () => {
 	);
 	assert.deepEqual(first, {
 		block: true,
-		reason: "Blocked because approval is unavailable: .env was protected when Repository mode started.",
+		reason:
+			"Blocked because approval is unavailable: The target of .env was untracked and Git-ignored when Repository mode started.",
 	});
 
 	context.answers.push("Repository");
 	await harness.commands.get("permissions")!.handler({}, context);
-	assert.deepEqual(context.selections.at(-1), ["Repository", "Ask", "Unrestricted"]);
+	assert.deepEqual(context.selections.at(-1), ["Repository", "Unattended", "Ask", "Unrestricted"]);
 	const refreshed = await harness.handlers.get("tool_call")!(
 		{ toolName: "edit", input: { path: "later.log" } },
 		context,
 	);
 	assert.equal((refreshed as { block?: boolean }).block, true);
+});
+
+test("Unattended mode blocks approval-required work without prompting", async () => {
+	const root = process.cwd();
+	const harness = createHarness([
+		gitResult(0, `${root}\n`),
+		gitResult(0),
+		gitResult(0, `${root}\n`),
+		gitResult(0),
+	]);
+	const context = createContext(root);
+
+	await harness.handlers.get("session_start")!({}, context);
+	context.answers.push("Unattended");
+	await harness.commands.get("permissions")!.handler({}, context);
+	assert.equal(context.statuses.at(-1), "permissions: unattended");
+
+	const selectionCount = context.selections.length;
+	assert.deepEqual(
+		await harness.handlers.get("tool_call")!(
+			{ toolName: "bash", input: { command: "git push origin main" } },
+			context,
+		),
+		{
+			block: true,
+			reason:
+				"Blocked in Unattended mode: This Git operation requires approval. Continue with permitted work and report this blocked operation.",
+		},
+	);
+	assert.equal(context.selections.length, selectionCount);
+	assert.equal(
+		await harness.handlers.get("tool_call")!({ toolName: "read", input: { path: "README.md" } }, context),
+		undefined,
+	);
+
+	await harness.handlers.get("session_start")!({}, context);
+	assert.equal(context.statuses.at(-1), "permissions: repo");
 });
 
 test("standard scalar allowed-tools rules are loaded from trusted local skills", async () => {

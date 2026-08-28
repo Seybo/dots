@@ -1,11 +1,10 @@
 import { realpathSync } from "node:fs";
 
-import { parseProtectedPaths, type RepositoryState } from "./policy.ts";
+import { parseStartupIgnoredPaths, type RepositoryState } from "./policy.ts";
 
 export type GitExecResult = {
 	code: number;
 	stdout: string;
-	stderr?: string;
 };
 
 export type GitExec = (
@@ -44,17 +43,17 @@ export async function discoverRepository(cwd: string, exec: GitExec): Promise<Re
 			{ timeout: 15000 },
 		);
 	} catch {
-		return { hasGitRoot: true, warning: "Protected-file snapshot failed; using Ask mode" };
+		return { hasGitRoot: true, warning: "Git-ignored file snapshot failed; using Ask mode" };
 	}
 	if (ignoredResult.code !== 0) {
-		return { hasGitRoot: true, warning: "Protected-file snapshot failed; using Ask mode" };
+		return { hasGitRoot: true, warning: "Git-ignored file snapshot failed; using Ask mode" };
 	}
 
 	return {
 		hasGitRoot: true,
 		repository: {
 			root,
-			protectedPaths: parseProtectedPaths(root, ignoredResult.stdout),
+			startupIgnoredPaths: parseStartupIgnoredPaths(root, ignoredResult.stdout),
 		},
 	};
 }

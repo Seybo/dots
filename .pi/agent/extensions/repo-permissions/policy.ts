@@ -1,17 +1,14 @@
-import { existsSync, lstatSync, readlinkSync, realpathSync } from "node:fs";
+import { lstatSync, readlinkSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-export type PermissionMode = "repository" | "ask" | "unrestricted";
+export type PermissionMode = "repository" | "unattended" | "ask" | "unrestricted";
 
-export type PermissionDecision =
-	| { kind: "allow" }
-	| { kind: "ask"; reason: string }
-	| { kind: "suggest"; tool: "read" | "edit" | "write"; reason: string };
+export type PermissionDecision = { kind: "allow" } | { kind: "ask"; reason: string };
 
 export type RepositoryState = {
 	root: string;
-	protectedPaths: Set<string>;
+	startupIgnoredPaths: Set<string>;
 };
 
 type ToolCall = {
@@ -21,7 +18,7 @@ type ToolCall = {
 	cwd: string;
 	repository?: RepositoryState;
 	skillRules: string[];
-	sshDestinations?: Set<string>;
+	sshDestinations: Set<string>;
 };
 
 type PathInfo = {
@@ -30,30 +27,79 @@ type PathInfo = {
 };
 
 const ALLOW: PermissionDecision = { kind: "allow" };
-const PATH_TOOLS = new Set(["read", "edit", "write"]);
 const PI_CLIPBOARD_IMAGE = /^pi-clipboard-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.png$/i;
-const READ_ONLY_COMMANDS = new Set(["pwd", "ls", "rg", "grep", "head", "tail", "wc", "nl", "sort", "test", "cmp"]);
-const READ_ONLY_GIT_COMMANDS = new Set([
-	"status",
-	"diff",
-	"log",
-	"show",
-	"rev-parse",
-	"merge-base",
-	"rev-list",
-	"ls-files",
-	"ls-tree",
-	"cat-file",
-	"for-each-ref",
-	"show-ref",
-	"blame",
-	"grep",
-	"describe",
-	"shortlog",
-	"count-objects",
+const ASK_COMMANDS = new Set([
+	"dd",
+	"diskutil",
+	"doas",
+	"exec",
+	"kill",
+	"killall",
+	"launchctl",
+	"mkfs",
+	"pkill",
+	"pacman",
+	"rmdir",
+	"rsync",
+	"scp",
+	"security",
+	"service",
+	"sftp",
+	"shred",
+	"su",
+	"sudo",
+	"systemctl",
+	"truncate",
+	"unlink",
+	"wipefs",
+]);
+const GUARDED_BRANCH_ARGUMENTS = new Set([
+	"-d",
+	"-D",
+	"-m",
+	"-M",
+	"-c",
+	"-C",
+	"-f",
+	"--delete",
+	"--move",
+	"--copy",
+	"--force",
+]);
+const GUARDED_GIT_COMMANDS = new Set([
+	"bisect",
+	"checkout",
+	"cherry-pick",
+	"clean",
+	"gc",
+	"merge",
+	"mv",
+	"prune",
+	"pull",
+	"push",
+	"rebase",
+	"repack",
+	"reset",
+	"restore",
+	"revert",
+	"switch",
+	"update-ref",
+]);
+const GUARDED_TMUX_COMMANDS = new Set([
+	"break-pane",
+	"join-pane",
+	"link-window",
+	"move-pane",
+	"move-window",
+	"new-session",
+	"new-window",
+	"select-layout",
+	"split-window",
+	"swap-pane",
+	"unlink-window",
 ]);
 
-export function parseProtectedPaths(root: string, output: string): Set<string> {
+export function parseStartupIgnoredPaths(root: string, output: string): Set<string> {
 	return new Set(
 		output
 			.split("\0")
@@ -64,9 +110,7 @@ export function parseProtectedPaths(root: string, output: string): Set<string> {
 
 export function parseRuleList(value: unknown): string[] {
 	const entries = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
-	return entries
-		.filter((entry): entry is string => typeof entry === "string")
-		.flatMap(splitRuleString);
+	return entries.filter((entry): entry is string => typeof entry === "string").flatMap(splitRuleString);
 }
 
 export function matchRule(rule: string, toolName: string, argValue: string): boolean {
@@ -86,7 +130,6 @@ export function splitShellCommand(command: string): string[] | undefined {
 
 	for (let index = 0; index < command.length; index++) {
 		const character = command[index]!;
-
 		if (isEscaped) {
 			current += character;
 			isEscaped = false;
@@ -109,22 +152,21 @@ export function splitShellCommand(command: string): string[] | undefined {
 
 		const pair = command.slice(index, index + 2);
 		if (pair === "&&" || pair === "||") {
-			if (current.trim()) segments.push(current.trim());
+			pushSegment(segments, current);
 			current = "";
 			index++;
 			continue;
 		}
-		if (character === "|" || character === ";") {
-			if (current.trim()) segments.push(current.trim());
+		if (["|", "&", ";", "\n", "\r"].includes(character)) {
+			pushSegment(segments, current);
 			current = "";
 			continue;
 		}
-
 		current += character;
 	}
 
 	if (quote || isEscaped) return undefined;
-	if (current.trim()) segments.push(current.trim());
+	pushSegment(segments, current);
 	return segments.length > 0 ? segments : undefined;
 }
 
@@ -133,16 +175,30 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 
 	const argValue = getMatchValue(call.toolName, call.input);
 	if (call.toolName === "read" && argValue && isPiClipboardImage(argValue, call.cwd)) return ALLOW;
+	if ((call.toolName === "edit" || call.toolName === "write") && !argValue) {
+		return { kind: "ask", reason: `${call.toolName} has no path to evaluate.` };
+	}
+
 	if ((call.toolName === "edit" || call.toolName === "write") && call.repository && argValue) {
-		const pathDecision = decidePathTool(call.toolName, argValue, call.cwd, call.repository);
-		if (pathDecision.kind === "ask" && /protected/i.test(pathDecision.reason)) return pathDecision;
+		const mutationDecision = decideDirectMutation(argValue, call.cwd, call.repository);
+		if (mutationDecision) return mutationDecision;
+	}
+
+	if (call.toolName === "bash" && argValue) {
+		const guardedDecision = decideGuardedBash(
+			argValue,
+			call.cwd,
+			call.repository,
+			call.sshDestinations,
+		);
+		if (guardedDecision) return guardedDecision;
 	}
 
 	if (call.mode === "ask") {
 		if (
 			call.toolName === "bash" &&
 			argValue &&
-			isAllowedBySessionSsh(argValue, call.sshDestinations ?? new Set())
+			isAllowedBySessionSsh(argValue, call.sshDestinations)
 		) {
 			return ALLOW;
 		}
@@ -151,265 +207,14 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 			: { kind: "ask", reason: "Ask mode requires approval." };
 	}
 
-	if (!call.repository) {
-		return { kind: "ask", reason: "Repository mode is unavailable." };
+	if (!call.repository) return { kind: "ask", reason: "Repository mode is unavailable." };
+	if (call.toolName === "bash" && !argValue) {
+		return { kind: "ask", reason: "Bash has no command to evaluate." };
 	}
-
-	if (PATH_TOOLS.has(call.toolName)) {
-		if (isAllowedBySkill(call.toolName, argValue, call.skillRules)) return ALLOW;
-		if (!argValue) return { kind: "ask", reason: `${call.toolName} has no path to validate.` };
-		return decidePathTool(call.toolName, argValue, call.cwd, call.repository);
-	}
-
-	if (call.toolName === "bash") {
-		if (!argValue) return { kind: "ask", reason: "Bash has no command to validate." };
-		return decideBash(
-			argValue,
-			call.cwd,
-			call.repository,
-			call.skillRules,
-			call.sshDestinations ?? new Set(),
-		);
-	}
-
-	return isAllowedBySkill(call.toolName, argValue, call.skillRules)
-		? ALLOW
-		: { kind: "ask", reason: `${call.toolName} is not repository-aware.` };
-}
-
-function decidePathTool(
-	toolName: string,
-	rawPath: string,
-	cwd: string,
-	repository: RepositoryState,
-): PermissionDecision {
-	const pathInfo = resolvePathInfo(rawPath, cwd);
-	if (!pathInfo) return { kind: "ask", reason: `Could not resolve ${rawPath} safely.` };
-
-	const canonicalRoot = canonicalPath(repository.root);
-	const isMutation = toolName === "edit" || toolName === "write";
-	if (
-		isMutation &&
-		(repository.protectedPaths.has(pathInfo.lexical) || repository.protectedPaths.has(pathInfo.canonical))
-	) {
-		return { kind: "ask", reason: `${rawPath} was protected when Repository mode started.` };
-	}
-	if (
-		isMutation &&
-		canonicalRoot &&
-		(isGitMetadata(canonicalRoot, pathInfo.lexical) || isGitMetadata(canonicalRoot, pathInfo.canonical))
-	) {
-		return { kind: "ask", reason: `${rawPath} is protected Git metadata.` };
-	}
-
-	if (!canonicalRoot || !isInside(canonicalRoot, pathInfo.canonical)) {
-		return { kind: "ask", reason: `${rawPath} resolves outside the repository.` };
-	}
-
 	return ALLOW;
-}
-
-function decideBash(
-	command: string,
-	cwd: string,
-	repository: RepositoryState,
-	skillRules: string[],
-	sshDestinations: Set<string>,
-): PermissionDecision {
-	const segments = splitShellCommand(command);
-	if (!segments || /[\r\n]/.test(command)) {
-		return { kind: "ask", reason: "The shell command shape cannot be validated." };
-	}
-
-	for (const segment of segments) {
-		if (isAllowedSshSegment(segment, sshDestinations)) continue;
-		if (isAllowedBySkill("bash", segment, skillRules)) continue;
-
-		const suggestion = suggestedAlternative(segment);
-		if (suggestion) return suggestion;
-
-		const decision = decideReadOnlySegment(segment, cwd, repository.root);
-		if (decision.kind !== "allow") return decision;
-	}
-
-	return ALLOW;
-}
-
-function decideReadOnlySegment(segment: string, cwd: string, root: string): PermissionDecision {
-	if (hasUnsafeShellSyntax(segment)) {
-		return { kind: "ask", reason: "Shell expansion or redirection requires approval." };
-	}
-
-	const tokens = tokenizeShellSegment(segment);
-	if (!tokens || tokens.length === 0) {
-		return { kind: "ask", reason: "The shell command cannot be tokenized safely." };
-	}
-
-	const command = tokens[0]!;
-	if (command === "git") {
-		if (!isReadOnlyGit(tokens, cwd, root)) {
-			return { kind: "ask", reason: "The Git command is not a recognized read-only shape." };
-		}
-	} else {
-		if (!READ_ONLY_COMMANDS.has(command) || hasRiskyFlags(command, tokens.slice(1))) {
-			return { kind: "ask", reason: `${command} is not a recognized read-only command shape.` };
-		}
-		if (!tokensStayInside(tokens.slice(1), cwd, root)) {
-			return { kind: "ask", reason: "A command path resolves outside the repository." };
-		}
-	}
-
-	return ALLOW;
-}
-
-function suggestedAlternative(segment: string): PermissionDecision | undefined {
-	if (/^cat(?:\s|$)/.test(segment)) {
-		return { kind: "suggest", tool: "read", reason: "Use read for file content." };
-	}
-	if (/^(?:sed\b[^\n]*\s(?:-i|--in-place)|perl\b[^\n]*\s-(?:pi|ip)\b)/.test(segment)) {
-		return { kind: "suggest", tool: "edit", reason: "Use edit for deterministic file changes." };
-	}
-	if (/^(?:printf|echo)\b[^\n]*(?:>|>>)/.test(segment)) {
-		return { kind: "suggest", tool: "write", reason: "Use write for complete file content." };
-	}
-	return undefined;
-}
-
-function hasRiskyFlags(command: string, args: string[]): boolean {
-	const flags = new Set(args);
-	if (
-		command === "rg" &&
-		(args.some(
-			(arg) =>
-				arg === "--pre" ||
-				arg.startsWith("--pre=") ||
-				arg === "--hostname-bin" ||
-				arg.startsWith("--hostname-bin="),
-		) ||
-			hasShortFlag(args, "L") ||
-			flags.has("--follow"))
-	) {
-		return true;
-	}
-	if (command === "grep" && (hasShortFlag(args, "R") || flags.has("--dereference-recursive"))) {
-		return true;
-	}
-	if (
-		command === "ls" &&
-		(hasShortFlag(args, "R") || flags.has("--recursive")) &&
-		(hasShortFlag(args, "L") || flags.has("--dereference"))
-	) {
-		return true;
-	}
-	if (
-		command === "sort" &&
-		args.some((arg) => arg === "-o" || (arg.startsWith("-o") && arg.length > 2) || arg === "--output" || arg.startsWith("--output="))
-	) {
-		return true;
-	}
-	if (command === "sort" && args.some((arg) => arg === "--compress-program" || arg.startsWith("--compress-program="))) {
-		return true;
-	}
-	return flags.has("--files-from") && command === "rg";
-}
-
-function hasShortFlag(args: string[], flag: string): boolean {
-	return args.some((arg) => arg.startsWith("-") && !arg.startsWith("--") && arg.slice(1).includes(flag));
-}
-
-function isReadOnlyGit(tokens: string[], cwd: string, root: string): boolean {
-	let index = 1;
-	let gitCwd = cwd;
-	while (index < tokens.length && tokens[index]!.startsWith("-")) {
-		const option = tokens[index]!;
-		if (option === "-C") {
-			const target = tokens[index + 1];
-			const targetInfo = target ? resolvePathInfo(target, gitCwd) : undefined;
-			const canonicalRoot = canonicalPath(root);
-			if (!targetInfo || !canonicalRoot || !isInside(canonicalRoot, targetInfo.canonical)) return false;
-			gitCwd = targetInfo.canonical;
-			index += 2;
-			continue;
-		}
-		if (["--no-pager", "--no-optional-locks", "--literal-pathspecs", "--no-replace-objects"].includes(option)) {
-			index++;
-			continue;
-		}
-		return false;
-	}
-
-	const subcommand = tokens[index];
-	if (!subcommand) return false;
-	const args = tokens.slice(index + 1);
-
-	if (subcommand === "branch") {
-		if (args.some(isMutatingBranchArgument)) return false;
-		return args.length === 0 || ["--show-current", "--list", "-a", "-r", "-v", "-vv"].includes(args[0]!);
-	}
-	if (subcommand === "reflog") return args.length === 0 || args[0] === "show";
-	if (subcommand === "stash") return args[0] === "list";
-	if (subcommand === "tag") return args[0] === "--list" || args[0] === "-l";
-	if (subcommand === "worktree") return args[0] === "list";
-	if (subcommand === "submodule") return args[0] === "status";
-	if (!READ_ONLY_GIT_COMMANDS.has(subcommand)) return false;
-
-	if (
-		args.some(
-			(arg) =>
-				arg === "--output" ||
-				arg.startsWith("--output=") ||
-				arg === "--ext-diff" ||
-				arg === "--textconv" ||
-				arg === "--filters" ||
-				arg === "--open-files-in-pager" ||
-				arg.startsWith("--open-files-in-pager="),
-		)
-	) {
-		return false;
-	}
-
-	return tokensStayInside(args, gitCwd, root);
-}
-
-function isMutatingBranchArgument(arg: string): boolean {
-	return (
-		["-d", "-D", "-m", "-M", "-c", "-C", "-f", "-t", "-u"].includes(arg) ||
-		["--delete", "--move", "--copy", "--force", "--track", "--unset-upstream", "--edit-description", "--create-reflog"].includes(arg) ||
-		arg.startsWith("--track=") ||
-		arg === "--set-upstream-to" ||
-		arg.startsWith("--set-upstream-to=")
-	);
-}
-
-function tokensStayInside(tokens: string[], cwd: string, root: string): boolean {
-	for (const token of tokens) {
-		if (token.startsWith("~")) return false;
-		if (token.startsWith("-") && token.includes("/") && !token.includes("=")) return false;
-
-		const value = token.startsWith("-") && token.includes("=") ? token.slice(token.indexOf("=") + 1) : token;
-		if (!looksLikePath(value, cwd)) continue;
-		if (!pathStaysInside(value, cwd, root)) return false;
-	}
-	return true;
-}
-
-function looksLikePath(value: string, cwd: string): boolean {
-	return (
-		isAbsolute(value) ||
-		value.startsWith(".") ||
-		value.includes("/") ||
-		existsSync(resolve(cwd, value))
-	);
-}
-
-function pathStaysInside(value: string, cwd: string, root: string): boolean {
-	const info = resolvePathInfo(value, cwd);
-	const canonicalRoot = canonicalPath(root);
-	return Boolean(info && canonicalRoot && isInside(canonicalRoot, info.canonical));
 }
 
 export function getSshDestination(command: string): string | undefined {
-	if (/[\r\n]/.test(command)) return undefined;
 	const segments = splitShellCommand(command);
 	if (!segments) return undefined;
 
@@ -418,8 +223,248 @@ export function getSshDestination(command: string): string | undefined {
 	return destination && destinations.every((candidate) => candidate === destination) ? destination : undefined;
 }
 
+function decideDirectMutation(
+	rawPath: string,
+	cwd: string,
+	repository: RepositoryState,
+): PermissionDecision | undefined {
+	const pathInfo = resolvePathInfo(rawPath, cwd);
+	if (!pathInfo) return { kind: "ask", reason: `Could not resolve ${rawPath} safely.` };
+
+	if (
+		repository.startupIgnoredPaths.has(pathInfo.lexical) ||
+		repository.startupIgnoredPaths.has(pathInfo.canonical)
+	) {
+		return {
+			kind: "ask",
+			reason: `The target of ${rawPath} was untracked and Git-ignored when Repository mode started.`,
+		};
+	}
+
+	if (
+		isGitMetadata(repository.root, pathInfo.lexical) ||
+		isGitMetadata(repository.root, pathInfo.canonical)
+	) {
+		return { kind: "ask", reason: `The target of ${rawPath} is Git metadata and requires approval.` };
+	}
+	return undefined;
+}
+
+function decideGuardedBash(
+	command: string,
+	cwd: string,
+	repository: RepositoryState | undefined,
+	sshDestinations: Set<string>,
+): PermissionDecision | undefined {
+	let hasChangedDirectory = false;
+	for (const segment of splitShellCommand(command) ?? [command]) {
+		const commandTokens = getCommandTokens(segment);
+		const reason = guardedSegmentReason(
+			segment,
+			commandTokens,
+			cwd,
+			repository,
+			sshDestinations,
+			hasChangedDirectory,
+		);
+		if (reason) return { kind: "ask", reason };
+		const commandName = commandTokens ? basename(commandTokens[0]!) : undefined;
+		if (commandName && ["cd", "popd", "pushd"].includes(commandName)) hasChangedDirectory = true;
+	}
+	return undefined;
+}
+
+function guardedSegmentReason(
+	segment: string,
+	commandTokens: string[] | undefined,
+	cwd: string,
+	repository: RepositoryState | undefined,
+	sshDestinations: Set<string>,
+	hasChangedDirectory: boolean,
+): string | undefined {
+	if (!commandTokens) return undefined;
+
+	const command = basename(commandTokens[0]!);
+	const args = commandTokens.slice(1);
+	if (command === "ssh") {
+		return isAllowedSshSegment(segment, sshDestinations) ? undefined : "SSH requires destination approval.";
+	}
+	if (ASK_COMMANDS.has(command)) return `${command} requires approval.`;
+	if (command === "rm") {
+		return guardedRmReason(segment, args, cwd, repository, hasChangedDirectory);
+	}
+	if (args.some((arg) => arg.startsWith("--force"))) return `${command} --force requires approval.`;
+	if (command === "find" && args.some(isMutatingFindArgument)) return "find mutation requires approval.";
+	if (command === "git" && isGuardedGit(commandTokens)) return "This Git operation requires approval.";
+	if (command === "tmux" && args.some(isGuardedTmuxCommand)) return "This tmux operation requires approval.";
+	if (command === "curl" && isMutatingCurl(args)) return "This curl request can mutate an external service.";
+	if (command === "gh" && isMutatingGh(args)) return "This GitHub operation can mutate remote state.";
+	if (isHostPackageMutation(command, args)) return "Global package changes require approval.";
+	if (isPublish(command, args)) return "Publishing requires approval.";
+	return undefined;
+}
+
+function guardedRmReason(
+	segment: string,
+	args: string[],
+	cwd: string,
+	repository: RepositoryState | undefined,
+	hasChangedDirectory: boolean,
+): string | undefined {
+	if (!repository) return "rm targets require an active repository.";
+	if (hasChangedDirectory || hasUnsafeShellSyntax(segment)) {
+		return "rm targets cannot be resolved safely from this shell command.";
+	}
+
+	const targets = rmTargets(args);
+	if (targets.length === 0) return "rm has no literal target to evaluate.";
+
+	const canonicalCwd = canonicalPath(cwd);
+	if (!canonicalCwd) return "rm working directory cannot be resolved safely.";
+	for (const target of targets) {
+		const targetInfo = resolveShellPathInfo(target, canonicalCwd);
+		const canonicalParent = targetInfo ? canonicalPath(dirname(targetInfo.lexical)) : undefined;
+		const deletionPath = canonicalParent && targetInfo
+			? join(canonicalParent, basename(targetInfo.lexical))
+			: undefined;
+		if (
+			!deletionPath ||
+			deletionPath === repository.root ||
+			!isInside(repository.root, deletionPath) ||
+			(rmMayDereferenceTarget(target) && !isInside(repository.root, targetInfo.canonical))
+		) {
+			return `rm target ${target} resolves outside the repository or cannot be evaluated safely.`;
+		}
+		if (isGitMetadata(repository.root, deletionPath)) {
+			return `rm target ${target} is Git metadata and requires approval.`;
+		}
+		if (
+			[...repository.startupIgnoredPaths].some(
+				(ignoredPath) => ignoredPath === deletionPath || isInside(deletionPath, ignoredPath),
+			)
+		) {
+			return `rm target ${target} contains a file that was untracked and Git-ignored when Repository mode started.`;
+		}
+	}
+	return undefined;
+}
+
+function rmTargets(args: string[]): string[] {
+	const separator = args.indexOf("--");
+	if (separator !== -1) return args.slice(separator + 1);
+	return args.filter((arg) => arg === "-" || !arg.startsWith("-"));
+}
+
+function rmMayDereferenceTarget(target: string): boolean {
+	return target === "." || target === ".." || /\/$|\/\.{1,2}\/?$/.test(target);
+}
+
+function getCommandTokens(segment: string): string[] | undefined {
+	const tokens = tokenizeShellSegment(segment);
+	if (!tokens || tokens.length === 0) return undefined;
+	const commandIndex = tokens.findIndex((token) => !/^[a-z_][a-z0-9_]*=/i.test(token));
+	return commandIndex === -1 ? undefined : tokens.slice(commandIndex);
+}
+
+function isMutatingFindArgument(arg: string): boolean {
+	return ["-delete", "--delete", "-exec", "-execdir", "-ok", "-okdir"].includes(arg) || arg.startsWith("-fprint");
+}
+
+function isGuardedGit(tokens: string[]): boolean {
+	const parsed = parseGitCommand(tokens);
+	if (!parsed) return false;
+	const { command, args } = parsed;
+
+	if (GUARDED_GIT_COMMANDS.has(command)) return true;
+	if (command === "commit") return args.includes("--amend");
+	if (command === "branch") {
+		if (args.some((arg) => GUARDED_BRANCH_ARGUMENTS.has(arg))) return true;
+		return !(args.length === 0 || ["--show-current", "--list", "-a", "-r", "-v", "-vv"].includes(args[0]!));
+	}
+	if (command === "tag") return !(args.length === 0 || ["--list", "-l"].includes(args[0]!));
+	if (command === "stash") return !["list", "show"].includes(args[0] ?? "");
+	if (command === "remote") return ![undefined, "-v", "show", "get-url"].includes(args[0]);
+	if (command === "reflog") return ["delete", "expire"].includes(args[0] ?? "");
+	if (command === "worktree") return args[0] !== "list";
+	if (command === "submodule") return !["status", "summary"].includes(args[0] ?? "");
+	if (command === "notes") return !["list", "show"].includes(args[0] ?? "");
+	if (command === "config") return isMutatingGitConfig(args);
+	return false;
+}
+
+function parseGitCommand(tokens: string[]): { command: string; args: string[] } | undefined {
+	let index = 1;
+	while (index < tokens.length && tokens[index]!.startsWith("-")) {
+		const option = tokens[index]!;
+		index += ["-C", "-c", "--git-dir", "--namespace", "--work-tree"].includes(option) ? 2 : 1;
+	}
+	const command = tokens[index];
+	return command ? { command, args: tokens.slice(index + 1) } : undefined;
+}
+
+function isMutatingGitConfig(args: string[]): boolean {
+	if (args.some((arg) => /^(?:--add|--remove-section|--rename-section|--replace-all|--unset(?:-all)?)$/.test(arg))) {
+		return true;
+	}
+	if (args.some((arg) => ["--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l"].includes(arg))) {
+		return false;
+	}
+	return args.filter((arg) => !arg.startsWith("-")).length > 1;
+}
+
+function isGuardedTmuxCommand(arg: string): boolean {
+	return GUARDED_TMUX_COMMANDS.has(arg) || arg.startsWith("kill-") || arg.startsWith("respawn-");
+}
+
+function isMutatingCurl(args: string[]): boolean {
+	return args.some((arg, index) => {
+		if (/^-X(?!GET$|HEAD$)/i.test(arg)) return true;
+		if (/^(?:-d.+|-F.+|-T.+)$/.test(arg)) return true;
+		if (/^(?:-d|--data(?:-ascii|-binary|-raw|-urlencode)?|-F|--form|-T|--upload-file)$/.test(arg)) return true;
+		if (/^--(?:data|form|upload-file)=/.test(arg)) return true;
+		if (arg === "-X" || arg === "--request") return !/^(?:GET|HEAD)$/i.test(args[index + 1] ?? "");
+		return /^--request=(?!GET$|HEAD$)/i.test(arg);
+	});
+}
+
+function isMutatingGh(args: string[]): boolean {
+	const [area, action] = args;
+	if (area === "api") {
+		return args.some((arg, index) => {
+			if (/^(?:-[fF].+|--field=|--raw-field=|--input=)/.test(arg)) return true;
+			if (["-f", "-F", "--field", "--raw-field", "--input"].includes(arg)) return true;
+			if (arg === "-X" || arg === "--method") return !/^(?:GET|HEAD)$/i.test(args[index + 1] ?? "");
+			return /^--method=(?!GET$|HEAD$)/i.test(arg);
+		});
+	}
+	if (area === "pr") return !["checks", "diff", "list", "status", "view"].includes(action ?? "");
+	if (area === "issue") return !["list", "status", "view"].includes(action ?? "");
+	if (area === "release") return !["list", "view"].includes(action ?? "");
+	if (area === "auth") return action !== "status";
+	return false;
+}
+
+function isHostPackageMutation(command: string, args: string[]): boolean {
+	if (command === "brew") return ["cleanup", "install", "uninstall", "update", "upgrade"].includes(args[0] ?? "");
+	if (["npm", "pnpm"].includes(command)) {
+		const hasGlobalFlag = args.some((arg) => arg === "-g" || arg === "--global");
+		return hasGlobalFlag && args.some((arg) => ["add", "i", "install", "remove", "rm", "uninstall"].includes(arg));
+	}
+	if (command === "yarn") return args[0] === "global";
+	if (command === "gem") return ["install", "uninstall", "update"].includes(args[0] ?? "");
+	if (command !== "asdf") return false;
+	return (
+		["install", "uninstall"].includes(args[0] ?? "") ||
+		(args[0] === "plugin" && ["add", "remove"].includes(args[1] ?? ""))
+	);
+}
+
+function isPublish(command: string, args: string[]): boolean {
+	if (command === "npm") return ["deprecate", "publish", "unpublish"].includes(args[0] ?? "");
+	return command === "gem" && ["push", "yank"].includes(args[0] ?? "");
+}
+
 function isAllowedBySessionSsh(command: string, destinations: Set<string>): boolean {
-	if (/[\r\n]/.test(command)) return false;
 	const segments = splitShellCommand(command);
 	return Boolean(segments && segments.every((segment) => isAllowedSshSegment(segment, destinations)));
 }
@@ -443,14 +488,11 @@ function parseSshSegment(segment: string): string | undefined {
 
 function isAllowedBySkill(toolName: string, argValue: string, rules: string[]): boolean {
 	if (toolName !== "bash") return rules.some((rule) => matchRule(rule, toolName, argValue));
-	if (/[\r\n]/.test(argValue)) return false;
-
 	const segments = splitShellCommand(argValue);
 	return Boolean(
 		segments &&
 			segments.every(
-				(segment) =>
-					!hasUnsafeShellSyntax(segment) && rules.some((rule) => matchRule(rule, toolName, segment)),
+				(segment) => !hasUnsafeShellSyntax(segment) && rules.some((rule) => matchRule(rule, toolName, segment)),
 			),
 	);
 }
@@ -467,7 +509,6 @@ function splitRuleString(value: string): string[] {
 	const rules: string[] = [];
 	let current = "";
 	let depth = 0;
-
 	for (const character of value.trim()) {
 		if (/\s/.test(character) && depth === 0) {
 			if (current) rules.push(current);
@@ -491,12 +532,14 @@ function matchPattern(pattern: string, value: string): boolean {
 	return new RegExp(`^${adjusted}$`).test(value);
 }
 
+function pushSegment(segments: string[], value: string): void {
+	if (value.trim()) segments.push(value.trim());
+}
+
 function hasUnsafeShellSyntax(segment: string): boolean {
 	let quote: "'" | '"' | undefined;
 	let isEscaped = false;
-
-	for (let index = 0; index < segment.length; index++) {
-		const character = segment[index]!;
+	for (const character of segment) {
 		if (isEscaped) {
 			isEscaped = false;
 			continue;
@@ -511,11 +554,10 @@ function hasUnsafeShellSyntax(segment: string): boolean {
 		}
 		if (quote === "'") continue;
 		if (character === "`" || character === "$" || character === "<" || character === ">") return true;
-		if (!quote && (character === "(" || character === ")" || character === "&" || "*?[{}".includes(character))) {
+		if (!quote && (character === "(" || character === ")" || "*?[{".includes(character))) {
 			return true;
 		}
 	}
-
 	return Boolean(quote || isEscaped);
 }
 
@@ -525,7 +567,6 @@ function tokenizeShellSegment(segment: string): string[] | undefined {
 	let quote: "'" | '"' | undefined;
 	let isEscaped = false;
 	let hasToken = false;
-
 	for (const character of segment) {
 		if (isEscaped) {
 			current += character;
@@ -551,7 +592,6 @@ function tokenizeShellSegment(segment: string): string[] | undefined {
 		current += character;
 		hasToken = true;
 	}
-
 	if (quote || isEscaped) return undefined;
 	if (hasToken) tokens.push(current);
 	return tokens;
@@ -569,8 +609,16 @@ function isPiClipboardImage(rawPath: string, cwd: string): boolean {
 }
 
 function resolvePathInfo(rawPath: string, cwd: string): PathInfo | undefined {
-	const withoutAt = rawPath.startsWith("@") ? rawPath.slice(1) : rawPath;
-	const normalized = withoutAt === "~" ? homedir() : withoutAt.startsWith("~/") ? join(homedir(), withoutAt.slice(2)) : withoutAt;
+	return resolveExpandedPath(rawPath.startsWith("@") ? rawPath.slice(1) : rawPath, cwd);
+}
+
+function resolveShellPathInfo(rawPath: string, cwd: string): PathInfo | undefined {
+	return resolveExpandedPath(rawPath, cwd);
+}
+
+function resolveExpandedPath(rawPath: string, cwd: string): PathInfo | undefined {
+	const normalized =
+		rawPath === "~" ? homedir() : rawPath.startsWith("~/") ? join(homedir(), rawPath.slice(2)) : rawPath;
 	const lexical = resolve(cwd, normalized);
 	const canonical = canonicalPath(lexical);
 	return canonical ? { lexical, canonical } : undefined;
@@ -578,23 +626,17 @@ function resolvePathInfo(rawPath: string, cwd: string): PathInfo | undefined {
 
 function canonicalPath(target: string, depth = 0): string | undefined {
 	if (depth > 20) return undefined;
-
 	try {
 		return realpathSync(target);
 	} catch (error) {
 		if (!isMissingPathError(error)) return undefined;
 	}
-
 	try {
 		const stat = lstatSync(target);
-		if (stat.isSymbolicLink()) {
-			const linkTarget = readlinkSync(target);
-			return canonicalPath(resolve(dirname(target), linkTarget), depth + 1);
-		}
+		if (stat.isSymbolicLink()) return canonicalPath(resolve(dirname(target), readlinkSync(target)), depth + 1);
 	} catch (error) {
 		if (!isMissingPathError(error)) return undefined;
 	}
-
 	const parent = dirname(target);
 	if (parent === target) return target;
 	const canonicalParent = canonicalPath(parent, depth + 1);
@@ -612,5 +654,8 @@ function isGitMetadata(root: string, target: string): boolean {
 
 function isInside(root: string, target: string): boolean {
 	const pathFromRoot = relative(root, target);
-	return pathFromRoot === "" || (!pathFromRoot.startsWith(`..${sep}`) && pathFromRoot !== ".." && !isAbsolute(pathFromRoot));
+	return (
+		pathFromRoot === "" ||
+		(!pathFromRoot.startsWith(`..${sep}`) && pathFromRoot !== ".." && !isAbsolute(pathFromRoot))
+	);
 }

@@ -13,7 +13,8 @@ import { discoverRepository } from "./repository.ts";
 
 const STATUS_ID = "repo-permissions";
 const PROMPT_CHOICES = ["Allow once", "Allow everything for this session", "Reject"];
-const REPOSITORY_MODE_CHOICES = ["Repository", "Ask", "Unrestricted"];
+const REPOSITORY_MODE_CHOICES = ["Repository", "Unattended", "Ask", "Unrestricted"];
+const REPOSITORY_RETRY_CHOICES = ["Repository", "Ask", "Unrestricted"];
 const BASIC_MODE_CHOICES = ["Ask", "Unrestricted"];
 const MAX_PROMPT_DETAIL_LENGTH = 1200;
 
@@ -36,7 +37,7 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 		renderStatus(ctx);
 	}
 
-	async function loadRepository(ctx: ExtensionContext): Promise<boolean> {
+	async function loadRepository(ctx: ExtensionContext): Promise<void> {
 		const discovery = await discoverRepository(ctx.cwd, (command, args, options) =>
 			pi.exec(command, args, options),
 		);
@@ -44,20 +45,23 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 		repository = discovery.repository;
 		setMode(repository ? "repository" : "ask", ctx);
 		if (discovery.warning) ctx.ui.notify(discovery.warning, "warning");
-		return Boolean(repository);
 	}
 
 	pi.registerCommand("permissions", {
 		description: "Select the permission mode for this session",
 		handler: async (_args, ctx) => {
-			const choices = hasGitRoot ? REPOSITORY_MODE_CHOICES : BASIC_MODE_CHOICES;
+			const choices = repository
+				? REPOSITORY_MODE_CHOICES
+				: hasGitRoot
+					? REPOSITORY_RETRY_CHOICES
+					: BASIC_MODE_CHOICES;
 			const choice = await ctx.ui.select("Permission mode", choices);
 			if (choice === "Repository") {
-				if (await loadRepository(ctx) && repository) {
-					ctx.ui.notify(`Repository mode: ${repository.root}`, "info");
-				}
+				await loadRepository(ctx);
+				if (repository) ctx.ui.notify(`Repository mode: ${repository.root}`, "info");
 				return;
 			}
+			if (choice === "Unattended") setMode("unattended", ctx);
 			if (choice === "Ask") setMode("ask", ctx);
 			if (choice === "Unrestricted") setMode("unrestricted", ctx);
 		},
@@ -72,7 +76,7 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 		await loadRepository(ctx);
 	});
 
-	pi.on("session_shutdown", async (_event, ctx) => {
+	pi.on("session_shutdown", (_event, ctx) => {
 		ctx.ui.setStatus(STATUS_ID, undefined);
 	});
 
@@ -91,10 +95,10 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 		});
 
 		if (decision.kind === "allow") return;
-		if (decision.kind === "suggest") {
+		if (mode === "unattended") {
 			return {
 				block: true,
-				reason: `${decision.reason} Retry with the ${decision.tool} tool.`,
+				reason: `Blocked in Unattended mode: ${decision.reason} Continue with permitted work and report this blocked operation.`,
 			};
 		}
 		if (!ctx.hasUI) {
@@ -110,7 +114,7 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 			: PROMPT_CHOICES;
 		const choice = await ctx.ui.select(formatPrompt(event.toolName, input, decision.reason), choices);
 		if (choice === "Allow once") return;
-		if (sshDestination && sshChoice && choice === sshChoice) {
+		if (sshDestination && choice === sshChoice) {
 			sshDestinations.add(sshDestination);
 			ctx.ui.notify(`SSH to ${sshDestination} is allowed for this session.`, "info");
 			return;
@@ -141,25 +145,19 @@ function truncatePromptDetail(detail: string): string {
 }
 
 function getSkillRules(pi: ExtensionAPI, parseFrontmatter: FrontmatterParser): string[] {
-	const skills = pi
-		.getCommands()
-		.filter(
-			(command) =>
-				command.source === "skill" &&
-				command.sourceInfo.origin === "top-level" &&
-				(command.sourceInfo.scope === "user" || command.sourceInfo.scope === "project"),
-		)
-		.sort((left, right) => left.sourceInfo.path.localeCompare(right.sourceInfo.path));
+	const skills = pi.getCommands().filter(
+		(command) =>
+			command.source === "skill" &&
+			command.sourceInfo.origin === "top-level" &&
+			(command.sourceInfo.scope === "user" || command.sourceInfo.scope === "project"),
+	);
 
 	return [
 		...new Set(
 			skills.flatMap((skill) => {
 				try {
 					const frontmatter = parseFrontmatter(readFileSync(skill.sourceInfo.path, "utf8"));
-					return [
-						...parseRuleList(frontmatter.allowed_tools),
-						...parseRuleList(frontmatter["allowed-tools"]),
-					];
+					return parseRuleList(frontmatter["allowed-tools"]);
 				} catch {
 					return [];
 				}
