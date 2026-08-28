@@ -72,4 +72,5 @@ Use this file to map vague user wording to likely capabilities. The exact source
 - `00cc` → copy referenced content exactly to the system clipboard.
 - `00ex` → explain referenced text.
 - `00gf` → give feedback on referenced text or idea.
+- `00rtfm` → read the development principles, update the solution to follow them, and report the updates.
 - `00rvu` → review unstaged changes only; no specs or RuboCop.

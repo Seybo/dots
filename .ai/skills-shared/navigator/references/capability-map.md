@@ -80,6 +80,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `00cc` — copy referenced content exactly to the system clipboard.
 - `00ex` — explain referenced text in simple, precise terms.
 - `00gf` — give feedback on referenced idea or text.
+- `00rtfm` — apply the development principles to the solution and report the updates.
 - `00rvu` — review unstaged changes only; do not run specs or RuboCop.
 
 ## Pi system docs
