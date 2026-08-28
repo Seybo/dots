@@ -1,5 +1,5 @@
 ---
-name: misc_kaamp1
+name: misc_kaamp
 root: <%= ENV.fetch("DEV_ROOT") %>/projects/misc/kaamp_be/1st
 startup_window: git
 enable_pane_titles: true

@@ -21,12 +21,12 @@ projects:
   misc_kaamp_be:
     checkout_layout: ordinal_workspaces
     code_root: projects/misc/kaamp_be
-    tmux_layout: misc_kaamp1
+    tmux_layout: misc_kaamp
     task_provider: local
   misc_kaamp_fe:
     checkout_layout: ordinal_workspaces
     code_root: projects/misc/kaamp_fe
-    tmux_layout: misc_kaamp1
+    tmux_layout: misc_kaamp
     task_provider: local
   my_finance:
     checkout_layout: ordinal_workspaces
