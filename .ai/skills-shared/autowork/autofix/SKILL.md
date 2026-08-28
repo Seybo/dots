@@ -2,7 +2,8 @@
 name: autofix
 description: >-
   Import and decide reported issues from the current GitHub pull request or a
-  local review copied to the clipboard, or explicitly rebase its completed Task.
+  local review read from the clipboard or an explicit file, or explicitly rebase
+  its completed Task.
   Command-only skill.
 disable-model-invocation: true
 ---
@@ -20,6 +21,7 @@ Supported invocations:
 ```text
 /skill:autofix
 /skill:autofix --local --task <task-id>
+/skill:autofix --local --task <task-id> --file <path>
 /skill:autofix --rebase-base
 /skill:autofix --rebase-base <base-ref>
 ```
@@ -60,22 +62,28 @@ completely.
 - For a Shortcut project, infer the Task ID from the current `sc-<digits>`
   branch segment and resolve exactly one Task folder.
 - For a local-provider project, require `--local --task <task-id>` and resolve
-  that explicit numeric Task selector. Never infer a local Task from
+  that explicit numeric Task selector. Accept one optional `--file <path>` pair
+  only with this local form. Reject duplicate `--file`, a missing path, or
+  `--file` in GitHub or rebase mode. Never infer a local Task from
   `main`/`master` or the newest Task.
+- When `--file` is present, resolve a relative path from the current working
+  directory and require the resolved path to exist as a regular file before
+  **Resume**. Retain it as `review_file`. Do not modify or delete it.
 - Retain the canonical Task folder path. Ruby verifies that it belongs to the
   current checkout and configured branch and that Autoimplement reached
   terminal `final_checks_passed` state.
 
 Reject missing, duplicate, or unsupported arguments before **Resume**. The only
-normal source forms are no arguments for GitHub and `--local --task <task-id>`
-for local review. `--rebase-base` is Shortcut-only and uses the same inferred
-Task; never offer or invoke it for a local-provider Task.
+normal source forms are no arguments for GitHub, `--local --task <task-id>` for
+local clipboard review, and `--local --task <task-id> --file <path>` for local
+file review. `--rebase-base` is Shortcut-only and uses the same inferred Task;
+never offer or invoke it for a local-provider Task.
 
 ## Rebase completed Task
 
 Treat `--rebase-base` as a separate explicit operation for the resolved
 Shortcut Task. Accept either no value or one exact base ref after it. Reject
-combinations with `--local`, `--base`, `--task`, or any other argument. This
+combinations with `--local`, `--base`, `--task`, `--file`, or any other argument. This
 operation is valid before Review import and while one Review remains incomplete.
 Do not enter **Resume**, collect a source, or continue normal Review
 orchestration during or after it.
@@ -224,11 +232,14 @@ settling the imported Review.
 
 ## Local
 
-With `--local --task <task-id>`:
+With `--local --task <task-id>` and optional `--file <path>`:
 
 1. Read `app/prompts/extract_issues_from_clipboard.md` from this skill directory.
-2. Run `pbpaste` directly and treat its complete output as the review.
-3. Follow the prompt to extract the Reported Issue bodies.
+2. Obtain the complete review:
+   - when `review_file` is present, read that file completely
+   - otherwise run `pbpaste` directly
+3. Treat the complete source text as the review and follow the prompt to extract
+   the Reported Issue bodies.
 4. Write this object to `/tmp/autofix-local-review.json`:
 
    ```json
@@ -242,13 +253,13 @@ With `--local --task <task-id>`:
    ```
 
 6. Delete `/tmp/autofix-local-review.json` after the helper returns, including
-   when it fails.
+   when it fails. Never modify or delete `review_file`.
 7. Follow **Issue assessment** when helper stdout contains an `Issue: <id>`
    block. Return any other stdout unchanged. Surface failures after deleting
-   the file.
+   the generated JSON file.
 
-Do not add special handling for empty clipboard text. Do not store the original
-clipboard review.
+Do not add special handling for empty source text. Do not store the original
+clipboard or file review.
 
 ## Work Cycle handoff
 
@@ -444,4 +455,4 @@ Cycle. Run one decision command per reply; do not process the queue
 automatically. Do not refetch or re-import source data between decisions.
 
 Reject any other skill arguments, including unsupported combinations with
-`--rebase-base`.
+`--file` or `--rebase-base`.
