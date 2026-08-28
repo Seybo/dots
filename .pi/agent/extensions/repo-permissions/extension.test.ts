@@ -211,7 +211,7 @@ test("approval prompts truncate large Bash and custom-tool details", async () =>
 
 test("SSH destination approval is scoped to the current session", async () => {
 	const destination = "dev@192.0.2.10";
-	const sshChoice = `Allow SSH to ${destination} for this session`;
+	const sshChoice = `Allow SSH access to ${destination} for this session`;
 	const harness = createHarness([gitResult(1), gitResult(1)]);
 	const context = createContext("/tmp");
 	await harness.handlers.get("session_start")!({}, context);
@@ -219,7 +219,10 @@ test("SSH destination approval is scoped to the current session", async () => {
 	context.answers.push(sshChoice);
 	assert.equal(
 		await harness.handlers.get("tool_call")!(
-			{ toolName: "bash", input: { command: `ssh ${destination} 'sudo touch /tmp/remote'` } },
+			{
+				toolName: "bash",
+				input: { command: `scp /tmp/local ${destination}:/home/svin/remote && ssh ${destination} true` },
+			},
 			context,
 		),
 		undefined,
@@ -233,13 +236,15 @@ test("SSH destination approval is scoped to the current session", async () => {
 	assert.match(context.notifications.at(-1) ?? "", new RegExp(destination.replaceAll(".", "\\.")));
 
 	const selectionCount = context.selections.length;
-	assert.equal(
-		await harness.handlers.get("tool_call")!(
-			{ toolName: "bash", input: { command: `ssh ${destination} 'anything > /tmp/remote'` } },
-			context,
-		),
-		undefined,
-	);
+	for (const command of [
+		`ssh ${destination} 'anything > /tmp/remote'`,
+		`scp /tmp/local ${destination}:/home/svin/remote && ssh ${destination} true`,
+	]) {
+		assert.equal(
+			await harness.handlers.get("tool_call")!({ toolName: "bash", input: { command } }, context),
+			undefined,
+		);
+	}
 	assert.equal(context.selections.length, selectionCount);
 
 	for (const command of ["ssh other@192.0.2.10 true", "rm local-file"]) {

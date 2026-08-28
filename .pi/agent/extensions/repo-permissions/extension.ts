@@ -108,7 +108,7 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 			};
 		}
 
-		const sshChoice = sshDestination ? `Allow SSH to ${sshDestination} for this session` : undefined;
+		const sshChoice = sshDestination ? `Allow SSH access to ${sshDestination} for this session` : undefined;
 		const choices = sshChoice
 			? ["Allow once", sshChoice, "Allow everything for this session", "Reject"]
 			: PROMPT_CHOICES;
@@ -116,7 +116,7 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 		if (choice === "Allow once") return;
 		if (sshDestination && choice === sshChoice) {
 			sshDestinations.add(sshDestination);
-			ctx.ui.notify(`SSH to ${sshDestination} is allowed for this session.`, "info");
+			ctx.ui.notify(`SSH access to ${sshDestination} is allowed for this session.`, "info");
 			return;
 		}
 		if (choice === "Allow everything for this session") {

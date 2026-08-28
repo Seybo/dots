@@ -259,36 +259,34 @@ test("SSH grants allow one exact destination for the session", () => {
 		const destination = "dev@192.0.2.10";
 		const grants = new Set([destination]);
 		for (const mode of ["repository", "ask"] as const) {
+			for (const command of [
+				`ssh ${destination} 'sudo touch /tmp/remote'`,
+				`scp /tmp/local ${destination}:/home/svin/remote`,
+				`scp ${destination}:/home/svin/remote /tmp/local`,
+				`sftp ${destination}`,
+				`scp /tmp/local ${destination}:/home/svin/remote && ssh ${destination} true`,
+			]) {
+				assert.equal(
+					call(mode, "bash", { command }, repository.root, repository, [], grants).kind,
+					"allow",
+					command,
+				);
+			}
+		}
+		for (const command of [
+			"ssh other@example.test true",
+			"scp /tmp/local other@example.test:/tmp/remote",
+			`scp ${destination}:/tmp/source other@example.test:/tmp/remote`,
+			`scp -P 22 /tmp/local ${destination}:/tmp/remote`,
+			"sftp other@example.test",
+			`sftp -P 22 ${destination}`,
+		]) {
 			assert.equal(
-				call(
-					mode,
-					"bash",
-					{ command: `ssh ${destination} 'sudo touch /tmp/remote'` },
-					repository.root,
-					repository,
-					[],
-					grants,
-				).kind,
-				"allow",
+				call("repository", "bash", { command }, repository.root, repository, [], grants).kind,
+				"ask",
+				command,
 			);
 		}
-		assert.equal(
-			call(
-				"repository",
-				"bash",
-				{ command: `ssh ${destination} true && ssh ${destination} false` },
-				repository.root,
-				repository,
-				[],
-				grants,
-			).kind,
-			"allow",
-		);
-		assert.equal(
-			call("repository", "bash", { command: "ssh other@example.test true" }, repository.root, repository, [], grants)
-				.kind,
-			"ask",
-		);
 		assert.equal(
 			call(
 				"repository",
@@ -316,6 +314,10 @@ test("SSH grants allow one exact destination for the session", () => {
 
 		assert.equal(getSshDestination(`ssh ${destination} 'sudo reboot'`), destination);
 		assert.equal(getSshDestination(`ssh ${destination} true && ssh ${destination} false`), destination);
+		assert.equal(
+			getSshDestination(`scp /tmp/local ${destination}:/home/svin/remote && ssh ${destination} true`),
+			destination,
+		);
 		assert.equal(getSshDestination(`ssh ${destination} true && rm tracked.txt`), undefined);
 	});
 });

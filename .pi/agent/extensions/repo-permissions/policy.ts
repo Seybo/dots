@@ -41,10 +41,8 @@ const ASK_COMMANDS = new Set([
 	"pacman",
 	"rmdir",
 	"rsync",
-	"scp",
 	"security",
 	"service",
-	"sftp",
 	"shred",
 	"su",
 	"sudo",
@@ -218,7 +216,7 @@ export function getSshDestination(command: string): string | undefined {
 	const segments = splitShellCommand(command);
 	if (!segments) return undefined;
 
-	const destinations = segments.map(parseSshSegment);
+	const destinations = segments.map(parseSshAccessSegment);
 	const destination = destinations[0];
 	return destination && destinations.every((candidate) => candidate === destination) ? destination : undefined;
 }
@@ -286,8 +284,10 @@ function guardedSegmentReason(
 
 	const command = basename(commandTokens[0]!);
 	const args = commandTokens.slice(1);
-	if (command === "ssh") {
-		return isAllowedSshSegment(segment, sshDestinations) ? undefined : "SSH requires destination approval.";
+	if (["scp", "sftp", "ssh"].includes(command)) {
+		return isAllowedSshAccessSegment(segment, sshDestinations)
+			? undefined
+			: "SSH access requires destination approval.";
 	}
 	if (ASK_COMMANDS.has(command)) return `${command} requires approval.`;
 	if (command === "rm") {
@@ -466,24 +466,38 @@ function isPublish(command: string, args: string[]): boolean {
 
 function isAllowedBySessionSsh(command: string, destinations: Set<string>): boolean {
 	const segments = splitShellCommand(command);
-	return Boolean(segments && segments.every((segment) => isAllowedSshSegment(segment, destinations)));
+	return Boolean(segments && segments.every((segment) => isAllowedSshAccessSegment(segment, destinations)));
 }
 
-function isAllowedSshSegment(segment: string, destinations: Set<string>): boolean {
-	const destination = parseSshSegment(segment);
+function isAllowedSshAccessSegment(segment: string, destinations: Set<string>): boolean {
+	const destination = parseSshAccessSegment(segment);
 	return Boolean(destination && destinations.has(destination));
 }
 
-function parseSshSegment(segment: string): string | undefined {
+function parseSshAccessSegment(segment: string): string | undefined {
 	if (hasUnsafeShellSyntax(segment)) return undefined;
 	const tokens = tokenizeShellSegment(segment);
-	if (!tokens || tokens[0] !== "ssh" || tokens.length < 2) return undefined;
+	if (!tokens || tokens.length < 2) return undefined;
 
-	const destination = tokens[1]!;
-	if (destination.startsWith("-")) return undefined;
-	return /^(?:[a-z0-9._-]+@)?(?:[a-z0-9._-]+|\[[0-9a-f:]+\])$/i.test(destination)
-		? destination
-		: undefined;
+	const command = basename(tokens[0]!);
+	if (command === "ssh") return simpleSshDestination(tokens[1]!);
+	if (command === "sftp") return scpDestination(tokens[1]!) ?? simpleSshDestination(tokens[1]!);
+	if (command !== "scp" || tokens.length < 3 || tokens.slice(1).some((token) => token.startsWith("-"))) {
+		return undefined;
+	}
+
+	const destinations = tokens.slice(1).map(scpDestination).filter((value) => value !== undefined);
+	const destination = destinations[0];
+	return destination && destinations.every((value) => value === destination) ? destination : undefined;
+}
+
+function simpleSshDestination(value: string): string | undefined {
+	return /^(?:[a-z0-9._-]+@)?(?:[a-z0-9._-]+|\[[0-9a-f:]+\])$/i.test(value) ? value : undefined;
+}
+
+function scpDestination(value: string): string | undefined {
+	const match = value.match(/^((?:[a-z0-9._-]+@)?(?:[a-z0-9._-]+|\[[0-9a-f:]+\])):/i);
+	return match?.[1];
 }
 
 function isAllowedBySkill(toolName: string, argValue: string, rules: string[]): boolean {
