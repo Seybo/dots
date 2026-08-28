@@ -126,20 +126,6 @@ bindkey -r '^N' # don't need it
 bindkey '^P' forward-char # does completion the same way as i have configured in nvim
 bindkey '^K' kill-line # should be default but it's not mapped for some reason
 
-# prompt to adopt lf's last directory after exit
-lf() {
-  local dir ans
-  dir="$(command lf -print-last-dir "$@")" || return
-  [ -n "$dir" ] || return
-  [ "$dir" = "$PWD" ] && return
-
-  printf 'cd to %s? [y/N] ' "$dir"
-  read -r ans
-  case "$ans" in
-    y|Y) cd "$dir" ;;
-  esac
-}
-
 # SSH → attach to/create the base tmux session; detaching closes the SSH connection.
 # Local Ghostty sessions use the normal tmux workspace launchers.
 if [ -n "$SSH_CONNECTION" ] && [ -z "$TMUX" ]; then
