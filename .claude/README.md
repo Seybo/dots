@@ -48,7 +48,7 @@ Everything lives in the dotfiles repo and is stow-linked into `$HOME` (via `stow
 
 Claude Code rewrites `~/.claude/settings.json` itself (permission grants, `/model`), so it is excluded from Stow and Git. The ignored repo-local baseline is `~/.dots/.claude/settings.json`. The `dots-commit` skill detects drift, confirms live changes with the operator, updates the baseline, and scans it with `dots-check`. The baseline is never committed.
 
-Highlights: read-only Bash/git allowlist, the exact read-only Autofix participant command `/Volumes/dev/bin/skills/autofix show-work-cycle <id>`, `find`-mutation ask-rules, `additionalDirectories` for `/Volumes/dev/_tasks` + `/tmp`, both PreToolUse hooks, statusline, skill overrides.
+Highlights: read-only Bash/git allowlist, the exact read-only Autofix participant command `$DEV_ROOT/bin/skills/autofix show-work-cycle <id>`, `find`-mutation ask-rules, `additionalDirectories` for the machine's task root + `/tmp`, both PreToolUse hooks, statusline, skill overrides.
 
 ### Hooks (deterministic enforcement > prose rules)
 

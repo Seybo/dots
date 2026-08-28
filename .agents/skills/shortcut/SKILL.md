@@ -131,7 +131,7 @@ Minimum arguments:
 - one Shortcut story ID or story URL
 - optional markdown file path ending in `.md` or `.markdown`
 
-If the markdown path is omitted, find the task file automatically by story ID under `/Volumes/dev/_tasks/*/<story_id>-*/task.md`. Exactly one matching task folder must exist. When updating from a `task.md` that contains a `# Story details` section, use its `Name:` value as the Shortcut story name and strip that section before sending the description to Shortcut.
+If the markdown path is omitted, find the task file automatically by story ID under `$DEV_ROOT/_tasks/*/<story_id>-*/task.md`. Exactly one matching task folder must exist. When updating from a `task.md` that contains a `# Story details` section, use its `Name:` value as the Shortcut story name and strip that section before sending the description to Shortcut.
 
 In Pi, users may invoke this with plain language containing `update story`, `update stories`, `update this story`, or `update these stories`, for example:
 

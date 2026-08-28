@@ -3,7 +3,6 @@ import { join } from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-// Task: /Volumes/dev/_tasks/env/0030-transient-pi-manager-attention/task.md
 const MANAGER_MARKER = `[${"MM" + "_NTF"}]`;
 const QA_PROMPT = "Send an MM_NTF synthetic Manager decision now.";
 const WIDGET_ID = "manager-attention";
@@ -12,10 +11,11 @@ const ATTENTION_HELPER = join(homedir(), ".dots/no_stow/bin/tmux/agent-attention
 type WorkflowAttentionReason = "issue" | "squash" | "rebase" | "failure";
 
 function isWorkflowCommand(command: string): boolean {
-	return (
-		command.includes("/Volumes/dev/bin/skills/autofix ") ||
-		command.includes("/Volumes/dev/bin/skills/autoimplement ")
-	);
+	const devRoot = process.env.DEV_ROOT?.trim();
+	if (!devRoot) return false;
+
+	const skillsRoot = join(devRoot, "bin/skills");
+	return command.includes(`${skillsRoot}/autofix `) || command.includes(`${skillsRoot}/autoimplement `);
 }
 
 function workflowAttentionReason(output: string, is_error: boolean): WorkflowAttentionReason | undefined {

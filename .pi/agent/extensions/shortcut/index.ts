@@ -174,7 +174,10 @@ function parseUpdateStoryArgs(text: string): { storyId: string; descriptionPath:
 }
 
 function findTaskMarkdownForStory(storyId: string): string | undefined {
-    const tasksRoot = "/Volumes/dev/_tasks"
+    const devRoot = process.env.DEV_ROOT?.trim()
+    if (!devRoot) return undefined
+
+    const tasksRoot = join(devRoot, "_tasks")
     if (!existsSync(tasksRoot)) return undefined
 
     const matches: string[] = []

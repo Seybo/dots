@@ -1,5 +1,5 @@
 ---
-description: Generate a PR description from a task.md under /Volumes/dev/_tasks/shaka_gtm. Finds the task folder by id prefix and writes a Codex-review-friendly description with the repo's mandatory PR sections.
+description: Generate a PR description from a task.md under $DEV_ROOT/_tasks/shaka_gtm. Finds the task folder by id prefix and writes a Codex-review-friendly description with the repo's mandatory PR sections.
 ---
 
 # /pr-description-from-task
@@ -13,7 +13,7 @@ Generate a PR description from a GTM task file. The output is meant for a Codex 
 ## Invocation
 
 - `/pr-description-from-task` — infer `<task_id>` from the current gtm branch
-- `/pr-description-from-task <task_id>` — find `/Volumes/dev/_tasks/shaka_gtm/<task_id>*/task.md`
+- `/pr-description-from-task <task_id>` — find `$DEV_ROOT/_tasks/shaka_gtm/<task_id>*/task.md`
 
 Examples:
 
@@ -21,7 +21,7 @@ Examples:
 - `/pr-description-from-task 33419`
 - `/pr-description-from-task 33357`
 
-`task_id` must be a non-empty token. It is matched as the start of a task folder name under `/Volumes/dev/_tasks/shaka_gtm/` (the task root for the registered `shaka_gtm` project in `~/.ai/skills-shared/components/projects.yml`), the same prefix style used by `/workit`. When it is omitted, infer the Shortcut story ID from the current branch using the canonical `sc-<digits>` regex in `~/.ai/skills-shared/components/task-resolution.md` and use it as `<task_id>`.
+`task_id` must be a non-empty token. It is matched as the start of a task folder name under `$DEV_ROOT/_tasks/shaka_gtm/` (the task root for the registered `shaka_gtm` project in `~/.ai/skills-shared/components/projects.yml`), the same prefix style used by `/workit`. When it is omitted, infer the Shortcut story ID from the current branch using the canonical `sc-<digits>` regex in `~/.ai/skills-shared/components/task-resolution.md` and use it as `<task_id>`.
 
 ## Procedure
 
@@ -34,7 +34,7 @@ Examples:
 2. Resolve the task folder:
    - Search exactly:
      ```text
-     /Volumes/dev/_tasks/shaka_gtm/<task_id>*
+     $DEV_ROOT/_tasks/shaka_gtm/<task_id>*
      ```
    - Expected: exactly one directory.
    - If none, report no task folder found.
