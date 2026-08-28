@@ -1,0 +1,29 @@
+---
+name: my_health
+root: <%= @settings.fetch("workspace_root") %>
+startup_window: git
+enable_pane_titles: true
+pane_title_position: "off"
+
+windows:
+  - git:
+      panes:
+        - lg
+
+  - vim:
+      panes:
+        - v
+
+  - autowork:
+      layout: 083e,156x45,0,0{42x45,0,0,47,113x45,43,0[113x23,43,0,49,113x21,43,24,50]}
+      panes:
+        - agent-manager:
+        - agent-worker:
+        - agent-reviewer:
+
+  - misc:
+      root: <%= @settings.fetch("task_root") %>
+      layout: 9ad5,156x45,0,0{128x45,0,0,59,27x45,129,0,62}
+      panes:
+        - lg
+        -

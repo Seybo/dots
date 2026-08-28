@@ -1,0 +1,34 @@
+---
+name: base
+root: <%= ENV.fetch("STOW_DIR") %>
+startup_window: git
+
+windows:
+  - git:
+      panes:
+        - lg
+
+  - vim:
+      panes:
+        - v
+
+  - pi1:
+      panes:
+        -
+
+  - pi2:
+      panes:
+        -
+
+  - piweb:
+      layout: 74cf,156x46,0,0{75x46,0,0,88,80x46,76,0[80x23,76,0,70,80x22,76,24,98]}
+      panes:
+        -
+        -
+        -
+
+  - misc:
+      layout: 9ad5,156x45,0,0{128x45,0,0,59,27x45,129,0,62}
+      panes:
+        -
+        -
