@@ -76,6 +76,7 @@ bindkey '^Z' fancy-ctrl-z
 export MACHINE_NAME="squirrel"
 export DEV_ROOT="/Volumes/dev"
 export STOW_DIR="$HOME/.dots"
+export AUTOWORK_DB_PATH="$STOW_DIR/refs/dev-env/autowork/autowork.db"
 export PATH="$STOW_DIR/bin:$PATH"
 source "$STOW_DIR/no_stow/.zsh_aliases_public"
 source "$STOW_DIR/no_stow/bash_utils.sh"
