@@ -288,7 +288,7 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	pi.on("session_start", (_event, ctx) => {
-		const isInputLanguageEnabled = process.platform === "darwin" && ctx.mode === "tui";
+		const isInputLanguageEnabled = process.env.MACHINE_NAME === "squirrel" && ctx.mode === "tui";
 		ctx.ui.setEditorComponent((tui, theme, keybindings) => {
 			const editor = new VimEditor(
 				tui,

@@ -24,7 +24,7 @@ vim.g.maplocalleader = '\\'
 -- Oma loads this config from a pull-only checkout. Lazy rewrites its lockfile after
 -- installing plugins, so use a writable local copy while keeping the shared lock authoritative.
 local lockfile = vim.fn.stdpath('config') .. '/lazy-lock.json'
-if vim.env.NVIM_APPNAME == 'nvim-shared' then
+if vim.env.MACHINE_NAME == 'oma' then
   local local_lockfile = vim.fn.stdpath('state') .. '/lazy-lock.json'
   vim.fn.mkdir(vim.fn.fnamemodify(local_lockfile, ':h'), 'p')
   vim.fn.writefile(vim.fn.readfile(lockfile), local_lockfile)

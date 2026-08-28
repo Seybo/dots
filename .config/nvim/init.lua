@@ -1,7 +1,7 @@
 require('config.debugger')
 require('config.settings')
 
-if vim.uv.os_uname().sysname == 'Linux' then
+if vim.env.MACHINE_NAME == 'oma' then
   require('config.remote_clipboard').setup()
 end
 

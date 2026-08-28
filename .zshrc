@@ -73,6 +73,7 @@ zle -N fancy-ctrl-z fancy-ctrl-z
 bindkey '^Z' fancy-ctrl-z
 
 # stow
+export MACHINE_NAME="squirrel"
 export DEV_ROOT="/Volumes/dev"
 export STOW_DIR="$HOME/.dots"
 export PATH="$STOW_DIR/bin:$PATH"

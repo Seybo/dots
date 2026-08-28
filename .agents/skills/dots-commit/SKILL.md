@@ -21,9 +21,10 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
 
 ## Hard rules
 
-- Require `STOW_DIR`; stop if it is missing or not a Git repository.
+- Require `MACHINE_NAME` (`squirrel` or `oma`) and `STOW_DIR`; stop if either is missing, the machine name is unknown, or the path is not a Git repository.
+- Require `STOW_DIR=$HOME/.dots` on `squirrel` and `STOW_DIR=$HOME/.omadots` on `oma`; stop if they do not match.
 - Treat `$STOW_DIR` and `$STOW_DIR/refs/dev-env` as separate Git repositories. Never combine their paths in one commit.
-- When `STOW_DIR=$HOME/.omadots`, never mutate `$HOME/.dots`; it is a pull-only shared source.
+- When `MACHINE_NAME=oma`, never mutate `$HOME/.dots`; it is a pull-only shared source.
 - Prepare and present commit groups first; wait for explicit user approval before staging or committing.
 - Do not mutate git history, branches, tags, stashes, remotes, or commit state before approval.
 - After approval, stage and commit only the approved paths and groups in their stated repository.
@@ -73,7 +74,7 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
      ```
    - Read diffs for tracked changes. Use targeted `git -C <repo> diff -- <paths>` / `git -C <repo> diff --cached -- <paths>` commands when the full diff is large.
    - For untracked files, list the files first, then read only relevant text files. Do not dump large binaries or generated artifacts.
-   - Only when `STOW_DIR=$HOME/.dots`, check Claude settings drift. `~/.claude/settings.json` is deliberately not stow-linked because Claude Code rewrites it. Its ignored repo-local baseline is `.claude/settings.json`:
+   - Only when `MACHINE_NAME=squirrel`, check Claude settings drift. `~/.claude/settings.json` is deliberately not stow-linked because Claude Code rewrites it. Its ignored repo-local baseline is `.claude/settings.json`:
      ```bash
      diff "$HOME/.claude/settings.json" "$STOW_DIR/.claude/settings.json"
      ```
@@ -86,8 +87,8 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
 4. **Check repo fit**
    - Run `$STOW_DIR/bin/stow_check`. Stop on any conflict.
    - Treat `$STOW_DIR` as the machine's active dotfiles repository.
-   - When `STOW_DIR=$HOME/.dots`, shell/editor/terminal/tmux/zellij/Ghostty/Hammerspoon config, themes, local helper scripts, and shared agent skills/config belong there.
-   - When `STOW_DIR=$HOME/.omadots`, only Oma-specific wiring and config belong there; shared rules and skills belong in pull-only `$HOME/.dots`.
+   - When `MACHINE_NAME=squirrel`, shell/editor/terminal/tmux/zellij/Ghostty/Hammerspoon config, themes, local helper scripts, and shared agent skills/config belong there.
+   - When `MACHINE_NAME=oma`, only Oma-specific wiring and config belong there; shared rules and skills belong in pull-only `$HOME/.dots`.
    - Treat `refs/dev-env` as the development-environment reference repository. Documentation belongs there; executable configuration, credentials, and runtime state do not.
    - Flag changes as questionable if they look like:
      - secrets, credentials, auth/session files, raw provider responses, or private tokens
