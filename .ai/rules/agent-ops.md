@@ -8,6 +8,11 @@ Language- and project-neutral rules for all agents unless a project's local inst
 - Before moving, replacing, or deleting anything, identify state that version control cannot restore. If any exists, stop until it has a verified backup outside the affected paths.
 - Inspection must not create or mutate the thing being inspected. Verify existence first and use read-only modes.
 
+## Agent temporary files
+
+- Put agent-owned temporary files in `agents_tmp/` at the active repository root instead of the operating system's temporary directory.
+- Never stage or commit `agents_tmp/`.
+
 ## Git safety
 
 - Never mutate git history, branches, tags, stashes, remotes, or commit state without explicit user approval for that exact action. This includes `commit`, `commit --amend`, `reset`, `rebase`, `merge`, `cherry-pick`, `revert`, `switch`/`checkout` that changes branches, branch create/delete/rename, tag create/delete, stash create/apply/pop/drop, force-push, and remote changes.

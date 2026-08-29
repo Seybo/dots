@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
@@ -49,6 +49,7 @@ const call = (
 
 test("repository mode allows ordinary tools inside and outside the repository", () => {
 	withRepository((repository, outside) => {
+		const outsideHomePath = join(homedir(), "repo-permissions-outside", "file.txt");
 		assert.equal(call("repository", "read", { path: "tracked.txt" }, repository.root, repository).kind, "allow");
 		assert.equal(call("repository", "edit", { path: "tracked.txt" }, repository.root, repository).kind, "allow");
 		assert.equal(call("repository", "write", { path: "new.txt" }, repository.root, repository).kind, "allow");
@@ -56,15 +57,32 @@ test("repository mode allows ordinary tools inside and outside the repository", 
 			call("repository", "read", { path: join(outside, "outside.txt") }, repository.root, repository).kind,
 			"allow",
 		);
-		assert.equal(
-			call("repository", "edit", { path: join(outside, "outside.txt") }, repository.root, repository).kind,
-			"allow",
-		);
-		assert.equal(
-			call("repository", "write", { path: "outside-link/new.txt" }, repository.root, repository).kind,
-			"allow",
-		);
+		assert.equal(call("repository", "edit", { path: outsideHomePath }, repository.root, repository).kind, "allow");
+		assert.equal(call("repository", "write", { path: outsideHomePath }, repository.root, repository).kind, "allow");
 		assert.equal(call("repository", "custom", { payload: "work" }, repository.root, repository).kind, "allow");
+	});
+});
+
+test("repository modes redirect direct OS-temp mutations to agents_tmp", () => {
+	withRepository((repository) => {
+		for (const mode of ["repository", "unattended"] as const) {
+			for (const toolName of ["edit", "write"]) {
+				for (const path of new Set([join(tmpdir(), "agent-owned.tmp"), "/tmp/agent-owned.tmp"])) {
+					const decision = call(mode, toolName, { path }, repository.root, repository);
+					assert.equal(decision.kind, "block");
+					assert.match(decision.reason, /agents_tmp/);
+					assert.match(decision.reason, /never commit/i);
+				}
+			}
+		}
+
+		assert.equal(call("repository", "write", { path: "agents_tmp/file" }, repository.root, repository).kind, "allow");
+		assert.equal(call("repository", "read", { path: join(tmpdir(), "output.log") }, repository.root, repository).kind, "allow");
+		assert.equal(call("ask", "write", { path: join(tmpdir(), "output.log") }, repository.root, repository).kind, "ask");
+		assert.equal(
+			call("unrestricted", "write", { path: join(tmpdir(), "output.log") }, repository.root, repository).kind,
+			"allow",
+		);
 	});
 });
 

@@ -4,7 +4,10 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 
 export type PermissionMode = "repository" | "unattended" | "ask" | "unrestricted";
 
-export type PermissionDecision = { kind: "allow" } | { kind: "ask"; reason: string };
+export type PermissionDecision =
+	| { kind: "allow" }
+	| { kind: "ask"; reason: string }
+	| { kind: "block"; reason: string };
 
 export type RepositoryState = {
 	root: string;
@@ -178,6 +181,10 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 	}
 
 	if ((call.toolName === "edit" || call.toolName === "write") && call.repository && argValue) {
+		if (call.mode === "repository" || call.mode === "unattended") {
+			const tempDecision = decideOsTempMutation(call.toolName, argValue, call.cwd, call.repository);
+			if (tempDecision) return tempDecision;
+		}
 		const mutationDecision = decideDirectMutation(argValue, call.cwd, call.repository);
 		if (mutationDecision) return mutationDecision;
 	}
@@ -219,6 +226,26 @@ export function getSshDestination(command: string): string | undefined {
 	const destinations = segments.map(parseSshAccessSegment);
 	const destination = destinations[0];
 	return destination && destinations.every((candidate) => candidate === destination) ? destination : undefined;
+}
+
+function decideOsTempMutation(
+	toolName: string,
+	rawPath: string,
+	cwd: string,
+	repository: RepositoryState,
+): PermissionDecision | undefined {
+	const pathInfo = resolvePathInfo(rawPath, cwd);
+	if (!pathInfo || isInside(repository.root, pathInfo.canonical)) return undefined;
+
+	const isOsTemp = [tmpdir(), "/tmp"]
+		.map(canonicalPath)
+		.some((root) => root && isInside(root, pathInfo.canonical));
+	if (!isOsTemp) return undefined;
+
+	return {
+		kind: "block",
+		reason: `Direct ${toolName} targets in OS temporary directories are blocked. Use ${join(repository.root, "agents_tmp")} for agent-owned temporary files. Never commit agents_tmp.`,
+	};
 }
 
 function decideDirectMutation(

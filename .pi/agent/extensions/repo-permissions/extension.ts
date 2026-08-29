@@ -95,6 +95,7 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 		});
 
 		if (decision.kind === "allow") return;
+		if (decision.kind === "block") return { block: true, reason: decision.reason };
 		if (mode === "unattended") {
 			return {
 				block: true,

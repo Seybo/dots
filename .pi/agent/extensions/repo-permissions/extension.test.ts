@@ -161,6 +161,26 @@ test("Unattended mode blocks approval-required work without prompting", async ()
 	assert.equal(context.statuses.at(-1), "permissions: repo");
 });
 
+test("Repository mode redirects direct OS-temp mutations without prompting", async () => {
+	const root = process.cwd();
+	const harness = createHarness([gitResult(0, `${root}\n`), gitResult(0)]);
+	const context = createContext(root);
+
+	await harness.handlers.get("session_start")!({}, context);
+	const selectionCount = context.selections.length;
+	assert.deepEqual(
+		await harness.handlers.get("tool_call")!(
+			{ toolName: "write", input: { path: "/tmp/agent-owned.tmp" } },
+			context,
+		),
+		{
+			block: true,
+			reason: `Direct write targets in OS temporary directories are blocked. Use ${root}/agents_tmp for agent-owned temporary files. Never commit agents_tmp.`,
+		},
+	);
+	assert.equal(context.selections.length, selectionCount);
+});
+
 test("standard scalar allowed-tools rules are loaded from trusted local skills", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "repo-permission-skill-"));
 	const skillPath = join(directory, "SKILL.md");
