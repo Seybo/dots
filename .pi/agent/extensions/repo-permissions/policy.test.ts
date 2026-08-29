@@ -265,6 +265,7 @@ test("SSH grants allow one exact destination for the session", () => {
 				`scp ${destination}:/home/svin/remote /tmp/local`,
 				`sftp ${destination}`,
 				`scp /tmp/local ${destination}:/home/svin/remote && ssh ${destination} true`,
+				`scp "$STOW_DIR/.tmux.conf" ${destination}:/tmp/shared.conf && ssh ${destination} 'tmux source-file ~/tmp/shared.conf'`,
 			]) {
 				assert.equal(
 					call(mode, "bash", { command }, repository.root, repository, [], grants).kind,
@@ -278,6 +279,9 @@ test("SSH grants allow one exact destination for the session", () => {
 			"scp /tmp/local other@example.test:/tmp/remote",
 			`scp ${destination}:/tmp/source other@example.test:/tmp/remote`,
 			`scp -P 22 /tmp/local ${destination}:/tmp/remote`,
+			`scp $STOW_DIR/.tmux.conf ${destination}:/tmp/remote`,
+			`scp "$(git push origin main)" ${destination}:/tmp/remote`,
+			`scp /tmp/local "$HOST:/tmp/remote"`,
 			"sftp other@example.test",
 			`sftp -P 22 ${destination}`,
 		]) {
@@ -316,6 +320,10 @@ test("SSH grants allow one exact destination for the session", () => {
 		assert.equal(getSshDestination(`ssh ${destination} true && ssh ${destination} false`), destination);
 		assert.equal(
 			getSshDestination(`scp /tmp/local ${destination}:/home/svin/remote && ssh ${destination} true`),
+			destination,
+		);
+		assert.equal(
+			getSshDestination(`scp "$STOW_DIR/.tmux.conf" ${destination}:/tmp/shared.conf && ssh ${destination} true`),
 			destination,
 		);
 		assert.equal(getSshDestination(`ssh ${destination} true && rm tracked.txt`), undefined);

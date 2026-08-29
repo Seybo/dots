@@ -475,20 +475,32 @@ function isAllowedSshAccessSegment(segment: string, destinations: Set<string>): 
 }
 
 function parseSshAccessSegment(segment: string): string | undefined {
-	if (hasUnsafeShellSyntax(segment)) return undefined;
 	const tokens = tokenizeShellSegment(segment);
 	if (!tokens || tokens.length < 2) return undefined;
 
 	const command = basename(tokens[0]!);
+	if (command !== "scp" && hasUnsafeShellSyntax(segment)) return undefined;
 	if (command === "ssh") return simpleSshDestination(tokens[1]!);
 	if (command === "sftp") return scpDestination(tokens[1]!) ?? simpleSshDestination(tokens[1]!);
-	if (command !== "scp" || tokens.length < 3 || tokens.slice(1).some((token) => token.startsWith("-"))) {
+	if (
+		command !== "scp" ||
+		hasUnsafeScpSyntax(segment) ||
+		tokens.length < 3 ||
+		tokens.slice(1).some((token) => token.startsWith("-"))
+	) {
 		return undefined;
 	}
 
 	const destinations = tokens.slice(1).map(scpDestination).filter((value) => value !== undefined);
 	const destination = destinations[0];
 	return destination && destinations.every((value) => value === destination) ? destination : undefined;
+}
+
+function hasUnsafeScpSyntax(segment: string): boolean {
+	const sanitized = segment.replace(/"(?:\\.|[^"\\])*"/g, (quoted) =>
+		quoted.replace(/\$(?:[a-z_][a-z0-9_]*|\{[a-z_][a-z0-9_]*\})/gi, "VAR"),
+	);
+	return hasUnsafeShellSyntax(sanitized);
 }
 
 function simpleSshDestination(value: string): string | undefined {

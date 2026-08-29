@@ -103,6 +103,6 @@ Do not add skill rules for ordinary Repository-mode work; it is already allowed.
 - Unrestricted mode is session-only.
 - Repository mode allows ordinary outside task/workflow paths; it is not filesystem confinement.
 - Pi clipboard images named `pi-clipboard-<UUID>.png` are readable from the OS temporary directory in Repository and Ask modes.
-- SSH access through conservative `ssh`, `scp`, and `sftp` forms may be approved for one exact destination for the current session.
+- SSH access through conservative `ssh`, `scp`, and `sftp` forms may be approved for one exact destination for the current session. Quoted local `scp` paths may use simple environment variables.
 - High-impact commands prompt even when a trusted skill rule matches.
 - Unattended and non-interactive operations that require approval are blocked.
