@@ -8,6 +8,10 @@ alias lg='lazygit'
 alias v='nvim'
 alias vim='nvim'
 
+theme_ssh() {
+  ruby "$HOME/.dots/themes/theme_ssh.rb" "$@"
+}
+
 alias tksv='tmux kill-server'
 alias tkss='tmux kill-session -t'
 mux() {
