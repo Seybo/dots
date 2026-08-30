@@ -92,6 +92,8 @@ Do not report a scanner behavior change as complete unless the relevant spec was
 
 ## What it checks (MVP)
 - High-signal token patterns (AWS, GitHub, Slack, Stripe, Twilio, Google API, OpenAI/Anthropic/etc keys, Hugging Face, JWT-ish, age secret keys, PEM blocks)
+- Real-looking `user@IPv4` SSH destinations, excluding loopback and RFC documentation ranges
+- Bare Tailscale IPv4 CGNAT and Tailscale IPv6 addresses
 - Entropy heuristic for long random-looking strings (base58/64-ish) of length 32-128
 - Skips binaries and files >1MB
 

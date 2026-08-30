@@ -11,6 +11,19 @@ MAX_FILE_BYTES = 1_000_000
 ENTROPY_THRESHOLD = 4.2
 ENTROPY_MIN_LEN = 32
 ENTROPY_MAX_LEN = 128
+SSH_DESTINATION_IP_REGEX = %r{
+  \b[a-z0-9._-]+@
+  (?!(?:
+    0\.0\.0\.0|
+    127\.\d{1,3}\.\d{1,3}\.\d{1,3}|
+    192\.0\.2\.\d{1,3}|
+    198\.51\.100\.\d{1,3}|
+    203\.0\.113\.\d{1,3}
+  )\b)
+  (?:\d{1,3}\.){3}\d{1,3}\b
+}ix
+TAILSCALE_IPV4_REGEX = /\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\b/
+TAILSCALE_IPV6_REGEX = /\bfd7a:115c:a1e0:[0-9a-f:]*[0-9a-f]\b/i
 
 Rule = Struct.new(:name, :regex)
 Finding = Struct.new(:rule, :path, :line, :snippet)
@@ -35,7 +48,10 @@ RULES = [
   Rule.new('cloudflare', /cf_[A-Za-z0-9]{30,}/),
   Rule.new('jwt', /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/),
   Rule.new('age_secret_key', /AGE-SECRET-KEY-1[0-9A-Z]{58}/i),
-  Rule.new('pem_private_key', /-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----/)
+  Rule.new('pem_private_key', /-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----/),
+  Rule.new('ssh_destination_ip', SSH_DESTINATION_IP_REGEX),
+  Rule.new('tailscale_ipv4', TAILSCALE_IPV4_REGEX),
+  Rule.new('tailscale_ipv6', TAILSCALE_IPV6_REGEX)
 ].freeze
 
 CANDIDATE_TOKEN_REGEX = %r{[A-Za-z0-9+/_-]{#{ENTROPY_MIN_LEN},#{ENTROPY_MAX_LEN}}}

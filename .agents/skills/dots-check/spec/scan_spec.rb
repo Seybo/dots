@@ -137,6 +137,78 @@ class ScanSpec < Minitest::Test
     end
   end
 
+  def test_detects_real_ssh_destination_ip
+    with_repo do |dir|
+      destination = ["alice@", "8.8.", "8.8"].join
+      File.write(File.join(dir, "ssh.rb"), "DESTINATION = '#{destination}'\n")
+      system({"HOME" => dir}, "git", "add", "ssh.rb", chdir: dir)
+
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 1, status.exitstatus
+      assert_match(/ssh_destination_ip/, stdout)
+      assert_match(/<redacted>/, stdout)
+      refute_includes stdout, destination
+    end
+  end
+
+  def test_detects_bare_tailscale_ipv4_address
+    with_repo do |dir|
+      address = ["100.105.", "225.127"].join
+      File.write(File.join(dir, "host.rb"), "OMA_IP = '#{address}'\n")
+      system({"HOME" => dir}, "git", "add", "host.rb", chdir: dir)
+
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 1, status.exitstatus
+      assert_match(/tailscale_ipv4/, stdout)
+      assert_match(/<redacted>/, stdout)
+      refute_includes stdout, address
+    end
+  end
+
+  def test_detects_tailscale_ipv6_address
+    with_repo do |dir|
+      address = ["fd7a:115c:", "a1e0::1234:5678"].join
+      File.write(File.join(dir, "host.txt"), "HostName #{address}\n")
+      system({"HOME" => dir}, "git", "add", "host.txt", chdir: dir)
+
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 1, status.exitstatus
+      assert_match(/tailscale_ipv6/, stdout)
+      assert_match(/<redacted>/, stdout)
+      refute_includes stdout, address
+    end
+  end
+
+  def test_allows_ipv4_addresses_outside_tailscale_cgnat_range
+    with_repo do |dir|
+      File.write(File.join(dir, "hosts.txt"), "100.63.255.255\n100.128.0.1\n")
+      system({"HOME" => dir}, "git", "add", "hosts.txt", chdir: dir)
+
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 0, status.exitstatus
+      assert_match(/No findings/, stdout)
+      refute_match(/tailscale_ipv4/, stdout)
+    end
+  end
+
+  def test_allows_documentation_and_loopback_ssh_destination_ips
+    with_repo do |dir|
+      destinations = [
+        "dev@192.0.2.10",
+        "dev@198.51.100.10",
+        "dev@203.0.113.10",
+        "dev@127.0.0.1"
+      ]
+      File.write(File.join(dir, "ssh.txt"), destinations.join("\n"))
+      system({"HOME" => dir}, "git", "add", "ssh.txt", chdir: dir)
+
+      stdout, _stderr, status = run_scan(dir)
+      assert_equal 0, status.exitstatus
+      assert_match(/No findings/, stdout)
+      refute_match(/ssh_destination_ip/, stdout)
+    end
+  end
+
   def test_detects_aws_secret_assignment
     with_repo do |dir|
       secret = "A" * 40
