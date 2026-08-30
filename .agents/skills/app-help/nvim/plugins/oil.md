@@ -7,7 +7,7 @@
 
 ## Local configs
 
-- None
+- `/Users/inseybo/.dots/.config/nvim/lua/plugins/oil.lua`
 
 ## Official sources
 

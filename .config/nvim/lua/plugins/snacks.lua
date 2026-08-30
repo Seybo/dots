@@ -142,7 +142,7 @@ return {
         })
       end, mode = { 'n', 'v' }, desc = '[Snacks] Git blame' },
       {
-        '<leader>fo',
+        '<leader>fe',
         function()
           local file = vim.api.nvim_buf_get_name(0)
           -- Root Explorer at the file's repo instead of Neovim's unrelated cwd.
