@@ -42,7 +42,6 @@ const ASK_COMMANDS = new Set([
 	"mkfs",
 	"pkill",
 	"pacman",
-	"rmdir",
 	"rsync",
 	"security",
 	"service",
@@ -317,8 +316,11 @@ function guardedSegmentReason(
 			: "SSH access requires destination approval.";
 	}
 	if (ASK_COMMANDS.has(command)) return `${command} requires approval.`;
-	if (command === "rm") {
-		return guardedRmReason(segment, args, cwd, repository, hasChangedDirectory);
+	if (command === "rm" || command === "rmdir") {
+		if (command === "rmdir" && args.some(hasParentRemovalFlag)) {
+			return "rmdir parent removal requires approval.";
+		}
+		return guardedDeletionReason(command, segment, args, cwd, repository, hasChangedDirectory);
 	}
 	if (args.some((arg) => arg.startsWith("--force"))) return `${command} --force requires approval.`;
 	if (command === "find" && args.some(isMutatingFindArgument)) return "find mutation requires approval.";
@@ -331,20 +333,21 @@ function guardedSegmentReason(
 	return undefined;
 }
 
-function guardedRmReason(
+function guardedDeletionReason(
+	command: "rm" | "rmdir",
 	segment: string,
 	args: string[],
 	cwd: string,
 	repository: RepositoryState | undefined,
 	hasChangedDirectory: boolean,
 ): string | undefined {
-	if (!repository) return "rm targets require an active repository.";
+	if (!repository) return `${command} targets require an active repository.`;
 	if (hasChangedDirectory || hasUnsafeShellSyntax(segment)) {
-		return "rm targets cannot be resolved safely from this shell command.";
+		return `${command} targets cannot be resolved safely from this shell command.`;
 	}
 
-	const targets = rmTargets(args);
-	if (targets.length === 0) return "rm has no literal target to evaluate.";
+	const targets = deletionTargets(args);
+	if (targets.length === 0) return `${command} has no literal target to evaluate.`;
 
 	const canonicalCwd = canonicalPath(cwd);
 	if (!canonicalCwd) return "rm working directory cannot be resolved safely.";
@@ -358,31 +361,35 @@ function guardedRmReason(
 			!deletionPath ||
 			deletionPath === repository.root ||
 			!isInside(repository.root, deletionPath) ||
-			(rmMayDereferenceTarget(target) && !isInside(repository.root, targetInfo.canonical))
+			(deletionMayDereferenceTarget(target) && !isInside(repository.root, targetInfo.canonical))
 		) {
-			return `rm target ${target} resolves outside the repository or cannot be evaluated safely.`;
+			return `${command} target ${target} resolves outside the repository or cannot be evaluated safely.`;
 		}
 		if (isGitMetadata(repository.root, deletionPath)) {
-			return `rm target ${target} is Git metadata and requires approval.`;
+			return `${command} target ${target} is Git metadata and requires approval.`;
 		}
 		if (
 			[...repository.startupIgnoredPaths].some(
 				(ignoredPath) => ignoredPath === deletionPath || isInside(deletionPath, ignoredPath),
 			)
 		) {
-			return `rm target ${target} contains a file that was untracked and Git-ignored when Repository mode started.`;
+			return `${command} target ${target} contains a file that was untracked and Git-ignored when Repository mode started.`;
 		}
 	}
 	return undefined;
 }
 
-function rmTargets(args: string[]): string[] {
+function hasParentRemovalFlag(arg: string): boolean {
+	return arg === "--parents" || (arg.startsWith("-") && !arg.startsWith("--") && arg.slice(1).includes("p"));
+}
+
+function deletionTargets(args: string[]): string[] {
 	const separator = args.indexOf("--");
 	if (separator !== -1) return args.slice(separator + 1);
 	return args.filter((arg) => arg === "-" || !arg.startsWith("-"));
 }
 
-function rmMayDereferenceTarget(target: string): boolean {
+function deletionMayDereferenceTarget(target: string): boolean {
 	return target === "." || target === ".." || /\/$|\/\.{1,2}\/?$/.test(target);
 }
 

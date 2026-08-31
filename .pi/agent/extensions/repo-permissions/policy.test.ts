@@ -92,7 +92,9 @@ test("repository mode allows literal in-repository rm targets", () => {
 			"rm tracked.txt",
 			"rm -rf subdir",
 			"rm outside-link",
+			"rmdir empty-dir",
 			"git rm tracked.txt",
+			"find .agents/skills/example -maxdepth 2 -type f -print; rm .agents/skills/example/SKILL.md; rmdir .agents/skills/example",
 		]) {
 			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "allow", command);
 		}
@@ -113,6 +115,13 @@ test("repository mode asks for rm targets that are outside, dynamic, or speciall
 			"rm .env",
 			"rm .git/config",
 			"rm -rf .",
+			`rmdir ${outside}`,
+			"rmdir ../outside",
+			"rmdir \"$TARGET\"",
+			"rmdir -p nested/empty",
+			"rmdir -pv nested/empty",
+			"cd /tmp && rmdir empty",
+			"rmdir .",
 		]) {
 			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "ask", command);
 		}

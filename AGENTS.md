@@ -26,7 +26,7 @@
 - For permission prompts / allowlist changes, read `refs/dev-env/agent-permissions.md` or use the shared `agent-permissions` skill. Default: update both Claude Code and Pi permissions unless the user explicitly scopes to one.
 - For browser CPU spike investigations from this repo, use the exact approved wrapper commands: `/Users/inseybo/.dots/no_stow/bin/browser-spike-investigate brave` or `/Users/inseybo/.dots/no_stow/bin/browser-spike-investigate chrome`. Do not run ad-hoc `ps`/`sample`/`lsof`/`awk` investigation chains unless the wrapper is insufficient and the user approves.
 - Pi's Repository mode allows ordinary commands and tools by default but prompts for explicit high-impact operations. Unattended mode uses the same policy but blocks approval-required operations immediately. Prefer path-aware `read`, `edit`, and `write` when they express the work clearly and preserve startup ignored-file and Git-metadata checks.
-- Literal `rm` targets that resolve inside the repository are allowed. Dynamic or escaping targets require approval, and are blocked in Unattended mode.
+- Literal `rm` and plain `rmdir` targets that resolve inside the repository are allowed. Dynamic, escaping, and parent-removing `rmdir` targets require approval, and are blocked in Unattended mode.
 - `find ... -exec`, `find ... -delete`, `find ... -ok`, and `find ... -execdir` require approval. Prefer separate `find`, `ls`, `rg`, or shell-safe follow-up commands.
 
 ### Preferred command shapes

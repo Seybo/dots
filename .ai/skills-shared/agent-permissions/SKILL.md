@@ -50,9 +50,9 @@ Keep the ask list short. Add a command family only when it represents a concrete
 - destructive Git history, branch, stash, worktree, config, or remote operations
 - external mutations and package publishing
 
-Normal `git add`, `git rm`, and ordinary `git commit` remain allowed. Literal `rm` targets are allowed when their resolved deletion paths stay inside the repository.
+Normal `git add`, `git rm`, and ordinary `git commit` remain allowed. Literal `rm` and plain `rmdir` targets are allowed when their resolved deletion paths stay inside the repository. `rmdir -p` remains guarded.
 
-Direct `edit` and `write` calls still prompt for files that were untracked and Git-ignored when Repository mode started, and for Git metadata. In Repository and Unattended modes, direct mutations in OS temporary directories are blocked with guidance to use the repository's visible, never-commit `agents_tmp/` directory. Literal `rm` also prompts for startup-ignored targets, repository escapes, and dynamic targets that cannot be resolved safely. Skill rules cannot bypass these checks or the high-impact Bash ask list.
+Direct `edit` and `write` calls still prompt for files that were untracked and Git-ignored when Repository mode started, and for Git metadata. In Repository and Unattended modes, direct mutations in OS temporary directories are blocked with guidance to use the repository's visible, never-commit `agents_tmp/` directory. Literal deletion commands also prompt for startup-ignored targets, repository escapes, and dynamic targets that cannot be resolved safely. Skill rules cannot bypass these checks or the high-impact Bash ask list.
 
 Repository mode is not a sandbox. Unknown executables are allowed and can hide operations that the visible command matcher cannot inspect. Use Ask mode for operation-by-operation approval and an OS sandbox for untrusted code.
 
