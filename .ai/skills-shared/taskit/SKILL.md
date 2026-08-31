@@ -57,7 +57,7 @@ Examples:
 /taskit Switch to tmuxinator    # project inferred from cwd when possible
 ```
 
-Do not auto-use this skill from a general task-management request. Wait for the explicit slash command. An exact bare `taskit` reply to an active Grillme or Draftit continuation offer is equivalent to an explicit invocation for the preserved draft.
+Do not auto-use this skill from a general task-management request. Wait for the explicit slash command, a shown exact bare continuation reply, or an authorized automatic handoff from Grillme or Draftit. In an active menu, the shown number is equivalent to its keyword for the preserved draft.
 
 ## What it does
 
@@ -66,6 +66,8 @@ In manual mode, create a local task folder inside the selected project and creat
 Shortcut is used only in explicit Shortcut mode for projects whose registry entry has `task_provider: shortcut`: a numeric story ID, an inferred branch story ID, or an existing `task.md` whose first `# Story details` section has `Name:` and either an existing `Epic:` or an epic supplied through Taskit's conversion continuation. Projects with `task_provider: local` never call Shortcut; all selectors and task files remain local/manual.
 
 For `draftNN` and task markdown path mode, inspect the existing file. In a `task_provider: shortcut` project, a file with `Name:` and resolved epic state creates a Shortcut story and renames the folder to `<story_id>-<slug>`; an unambiguous request for local conversion at the epic continuation keeps local conversion available. A `task_provider: local` project never creates a Shortcut story and is renamed to a sequential local task folder such as `0004-<slug>`.
+
+An automatic-handoff authorization lasts only while Taskit proceeds without user input. Before any prompt or failure stop, end the authorization. If Taskit later resumes from that prompt, finish with the normal continuation menu rather than resuming automatic mode.
 
 ## Project and branch resolution
 
@@ -283,15 +285,22 @@ edit and rerun Taskit when their reply itself clearly resolves the decision.
    - Read and follow [`../components/task-branch-config.md`](../components/task-branch-config.md) completely using the resolved Task folder, selected workspace, generated branch name, and optional exact `base_ref`.
    - Apply only its **Shortcut Task branch setup** rules. This step does not record local-provider Git metadata.
 
-9. **Offer Workit continuation:**
+9. **Continue to Workit:**
    - run this step only after all applicable Taskit work completes successfully
    - derive the numeric task ID from the final task folder prefix
    - preserve the normalized project and task ID; when an ordinal workspace was selected, preserve its session alias (for example, project `shaka_gtm` with workspace `1st` becomes `shaka_gtm1`)
-   - offer two exact replies; do not require the user to copy or retype a slash command:
-     - `workit` — begin with normal step-boundary confirmations
-     - `workit non-stop` — begin in Workit's `non_stop_mode`
-   - if the next user message is exactly `workit`, treat it as an explicit Workit invocation; read and follow `../workit/SKILL.md` immediately as `/workit <resolved-project-or-session> <task_id>`
-   - if the next user message is exactly `workit non-stop`, treat it as `/workit <resolved-project-or-session> <task_id> non-stop` and follow Workit immediately
+   - with an active automatic-handoff authorization, treat the user's original exact bare `go-non-stop` or `2` choice as an explicit Workit invocation, then read and follow `../workit/SKILL.md` immediately as `/workit <resolved-project-or-session> <task_id> non-stop`; do not display an intermediate menu
+   - otherwise show:
+
+     ```text
+     What's next?
+
+     - workit / 1
+     - workit non-stop / 2
+     ```
+
+   - if the next user message is exactly `workit` or `1`, treat it as an explicit Workit invocation; read and follow `../workit/SKILL.md` immediately as `/workit <resolved-project-or-session> <task_id>`
+   - if the next user message is exactly `workit non-stop` or `2`, treat it as `/workit <resolved-project-or-session> <task_id> non-stop` and follow Workit immediately
    - do not invoke Workit for any other reply, after failed or incomplete Taskit work, or before the user chooses
 
 ## Task markdown path mode
@@ -472,6 +481,6 @@ the duplicate-title cleanup for Shortcut conversion applies.
 - Do not add extra files except `config.json` when this Shortcut branch-setup step owns its creation
 - Do not add extra sections to `task.md`
 - For implementation-oriented tasks, later planning should use TDD where it makes sense, with specs focused on edge cases, boundaries, regressions, and acceptance criteria rather than only happy paths
-- Do not auto-use this skill without an explicit `/taskit` command or an exact bare `taskit` reply to an active Grillme or Draftit continuation offer
+- Do not auto-use this skill without an explicit `/taskit` command, a shown exact bare continuation reply, or an authorized automatic handoff from Grillme or Draftit
 - Step 8 branch setup applies only to registered ordinal-workspace projects with `task_provider: shortcut` in Shortcut mode. `task_provider: local` projects and Manual tasks do not touch git automatically.
 - Feature support is optional and env-only; unfeatured Taskit behavior stays unchanged.

@@ -52,14 +52,15 @@ pair. The value identifies a Feature within the inferred project's Feature
 root. Reject a missing value, a duplicate pair, or any other option-style
 argument.
 
-An exact bare `draftit` reply to Grillme's active continuation offer may use the
-project and Feature preserved by Grillme. Explicit `--feature_id` and Grillme
-Feature state are mutually exclusive. Never infer an active Feature from older
-conversation or durable state.
+An exact bare `draftit` or `1` reply to Grillme's active continuation offer may
+use the project and Feature preserved by Grillme. An exact bare `go-non-stop` or
+`2` reply may supply the same context with an automatic-handoff authorization.
+Explicit `--feature_id` and Grillme Feature state are mutually exclusive. Never
+infer an active Feature from older conversation or durable state.
 
 Do not auto-use this skill from a general drafting request. Wait for the explicit
-slash command or an exact bare `draftit` reply to Grillme's active continuation
-offer.
+slash command, a shown exact bare continuation reply, or Grillme's authorized
+automatic handoff.
 
 ## What it does
 
@@ -145,18 +146,33 @@ copying another slash command.
    - for a featured draft, append `- [draftNN](../draftNN/task.md)` to the ordered Feature inventory only after `task.md` exists
    - re-read the new `task.md` and Feature file and verify their links agree
 
-8. **Report and offer continuation:**
+8. **Report and continue:**
    - show the draft name, draft folder, and `task.md` path; show the Feature path when present
    - preserve the resolved project, `draftNN`, and full `task.md` path for the next turn
    - inspect the final `# Deferred decisions` section when present; if it contains any question, remind the user that Taskit will pause before conversion so they can either approve preserving the unresolved decisions or answer them directly
-   - when invoked from Grillme's continuation, offer only `taskit` and tell the user to reply with exact bare `taskit`
-   - otherwise offer both next steps and tell the user to reply with exactly one bare keyword:
-     - `grillme` to grill the new `task.md`
-     - `taskit` to convert `<project> draftNN`
-   - if the next user message is exactly `grillme`, treat it as an explicit Grillme invocation; read and follow `../grillme/SKILL.md` immediately with the full `task.md` path as its authoritative source
-   - if the next user message is exactly `taskit`, treat it as an explicit Taskit invocation; read and follow `../taskit/SKILL.md` immediately as `/taskit <project> draftNN`
+   - after successful creation through Grillme's automatic handoff, read and follow `../taskit/SKILL.md` immediately as `/taskit <project> draftNN`, pass the automatic-handoff authorization, and do not display an intermediate menu
+   - after successful creation through Grillme's guided continuation, show:
+
+     ```text
+     What's next?
+
+     - taskit / 1
+     ```
+
+   - after successful standalone creation, show:
+
+     ```text
+     What's next?
+
+     - grillme / 1
+     - taskit / 2
+     ```
+
+   - in the active standalone menu, treat exact bare `grillme` or `1` as an explicit Grillme invocation; read and follow `../grillme/SKILL.md` immediately with the full `task.md` path as its authoritative source
+   - treat exact bare `taskit`, `1` from the guided menu, or `2` from the standalone menu as an explicit Taskit invocation; read and follow `../taskit/SKILL.md` immediately as `/taskit <project> draftNN`
+   - if automatic draft creation fails or needs user input, end the automatic-handoff authorization and follow normal Draftit behavior; do not resume it after a pause
    - do not invoke another skill for any other reply, after failed or incomplete draft creation, or before the user chooses
-   - continuation replies must contain only the exact bare keyword; optional arguments are not supported
+   - continuation replies must contain only an exact bare choice from the active menu; optional arguments are not supported
 
 ## Important Notes
 
@@ -164,7 +180,7 @@ copying another slash command.
 - Draftit always derives the slug from context. Rename a draft ad hoc later if its generated name needs correction.
 - Do not register projects automatically.
 - Do not add extra files.
-- Do not auto-use this skill without an explicit `/draftit` command or an exact bare `draftit` reply to Grillme's active continuation offer.
+- Do not auto-use this skill without an explicit `/draftit` command, a shown exact bare continuation reply, or Grillme's authorized automatic handoff.
 
 ## Final principles check
 
