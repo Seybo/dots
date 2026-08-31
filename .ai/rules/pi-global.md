@@ -234,7 +234,7 @@ When the meaning is clear, act on them without asking for clarification.
 - `00imp` — Implement the solution using `.ai/rules/development-principles.md`.
   Prefer removing complexity and simplifying existing logic. Avoid ad hoc conditions and special-case handling.
 
-- `00osq` — Objections? Suggestions? Questions?
+- `00osq` — State any objections, suggestions, or questions or confirm all clear and correct.
 
 - `00rtfm` — Read `.ai/rules/development-principles.md` and update the solution to follow it.
   Report the list of updates.
