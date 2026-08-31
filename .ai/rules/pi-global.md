@@ -231,6 +231,11 @@ When the meaning is clear, act on them without asking for clarification.
 - `00gf` — Give feedback on the referenced idea or text.
   Do not make changes.
 
+- `00imp` — Implement the solution using `.ai/rules/development-principles.md`.
+  Prefer removing complexity and simplifying existing logic. Avoid ad hoc conditions and special-case handling.
+
+- `00osq` — Objections? Suggestions? Questions?
+
 - `00rtfm` — Read `.ai/rules/development-principles.md` and update the solution to follow it.
   Report the list of updates.
 
