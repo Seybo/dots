@@ -48,7 +48,6 @@ const ASK_COMMANDS = new Set([
 	"shred",
 	"su",
 	"sudo",
-	"systemctl",
 	"truncate",
 	"unlink",
 	"wipefs",
@@ -84,6 +83,44 @@ const GUARDED_GIT_COMMANDS = new Set([
 	"revert",
 	"switch",
 	"update-ref",
+]);
+const READ_ONLY_SYSTEMCTL_COMMANDS = new Set([
+	"cat",
+	"get-default",
+	"help",
+	"is-active",
+	"is-enabled",
+	"is-failed",
+	"is-system-running",
+	"list-automounts",
+	"list-dependencies",
+	"list-jobs",
+	"list-machines",
+	"list-paths",
+	"list-sockets",
+	"list-timers",
+	"list-unit-files",
+	"list-units",
+	"show",
+	"show-environment",
+	"status",
+]);
+const SYSTEMCTL_OPTIONS_WITH_VALUE = new Set([
+	"-H",
+	"-M",
+	"-n",
+	"-o",
+	"-p",
+	"-t",
+	"--host",
+	"--image",
+	"--lines",
+	"--machine",
+	"--output",
+	"--property",
+	"--root",
+	"--state",
+	"--type",
 ]);
 const GUARDED_TMUX_COMMANDS = new Set([
 	"break-pane",
@@ -315,6 +352,9 @@ function guardedSegmentReason(
 			? undefined
 			: "SSH access requires destination approval.";
 	}
+	if (command === "systemctl") {
+		return isReadOnlySystemctl(args) ? undefined : "This systemctl operation requires approval.";
+	}
 	if (ASK_COMMANDS.has(command)) return `${command} requires approval.`;
 	if (command === "rm" || command === "rmdir") {
 		if (command === "rmdir" && args.some(hasParentRemovalFlag)) {
@@ -398,6 +438,19 @@ function getCommandTokens(segment: string): string[] | undefined {
 	if (!tokens || tokens.length === 0) return undefined;
 	const commandIndex = tokens.findIndex((token) => !/^[a-z_][a-z0-9_]*=/i.test(token));
 	return commandIndex === -1 ? undefined : tokens.slice(commandIndex);
+}
+
+function isReadOnlySystemctl(args: string[]): boolean {
+	for (let index = 0; index < args.length; index++) {
+		const arg = args[index]!;
+		if (SYSTEMCTL_OPTIONS_WITH_VALUE.has(arg)) {
+			index++;
+			continue;
+		}
+		if (arg.startsWith("-")) continue;
+		return READ_ONLY_SYSTEMCTL_COMMANDS.has(arg);
+	}
+	return true;
 }
 
 function isMutatingFindArgument(arg: string): boolean {

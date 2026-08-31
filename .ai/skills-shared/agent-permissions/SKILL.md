@@ -39,7 +39,7 @@ Mode choices and approvals never persist.
 
 ## Pi policy
 
-Repository mode is default-allow so normal skills, interpreters, tests, helpers, task paths, and custom tools do not require per-skill exceptions.
+Repository mode is default-allow so normal skills, interpreters, tests, helpers, task paths, custom tools, and read-only `systemctl` queries do not require per-skill exceptions.
 
 Keep the ask list short. Add a command family only when it represents a concrete, high-impact operation in this environment, such as:
 

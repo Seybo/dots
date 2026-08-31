@@ -207,6 +207,11 @@ test("repository mode allows normal skill and development commands", () => {
 			"rg TODO > result.txt",
 			"rg $(cat query) .",
 			"head {../outside/file,tracked.txt}",
+			"systemctl --user --failed --no-legend",
+			"systemctl --user status example.service",
+			"systemctl show example.service --property ActiveState",
+			"systemctl is-active example.service",
+			"systemctl list-units --type service --state failed",
 		]) {
 			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "allow", command);
 		}
@@ -230,6 +235,12 @@ test("repository mode asks for high-impact command families", () => {
 			"shred tracked.txt",
 			"kill 123",
 			"pkill Pi",
+			"systemctl --user start example.service",
+			"systemctl --user restart example.service",
+			"systemctl --user enable --now example.service",
+			"systemctl --user daemon-reload",
+			"systemctl --user set-environment TOKEN=value",
+			"systemctl frobnicate example.service",
 			"tmux kill-session -t work",
 			"tmux respawn-pane -k -t %1",
 			"curl -X POST https://example.test",
