@@ -124,16 +124,16 @@ Resolve the selector exactly like any other Task identifier: require one
 matching Task folder and its `task.md`; never guess from the branch name or from
 the newest Task.
 
-## Optional env Features
+## Optional Features
 
-A Feature groups related `env` drafts and Tasks while keeping their folders flat.
-Features are optional and initially supported only for the registered `env`
-project. Existing and simple drafts and Tasks remain unfeatured.
+A Feature groups related drafts and Tasks within one registered project while
+keeping their folders flat. Features are optional; existing and simple drafts
+and Tasks remain unfeatured.
 
 Feature files live at:
 
 ```text
-$DEV_ROOT/_tasks/env/features/<feature-slug>.md
+$DEV_ROOT/_tasks/<project>/features/<feature-slug>.md
 ```
 
 `<feature-slug>` follows Draftit's slug rules and matches
@@ -145,7 +145,7 @@ Feature: [<feature-slug>](../features/<feature-slug>.md)
 ```
 
 The relative path is stable because draft and numbered Task folders remain
-direct children of `$DEV_ROOT/_tasks/env/`. Never nest those folders below
+direct children of `$DEV_ROOT/_tasks/<project>/`. Never nest those folders below
 `features/`.
 
 A Feature file contains its stable shared brief and this final first-level

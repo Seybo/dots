@@ -2,8 +2,8 @@
 name: draftit
 description: >-
   Create the next draftNN folder for the current or preserved task project from
-  conversation context, deriving a short task slug automatically. Grillme may
-  supply optional env Feature membership through its handoff.
+  conversation context, deriving a short task slug automatically. An explicit
+  feature ID or Grillme handoff may supply optional Feature membership.
   Command-only skill. In Pi, invoke via /skill:draftit; /draftit is also
   accepted where that alias is exposed.
 disable-model-invocation: true
@@ -25,6 +25,7 @@ This is a command-only skill.
 /skill:draftit help
 /draftit help
 /draftit <context-reference-or-text>
+/draftit --feature_id <feature-slug> [context-reference-or-text]
 ```
 
 Examples:
@@ -33,6 +34,7 @@ Examples:
 /draftit
 /draftit the above plan
 /draftit add CSV export for the current report
+/draftit --feature_id user-login add password reset
 ```
 
 A direct invocation with no context argument infers the task context from the
@@ -42,13 +44,17 @@ searching further back.
 
 A direct invocation infers the project only from the current registered
 checkout. If that state is unavailable, stop and tell the user to invoke
-Draftit from the intended project's checkout. Do not accept a project, Feature,
-epic, name, or slug argument.
+Draftit from the intended project's checkout. Do not accept a project, epic,
+name, or slug argument.
+
+A direct invocation may begin with exactly one `--feature_id <feature-slug>`
+pair. The value identifies a Feature within the inferred project's Feature
+root. Reject a missing value, a duplicate pair, or any other option-style
+argument.
 
 An exact bare `draftit` reply to Grillme's active continuation offer may use the
-project preserved by Grillme. When Grillme's authoritative source is an `env`
-Feature file, its handoff also supplies that Feature membership. This explicit
-handoff is the only Feature source; never infer an active Feature from older
+project and Feature preserved by Grillme. Explicit `--feature_id` and Grillme
+Feature state are mutually exclusive. Never infer an active Feature from older
 conversation or durable state.
 
 Do not auto-use this skill from a general drafting request. Wait for the explicit
@@ -63,27 +69,29 @@ Create the next available `draftNN` folder under:
 $DEV_ROOT/_tasks/<project>/
 ```
 
-Then write `task.md` from the requested context. When an authorized handoff
-supplies Feature membership, write the Feature reference first and append the
-draft to that Feature's ordered inventory. After standalone creation, let the
-user choose whether to grill or convert that draft without copying another slash
-command.
+Then write `task.md` from the requested context. When an explicit feature ID or
+authorized handoff supplies Feature membership, write the Feature reference
+first and append the draft to that Feature's ordered inventory. After standalone
+creation, let the user choose whether to grill or convert that draft without
+copying another slash command.
 
 ## Instructions
 
 1. **Parse and validate the invocation:**
    - if the only argument is `help`, show this help text and stop
+   - for a direct invocation, detect and remove one optional leading `--feature_id <feature-slug>` pair before resolving context; reject a missing value, duplicate pair, or any other option-style argument
    - when no context argument remains, infer context from the immediately preceding coherent discussion; if it does not describe a useful task, show the invocation forms and ask for context
-   - reject project, Feature, epic, name, slug, and other option-style arguments; Draftit derives identity and receives routing state only from the current checkout or an authorized handoff
+   - reject project, epic, name, and slug arguments; Draftit derives the project from the current checkout or an authorized handoff
    - for a direct slash command, resolve the project from the current registered checkout using [`task-resolution.md`](../components/task-resolution.md); stop when it cannot be inferred
-   - for a Grillme handoff, use its preserved project when available; use its Feature only when the authoritative source is `$DEV_ROOT/_tasks/env/features/<feature-slug>.md`
+   - for a Grillme handoff, use its preserved project when available; use its Feature only when the authoritative source is `$DEV_ROOT/_tasks/<project>/features/<feature-slug>.md`
+   - reject an explicit feature ID when Grillme already supplied Feature state
    - do not inspect Pi session logs, prompt templates, other task directories, Git history, older conversation, or persisted state to infer missing routing context
 
 2. **Resolve the project and optional Feature:**
    - read the project from `~/.ai/skills-shared/components/projects.yml`; if it is not registered, stop and tell the user to add it to the registry
    - if its task root does not exist, create `$DEV_ROOT/_tasks/<project>/`
-   - without Feature state from Grillme, create an unfeatured draft
-   - with Feature state, require the project is exactly `env`, validate the slug with `^[a-z][a-z0-9-]*$`, and resolve `$DEV_ROOT/_tasks/env/features/<feature-slug>.md`
+   - without an explicit feature ID or Feature state from Grillme, create an unfeatured draft
+   - with either Feature source, validate the slug with `^[a-z][a-z0-9-]*$` and resolve `$DEV_ROOT/_tasks/<project>/features/<feature-slug>.md`
    - the Feature file must exist; read it completely and require its final first-level section to be `# Drafts and tasks` before creating the draft
 
 3. **Resolve context and derive the slug:**
@@ -116,7 +124,7 @@ command.
      {draft content}
      ```
    - Draftit never writes `Epic:`; Taskit collects Shortcut epic state during conversion when needed
-   - when an authorized handoff supplied Feature membership, prepend the exact Feature reference and one blank line:
+   - when an explicit feature ID or authorized handoff supplied Feature membership, prepend the exact Feature reference and one blank line:
      ```md
      Feature: [<feature-slug>](../features/<feature-slug>.md)
 

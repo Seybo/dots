@@ -84,7 +84,7 @@ Read that file whenever any of these must be inferred. In short:
 `taskit` only creates task folders under `$DEV_ROOT/_tasks/<project>/`; it never
 creates project roots or code checkouts.
 
-## Optional env Feature membership
+## Optional Feature membership
 
 For Draft reference and Task markdown path modes, recognize Feature membership
 only when `task.md` starts with this exact line:
@@ -95,8 +95,9 @@ Feature: [<feature-slug>](../features/<feature-slug>.md)
 
 Follow the Feature contract in `../components/task-resolution.md`:
 
-- Feature membership is valid only for project `env`; validate the slug and
-  require the linked `$DEV_ROOT/_tasks/env/features/<feature-slug>.md`
+- validate the slug and require the linked
+  `$DEV_ROOT/_tasks/<project>/features/<feature-slug>.md` within the selected
+  registered project
 - the Task reference is authoritative; do not scan Feature files to infer
   membership
 - before mutation, require the Feature's final `# Drafts and tasks` section to

@@ -1,8 +1,8 @@
 ---
 name: featureit
 description: >-
-  Research a user-provided env Feature idea, create its durable Feature file,
-  then hand that Feature to Grillme for incremental development into drafts.
+  Research a user-provided Feature idea for the current registered project,
+  create its durable Feature file, then hand it to Grillme or Draftit.
   Command-only skill. In Pi, invoke via /skill:featureit; /featureit is also
   accepted where that alias is exposed.
 disable-model-invocation: true
@@ -12,7 +12,7 @@ disable-model-invocation: true
 
 Follow `~/.ai/rules/development-principles.md` throughout this workflow.
 
-This is a command-only skill for the registered `env` project.
+This is a command-only skill for the current registered project.
 
 ## Invocation
 
@@ -29,7 +29,9 @@ Example:
 
 Require a non-empty natural-language Feature idea. Reject option-style
 arguments and project, path, name, slug, or mode options. Featureit derives the
-Feature identity and always uses project `env`.
+Feature identity and resolves the project from the current registered checkout
+using [`task-resolution.md`](../components/task-resolution.md). Stop when the
+project cannot be inferred.
 
 Do not auto-use this skill from a general feature request. Invoke it only through
 the slash command.
@@ -38,9 +40,9 @@ the slash command.
 
 Investigate the Feature idea, then create one Feature file containing the durable
 research and shared context for incremental development. Featureit does not grill
-the research, propose a split, or create drafts. After creation, it offers
-Grillme to settle one capability; Draftit can then create one Feature-linked
-draft.
+the research, propose a split, or create drafts. After creation, the user may
+run Draftit with `--feature_id <feature-slug>` or use Grillme to settle one
+capability before creating a Feature-linked draft.
 
 Read and follow [`task-resolution.md`](../components/task-resolution.md) for the
 Feature path, reference, inventory, membership, and precedence contract.
@@ -103,10 +105,11 @@ Feature path, reference, inventory, membership, and precedence contract.
    - do not accept a manual name or slug override
 
 2. **Resolve the target:**
-   - use the fixed Feature root `$DEV_ROOT/_tasks/env/features/`
+   - use the selected project's Feature root
+     `$DEV_ROOT/_tasks/<project>/features/`
    - create that directory when missing
    - resolve the target as
-     `$DEV_ROOT/_tasks/env/features/<feature-slug>.md`
+     `$DEV_ROOT/_tasks/<project>/features/<feature-slug>.md`
    - the target Feature file must not already exist; stop rather than overwrite,
      merge, rename, or choose another slug
 
@@ -132,12 +135,14 @@ Feature path, reference, inventory, membership, and precedence contract.
    - re-read the Feature file
    - verify it preserves the complete research summary and ends with
      `# Drafts and tasks`
-   - show the Feature slug and full file path
+   - show the project, Feature slug, and full file path
    - show a concise `Research performed` list using the same four categories from
      the Feature file, including explicit `Not performed` entries
-   - preserve the path and slug for the continuation below
+   - preserve the project, path, and slug for the continuation below
+   - show `/draftit --feature_id <feature-slug> <task context>` as the direct way
+     to create a linked draft in the current project
    - tell the user to reply with exact bare `grillme` to develop one capability
-     from the Feature
+     from the Feature before drafting it
 
 ## Grillme continuation
 
@@ -148,7 +153,7 @@ path. Any other reply ends the continuation.
 
 ## Boundaries
 
-- Featureit creates Features only for `env`.
+- Featureit creates Features only for the current registered project.
 - Feature files are local files; do not create drafts, Tasks, Shortcut stories,
   branches, commits, databases, persisted workflow state, or session artifacts.
 - Featureit is create-only. Do not reopen, resume, split, overwrite, or add work

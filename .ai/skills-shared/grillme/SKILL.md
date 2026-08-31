@@ -25,9 +25,9 @@ After grilling completes successfully and the final summary is ready:
    project and draft path, and tell the user to reply with exact bare `taskit`.
    For any other existing non-Feature file, report the update and stop.
 2. **Feature file:** Keep the Feature unchanged and offer `draftit` to create one
-   Feature-linked draft from the settled capability. Preserve project `env`, the
-   validated Feature slug, and the final summary. Tell the user to reply with
-   exact bare `draftit`.
+   Feature-linked draft from the settled capability. Preserve the registered
+   project resolved from the Feature path, the validated Feature slug, and the
+   final summary. Tell the user to reply with exact bare `draftit`.
 3. **Conversation or pasted text:** Offer `draftit` to create one draft from the
    settled result. Preserve the final summary and any project already resolved
    from the current workflow. Tell the user to reply with exact bare `draftit`.
