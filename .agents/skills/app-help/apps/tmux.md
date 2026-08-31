@@ -21,7 +21,7 @@
 
 ## Local gotchas
 
-- Interactive SSH logins auto-attach/create `base` via `.zshrc`; Termius can reach every open session with `Ctrl-b s`.
+- Squirrel interactive SSH logins auto-attach/create `base` via `.zshrc`. Oma's `~/.omadots/.bashrc` delegates to `~/.dots/no_stow/bin/tmux/switch-session`; it attaches an existing `base` or starts the shared tmuxinator `base.yml` when missing. Termius can reach every open session with `Ctrl-b s`.
 - Local tmux keeps the default `Ctrl-b` prefix; Ghostty `Cmd-p` enters local pane mode, where `n` splits right and `N` splits down.
 - Local tmux theme loading expects `~/.dots/themes/active/tmux.conf` when the active theme provides tmux styling; otherwise tmux keeps its base styling.
 - With local `allow-set-title off`, tmux prevents programs such as Pi and Claude from overwriting tmuxinator `select-pane -T` pane titles after startup.
