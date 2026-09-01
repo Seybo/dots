@@ -21,7 +21,9 @@ Typical input:
 - Keep a small shared app registry in `apps/`
 - Keep Oma-authored app additions in its writable pending registry until Squirrel promotes them
 - Keep a small Neovim plugin registry in `nvim/plugins/`
-- Use registry files primarily as source registries, with short high-signal local gotchas when discovered during work
+- Use registry files primarily as source registries
+- Add a gotcha only when it captures a hard-won issue that was genuinely difficult to solve and is likely to recur
+- Never add project-specific names, commands, layouts, or paths to the public app registry
 - Never use registry files as snapshots of volatile runtime config or current app state
 - If an app is unknown, discover sources and add it to the registry owned by the current machine before answering
 - If a Neovim plugin is unknown, discover sources and add `nvim/plugins/<plugin>.md` on Squirrel before answering
@@ -69,7 +71,7 @@ If the input is ambiguous or missing the app name, ask one short clarifying ques
    - then consult the actual docs/configs and answer
 7. Answer in a short form.
 8. Include the source used.
-9. Before finishing, consider whether the current task revealed a useful gotcha, local convention, non-obvious interaction, or repeated pitfall. On Squirrel, add it to the related shared registry file. On Oma, add only the new terminal-app information to the pending file without copying shared content. Keep the shared Neovim plugin registry read-only on Oma.
+9. Before finishing, update a registry only when the task resolved a hard-won, non-obvious issue that was genuinely difficult to solve and is likely to recur. Routine lookups, obvious config facts, local conventions, and project-specific details do not qualify. On Squirrel, add a qualifying note to the related shared registry file. On Oma, add only the qualifying new terminal-app information to the pending file without copying shared content. Keep the shared Neovim plugin registry read-only on Oma.
 
 ## Promote Oma app knowledge
 
@@ -151,7 +153,7 @@ If discovery is too weak, do not create a low-quality registry file. Answer from
 
 Keep each app or plugin registry file concise and structured. Follow `apps/_template.md` for app files, and use the same structure for plugin files under `nvim/plugins/`.
 
-Registry files are primarily source registries. They should point to the real manuals and docs, not summarize them. They may also include short local gotchas discovered during app-help work when those notes are specific and likely to save time later.
+Registry files are primarily source registries. They should point to the real manuals and docs, not summarize them. A gotcha is exceptional: include it only when it records a hard-won issue that was genuinely difficult to solve and is likely to save substantial investigation later.
 
 Expected sections:
 
@@ -170,10 +172,10 @@ When creating or updating a registry file:
 - avoid speculative claims
 - only list local config files that actually exist
 - do not copy factual answers from the docs into the app file
-- do not add generic tips, summaries, keybindings, config explanations, or mini-manual content
+- do not add generic tips, summaries, keybindings, config explanations, mini-manual content, or project-specific names, commands, layouts, and paths
 - do not record volatile runtime state, current settings, generated rules, current thresholds, current durations, current process lists, installed plugin versions, active sessions, cache contents, or other values that are already represented in a real config/runtime file
 - do not mirror config values from source files into registry prose; instead point to the source file or command that shows the current value
-- do add short local gotchas when the current task revealed a non-obvious behavior that is likely to save time later; keep these notes specific, source-backed, and tied to local config or workflow
+- add a local gotcha only for a source-backed, hard-won issue that was genuinely difficult to solve and is likely to recur
 
 ## Answer format
 
@@ -210,8 +212,8 @@ For online sources, include a short label and URL:
 ## When updating registry files
 
 Update an existing app or plugin registry file when discovery reveals a clearly better official source, local doc path, `:help` entry, plugin repo, or real local config path.
-Also consider updating it at the end of each app-help run when the work uncovered a high-signal local gotcha, convention, or non-obvious interaction that would have shortened the investigation.
-Do not update the registry merely because you changed a runtime setting, threshold, key value, generated wrapper, installed process rule, or other mutable config. The registry should point to where that state lives, not duplicate it.
+Update it with a gotcha only when the work resolved a hard-won, non-obvious issue that was genuinely difficult to solve and is likely to recur.
+Do not update the registry for routine discoveries, project-specific details, local conventions, or because you changed a runtime setting, threshold, key value, generated wrapper, installed process rule, or other mutable config. The registry should point to where shared app knowledge lives, not duplicate project or runtime state.
 Keep edits small and maintain the existing structure.
 
 ## Constraints
