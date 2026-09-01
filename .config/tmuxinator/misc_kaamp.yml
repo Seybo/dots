@@ -20,6 +20,13 @@ windows:
         - be-vim: v
         - fe-vim: cd <%= ENV.fetch("DEV_ROOT") %>/projects/misc/kaamp_fe/1st && v
 
+  - engine:
+      root: <%= ENV.fetch("DEV_ROOT") %>/projects/misc/kaamp_be/1st
+      layout: even-horizontal
+      panes:
+        - be-engine:
+        - fe-engine: cd <%= ENV.fetch("DEV_ROOT") %>/projects/misc/kaamp_fe/1st
+
   - be-autowork:
       root: <%= ENV.fetch("DEV_ROOT") %>/projects/misc/kaamp_be/1st
       layout: 083e,156x45,0,0{42x45,0,0,47,113x45,43,0[113x23,43,0,49,113x21,43,24,50]}
