@@ -11,12 +11,12 @@ projects:
   misc_axel_be:
     checkout_layout: ordinal_workspaces
     code_root: projects/misc/axel_be
-    tmux_layout: misc_axel1
+    tmux_layout: misc_axel
     task_provider: local
   misc_axel_fe:
     checkout_layout: ordinal_workspaces
     code_root: projects/misc/axel_fe
-    tmux_layout: misc_axel1
+    tmux_layout: misc_axel
     task_provider: local
   misc_kaamp_be:
     checkout_layout: ordinal_workspaces

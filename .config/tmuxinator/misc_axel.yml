@@ -1,5 +1,5 @@
 ---
-name: misc_axel1
+name: misc_axel
 root: <%= ENV.fetch("DEV_ROOT") %>/projects/misc/axel_be/1st
 startup_window: git
 enable_pane_titles: true
