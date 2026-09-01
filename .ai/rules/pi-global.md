@@ -136,6 +136,12 @@ Language- and project-neutral rules for all agents unless a project's local inst
 - Put agent-owned temporary files in `agents_tmp/` at the active repository root instead of the operating system's temporary directory.
 - Never stage or commit `agents_tmp/`.
 
+## Shell command safety
+
+- When processing dynamically discovered paths, first list the paths, then run the follow-up command on those literal paths in a separate tool call.
+- Avoid combining discovery with execution, deletion, or file-writing when the work can be expressed safely as two operations.
+- For `find`, approval-required examples include `-exec`, `-execdir`, `-ok`, `-okdir`, `-delete`, `-fprint`, `-fprint0`, `-fprintf`, and `-fls`.
+
 ## Git safety
 
 - Never mutate git history, branches, tags, stashes, remotes, or commit state without explicit user approval for that exact action. This includes `commit`, `commit --amend`, `reset`, `rebase`, `merge`, `cherry-pick`, `revert`, `switch`/`checkout` that changes branches, branch create/delete/rename, tag create/delete, stash create/apply/pop/drop, force-push, and remote changes.

@@ -27,7 +27,12 @@
 - For browser CPU spike investigations from this repo, use the exact approved wrapper commands: `/Users/inseybo/.dots/no_stow/bin/browser-spike-investigate brave` or `/Users/inseybo/.dots/no_stow/bin/browser-spike-investigate chrome`. Do not run ad-hoc `ps`/`sample`/`lsof`/`awk` investigation chains unless the wrapper is insufficient and the user approves.
 - Pi's Repository mode allows ordinary commands and tools by default but prompts for explicit high-impact operations. Unattended mode uses the same policy but blocks approval-required operations immediately. Prefer path-aware `read`, `edit`, and `write` when they express the work clearly and preserve startup ignored-file and Git-metadata checks.
 - Literal `rm` and plain `rmdir` targets that resolve inside the repository are allowed. Dynamic, escaping, and parent-removing `rmdir` targets require approval, and are blocked in Unattended mode.
-- `find ... -exec`, `find ... -delete`, `find ... -ok`, and `find ... -execdir` require approval. Prefer separate `find`, `ls`, `rg`, or shell-safe follow-up commands.
+
+### Shell command safety
+
+- When processing dynamically discovered paths, first list the paths, then run the follow-up command on those literal paths in a separate tool call.
+- Avoid combining discovery with execution, deletion, or file-writing when the work can be expressed safely as two operations.
+- For `find`, approval-required examples include `-exec`, `-execdir`, `-ok`, `-okdir`, `-delete`, `-fprint`, `-fprint0`, `-fprintf`, and `-fls`.
 
 ### Preferred command shapes
 

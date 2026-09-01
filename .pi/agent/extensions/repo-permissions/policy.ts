@@ -363,7 +363,9 @@ function guardedSegmentReason(
 		return guardedDeletionReason(command, segment, args, cwd, repository, hasChangedDirectory);
 	}
 	if (args.some((arg) => arg.startsWith("--force"))) return `${command} --force requires approval.`;
-	if (command === "find" && args.some(isMutatingFindArgument)) return "find mutation requires approval.";
+	if (command === "find" && args.some(isMutatingFindArgument)) {
+		return "find execution or mutation requires approval. For read-only processing, list paths first, then run the follow-up command on those literal paths in a separate tool call.";
+	}
 	if (command === "git" && isGuardedGit(commandTokens)) return "This Git operation requires approval.";
 	if (command === "tmux" && args.some(isGuardedTmuxCommand)) return "This tmux operation requires approval.";
 	if (command === "curl" && isMutatingCurl(args)) return "This curl request can mutate an external service.";
@@ -454,7 +456,7 @@ function isReadOnlySystemctl(args: string[]): boolean {
 }
 
 function isMutatingFindArgument(arg: string): boolean {
-	return ["-delete", "--delete", "-exec", "-execdir", "-ok", "-okdir"].includes(arg) || arg.startsWith("-fprint");
+	return ["-delete", "--delete", "-exec", "-execdir", "-fls", "-ok", "-okdir"].includes(arg) || arg.startsWith("-fprint");
 }
 
 function isGuardedGit(tokens: string[]): boolean {

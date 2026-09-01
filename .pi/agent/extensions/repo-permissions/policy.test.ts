@@ -232,6 +232,7 @@ test("repository mode asks for high-impact command families", () => {
 			"find . -delete",
 			"find . -exec echo {} ;",
 			"find . -fprint results.txt",
+			"find . -fls results.txt",
 			"shred tracked.txt",
 			"kill 123",
 			"pkill Pi",
@@ -256,6 +257,17 @@ test("repository mode asks for high-impact command families", () => {
 		]) {
 			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "ask", command);
 		}
+
+		const findDecision = call(
+			"repository",
+			"bash",
+			{ command: "find . -type f -exec wc -c {} ;" },
+			repository.root,
+			repository,
+		);
+		assert.equal(findDecision.kind, "ask");
+		assert.match(findDecision.reason, /list paths first/i);
+		assert.match(findDecision.reason, /separate tool call/i);
 	});
 });
 

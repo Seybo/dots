@@ -56,6 +56,12 @@ Direct `edit` and `write` calls still prompt for files that were untracked and G
 
 Repository mode is not a sandbox. Unknown executables are allowed and can hide operations that the visible command matcher cannot inspect. Use Ask mode for operation-by-operation approval and an OS sandbox for untrusted code.
 
+## Shell command safety
+
+When processing dynamically discovered paths, first list the paths, then run the follow-up command on those literal paths in a separate tool call. Avoid combining discovery with execution, deletion, or file-writing when the work can be expressed safely as two operations.
+
+For `find`, approval-required examples include `-exec`, `-execdir`, `-ok`, `-okdir`, `-delete`, `-fprint`, `-fprint0`, `-fprintf`, and `-fls`.
+
 ## Trusted skill rules
 
 Trusted top-level user and project skills may declare narrow `allowed-tools` rules for Ask mode. Pi's standard space-delimited scalar and the existing YAML list form are supported:
