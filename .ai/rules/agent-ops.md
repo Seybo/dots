@@ -19,6 +19,13 @@ Language- and project-neutral rules for all agents unless a project's local inst
 - Avoid combining discovery with execution, deletion, or file-writing when the work can be expressed safely as two operations.
 - For `find`, approval-required examples include `-exec`, `-execdir`, `-ok`, `-okdir`, `-delete`, `-fprint`, `-fprint0`, `-fprintf`, and `-fls`.
 
+## Remote session rules
+
+- Give routine read-only remote verification commands a tool timeout of at most 15 seconds.
+- For non-interactive SSH verification, use `BatchMode=yes` and a short `ConnectTimeout`.
+- Prefer one simple remote command per SSH call.
+- Use interactive SSH or a longer timeout only when the operation specifically requires it.
+
 ## Git safety
 
 - Never mutate git history, branches, tags, stashes, remotes, or commit state without explicit user approval for that exact action. This includes `commit`, `commit --amend`, `reset`, `rebase`, `merge`, `cherry-pick`, `revert`, `switch`/`checkout` that changes branches, branch create/delete/rename, tag create/delete, stash create/apply/pop/drop, force-push, and remote changes.
