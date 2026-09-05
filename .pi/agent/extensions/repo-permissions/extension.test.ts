@@ -260,6 +260,7 @@ test("SSH destination approval is scoped to the current session", async () => {
 		`ssh ${destination} 'anything > /tmp/remote'`,
 		`scp /tmp/local ${destination}:/home/svin/remote && ssh ${destination} true`,
 		`scp "$STOW_DIR/local" ${destination}:/home/svin/remote && ssh ${destination} true`,
+		`scp -q -o BatchMode=yes -o ConnectTimeout=5 /tmp/local ${destination}:/home/svin/remote`,
 	]) {
 		assert.equal(
 			await harness.handlers.get("tool_call")!({ toolName: "bash", input: { command } }, context),

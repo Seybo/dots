@@ -311,11 +311,14 @@ test("SSH grants allow one exact destination for the session", () => {
 		for (const mode of ["repository", "ask"] as const) {
 			for (const command of [
 				`ssh ${destination} 'sudo touch /tmp/remote'`,
+				`ssh -q -o BatchMode=yes -o ConnectTimeout=5 ${destination} true`,
 				`scp /tmp/local ${destination}:/home/svin/remote`,
 				`scp ${destination}:/home/svin/remote /tmp/local`,
 				`sftp ${destination}`,
+				`sftp -q -o BatchMode=yes -o ConnectTimeout=5 ${destination}`,
 				`scp /tmp/local ${destination}:/home/svin/remote && ssh ${destination} true`,
 				`scp "$STOW_DIR/.tmux.conf" ${destination}:/tmp/shared.conf && ssh ${destination} 'tmux source-file ~/tmp/shared.conf'`,
+				`scp -q -o BatchMode=yes -o ConnectTimeout=5 /tmp/local ${destination}:/tmp/remote`,
 			]) {
 				assert.equal(
 					call(mode, "bash", { command }, repository.root, repository, [], grants).kind,
@@ -326,9 +329,14 @@ test("SSH grants allow one exact destination for the session", () => {
 		}
 		for (const command of [
 			"ssh other@example.test true",
+			`ssh -o ProxyCommand=helper ${destination} true`,
+			`ssh -F alternate-config ${destination} true`,
 			"scp /tmp/local other@example.test:/tmp/remote",
 			`scp ${destination}:/tmp/source other@example.test:/tmp/remote`,
 			`scp -P 22 /tmp/local ${destination}:/tmp/remote`,
+			`scp -o ProxyCommand=helper /tmp/local ${destination}:/tmp/remote`,
+			`scp -F alternate-config /tmp/local ${destination}:/tmp/remote`,
+			`scp -S alternate-ssh /tmp/local ${destination}:/tmp/remote`,
 			`scp $STOW_DIR/.tmux.conf ${destination}:/tmp/remote`,
 			`scp "$(git push origin main)" ${destination}:/tmp/remote`,
 			`scp /tmp/local "$HOST:/tmp/remote"`,
@@ -367,6 +375,10 @@ test("SSH grants allow one exact destination for the session", () => {
 		);
 
 		assert.equal(getSshDestination(`ssh ${destination} 'sudo reboot'`), destination);
+		assert.equal(
+			getSshDestination(`ssh -q -o BatchMode=yes -o ConnectTimeout=5 ${destination} true`),
+			destination,
+		);
 		assert.equal(getSshDestination(`ssh ${destination} true && ssh ${destination} false`), destination);
 		assert.equal(
 			getSshDestination(`scp /tmp/local ${destination}:/home/svin/remote && ssh ${destination} true`),
@@ -374,6 +386,10 @@ test("SSH grants allow one exact destination for the session", () => {
 		);
 		assert.equal(
 			getSshDestination(`scp "$STOW_DIR/.tmux.conf" ${destination}:/tmp/shared.conf && ssh ${destination} true`),
+			destination,
+		);
+		assert.equal(
+			getSshDestination(`scp -q -o BatchMode=yes -o ConnectTimeout=5 /tmp/local ${destination}:/tmp/remote`),
 			destination,
 		);
 		assert.equal(getSshDestination(`ssh ${destination} true && rm tracked.txt`), undefined);

@@ -568,21 +568,45 @@ function parseSshAccessSegment(segment: string): string | undefined {
 	if (!tokens || tokens.length < 2) return undefined;
 
 	const command = basename(tokens[0]!);
-	if (command !== "scp" && hasUnsafeShellSyntax(segment)) return undefined;
-	if (command === "ssh") return simpleSshDestination(tokens[1]!);
-	if (command === "sftp") return scpDestination(tokens[1]!) ?? simpleSshDestination(tokens[1]!);
-	if (
-		command !== "scp" ||
-		hasUnsafeScpSyntax(segment) ||
-		tokens.length < 3 ||
-		tokens.slice(1).some((token) => token.startsWith("-"))
-	) {
-		return undefined;
-	}
+	if (!["scp", "sftp", "ssh"].includes(command)) return undefined;
+	if (command === "scp" ? hasUnsafeScpSyntax(segment) : hasUnsafeShellSyntax(segment)) return undefined;
 
-	const destinations = tokens.slice(1).map(scpDestination).filter((value) => value !== undefined);
+	const operands = sshFamilyOperands(tokens.slice(1));
+	if (!operands?.length) return undefined;
+	if (command === "ssh") return simpleSshDestination(operands[0]!);
+	if (command === "sftp") return scpDestination(operands[0]!) ?? simpleSshDestination(operands[0]!);
+	if (operands.length < 2) return undefined;
+
+	const destinations = operands.map(scpDestination).filter((value) => value !== undefined);
 	const destination = destinations[0];
 	return destination && destinations.every((value) => value === destination) ? destination : undefined;
+}
+
+function sshFamilyOperands(args: string[]): string[] | undefined {
+	let index = 0;
+	while (index < args.length) {
+		const arg = args[index]!;
+		if (arg === "-q") {
+			index++;
+			continue;
+		}
+		if (arg === "-o") {
+			if (!isSafeScpOption(args[index + 1] ?? "")) return undefined;
+			index += 2;
+			continue;
+		}
+		if (arg.startsWith("-o") && isSafeScpOption(arg.slice(2))) {
+			index++;
+			continue;
+		}
+		if (arg.startsWith("-")) return undefined;
+		return args.slice(index);
+	}
+	return [];
+}
+
+function isSafeScpOption(value: string): boolean {
+	return /^(?:BatchMode=yes|ConnectTimeout=\d+)$/i.test(value);
 }
 
 function hasUnsafeScpSyntax(segment: string): boolean {
