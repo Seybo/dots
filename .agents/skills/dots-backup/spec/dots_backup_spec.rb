@@ -174,6 +174,39 @@ class DotsBackupSpec < Minitest::Test
     assert_match(/Dots Backup Report/, stdout)
   end
 
+  def test_defaults_to_active_stow_dir
+    dir = Dir.mktmpdir("dots-backup-stow-")
+    data_root = File.join(dir, ".agents", "skills", "dots-backup")
+    inventory_path = File.join(data_root, "config", "inventory.yml")
+    status_dir = File.join(data_root, "state", "runs")
+    FileUtils.mkdir_p(File.dirname(inventory_path))
+    FileUtils.mkdir_p(status_dir)
+    File.write(inventory_path, <<~YAML)
+      version: 1
+      active_backups:
+        - name: music
+          tool: rclone
+          included:
+            - ~/Music
+          excluded: []
+    YAML
+    File.write(File.join(status_dir, "music-backup.json"), JSON.dump({
+      "name" => "music",
+      "run_type" => "backup",
+      "finished_at" => "2026-09-05T08:00:00Z",
+      "status" => "success"
+    }))
+
+    stdout, stderr, status = Open3.capture3({ "STOW_DIR" => dir }, SCRIPT, chdir: Dir.tmpdir)
+
+    assert_equal 0, status.exitstatus, stderr
+    assert_match(/Inventory: #{Regexp.escape(inventory_path)}/, stdout)
+    assert_match(/last run: 2026-09-05T08:00:00Z/, stdout)
+    assert_match(/status: success/, stdout)
+  ensure
+    FileUtils.remove_entry(dir) if dir && Dir.exist?(dir)
+  end
+
   def test_run_mode_requires_supported_run_type
     dir = Dir.mktmpdir("dots-backup-run-")
     inventory_path = inventory_with_command(dir, "higr", "backup", "echo backup")

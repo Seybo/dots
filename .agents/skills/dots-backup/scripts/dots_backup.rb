@@ -335,22 +335,9 @@ class DotsBackup
   end
 end
 
-def repo_root_from(start)
-  current = File.expand_path(start)
-
-  loop do
-    return current if File.directory?(File.join(current, ".git"))
-
-    parent = File.dirname(current)
-    raise "could not find repo root from #{start}" if parent == current
-
-    current = parent
-  end
-end
-
-repo_root = repo_root_from(__dir__)
-default_inventory = File.join(repo_root, ".agents", "skills", "dots-backup", "config", "inventory.yml")
-default_status_dir = File.join(repo_root, ".agents", "skills", "dots-backup", "state", "runs")
+data_root = File.join(File.expand_path(ENV.fetch("STOW_DIR")), ".agents", "skills", "dots-backup")
+default_inventory = File.join(data_root, "config", "inventory.yml")
+default_status_dir = File.join(data_root, "state", "runs")
 options = {
   inventory_path: default_inventory,
   status_dir: default_status_dir,
