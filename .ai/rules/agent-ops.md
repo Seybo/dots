@@ -35,9 +35,8 @@ Language- and project-neutral rules for all agents unless a project's local inst
 
 ### Commit subjects
 
-- Use `<area>: <change>`. For a specific named component, use `<area>: <component>. <Change>`.
-- Add the component only when it names a concrete skill, plugin, extension, or subsystem. Omit it when it merely repeats the area or subject.
-- Keep the change concise and imperative. Example: `ai: autoimplement. Require explicit super-review policy`.
+- Follow local instructions and commit history.
+- Keep subjects concise and imperative.
 
 ## Tmux process and layout safety
 
