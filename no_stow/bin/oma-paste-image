@@ -1,0 +1,41 @@
+#!/bin/zsh
+set -eu
+
+notify() {
+  /usr/bin/osascript \
+    -e 'on run argv' \
+    -e 'display notification (item 1 of argv) with title "Oma image paste"' \
+    -e 'end run' \
+    "$1" >/dev/null 2>&1 || true
+}
+
+local_image=$(mktemp "${TMPDIR:-/tmp}/oma-paste-image.XXXXXX")
+trap 'rm -f "$local_image"' EXIT
+
+if ! /opt/homebrew/bin/pngpaste - > "$local_image"; then
+  notify "The clipboard does not contain an image."
+  exit 1
+fi
+
+if ! remote_path=$(
+  /usr/bin/ssh -o BatchMode=yes -o ConnectTimeout=5 oma \
+    'umask 077; path="$HOME/.cache/clipboard-image.png"; cat > "$path"; printf "%s" "$path"' \
+    < "$local_image"
+); then
+  notify "The image could not be transferred to Oma."
+  exit 1
+fi
+
+if ! /usr/bin/osascript - "$remote_path" <<'APPLESCRIPT'
+on run argv
+  tell application "System Events"
+    set frontApp to name of first application process whose frontmost is true
+    if frontApp is not "Alacritty" then error "Alacritty is no longer focused"
+    keystroke (item 1 of argv)
+  end tell
+end run
+APPLESCRIPT
+then
+  notify "The image reached Oma, but its path could not be pasted."
+  exit 1
+fi

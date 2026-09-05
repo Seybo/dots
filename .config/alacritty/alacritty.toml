@@ -53,6 +53,8 @@ y = 6
 
 [keyboard]
 bindings = [
+  # Transfer a clipboard image to Oma and paste its remote path.
+  { key = 'V', mods = 'Command|Shift', command = { program = '/bin/zsh', args = ['-c', 'exec "$HOME/.dots/no_stow/bin/oma-paste-image"'] } },
   # Use Oma's existing tmux prefix bindings for window navigation.
   { key = 'U', mods = 'Command', chars = "\u0002p" },
   { key = 'M', mods = 'Command', chars = "\u0002n" },
