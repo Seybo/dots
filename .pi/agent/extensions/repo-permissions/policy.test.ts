@@ -212,6 +212,8 @@ test("repository mode allows normal skill and development commands", () => {
 			"systemctl show example.service --property ActiveState",
 			"systemctl is-active example.service",
 			"systemctl list-units --type service --state failed",
+			"rsync -a --exclude node_modules agents_tmp/scaffold/ ./",
+			"cd /home/example/project && rsync -a --exclude node_modules agents_tmp/scaffold/ ./ && git status --short",
 		]) {
 			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "allow", command);
 		}
@@ -242,6 +244,15 @@ test("repository mode asks for high-impact command families", () => {
 			"systemctl --user daemon-reload",
 			"systemctl --user set-environment TOKEN=value",
 			"systemctl frobnicate example.service",
+			"rsync -a --delete source/ destination/",
+			"rsync -a --delete-after source/ destination/",
+			"rsync -a --remove-source-files source/ destination/",
+			"rsync -a source/ example.test:/srv/project/",
+			"rsync -a rsync://example.test/module/ destination/",
+			"rsync -a -e ssh source/ destination/",
+			"rsync -ave ssh source/ destination/",
+			"rsync -a --rsh=ssh source/ destination/",
+			"rsync -a --rsync-path=/custom/rsync source/ destination/",
 			"tmux kill-session -t work",
 			"tmux respawn-pane -k -t %1",
 			"curl -X POST https://example.test",

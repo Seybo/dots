@@ -42,7 +42,6 @@ const ASK_COMMANDS = new Set([
 	"mkfs",
 	"pkill",
 	"pacman",
-	"rsync",
 	"security",
 	"service",
 	"shred",
@@ -355,6 +354,7 @@ function guardedSegmentReason(
 	if (command === "systemctl") {
 		return isReadOnlySystemctl(args) ? undefined : "This systemctl operation requires approval.";
 	}
+	if (command === "rsync" && isGuardedRsync(args)) return "This rsync operation requires approval.";
 	if (ASK_COMMANDS.has(command)) return `${command} requires approval.`;
 	if (command === "rm" || command === "rmdir") {
 		if (command === "rmdir" && args.some(hasParentRemovalFlag)) {
@@ -440,6 +440,16 @@ function getCommandTokens(segment: string): string[] | undefined {
 	if (!tokens || tokens.length === 0) return undefined;
 	const commandIndex = tokens.findIndex((token) => !/^[a-z_][a-z0-9_]*=/i.test(token));
 	return commandIndex === -1 ? undefined : tokens.slice(commandIndex);
+}
+
+function isGuardedRsync(args: string[]): boolean {
+	return args.some(
+		(arg) =>
+			/^--delete(?:$|-)|^--del$|^--remove-source-files$/.test(arg) ||
+			/^--(?:rsh|rsync-path)(?:=|$)/.test(arg) ||
+			/^-[^-]*e/.test(arg) ||
+			/^(?:rsync:\/\/|(?:[^@\s/:]+@)?(?:\[[0-9a-f:]+\]|[^/\s:]+):)/i.test(arg),
+	);
 }
 
 function isReadOnlySystemctl(args: string[]): boolean {
