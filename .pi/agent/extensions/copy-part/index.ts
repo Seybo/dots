@@ -155,7 +155,7 @@ async function pickPart(
 
 function copyToClipboard(text: string): Promise<void> {
 	return new Promise((resolve, reject) => {
-		const child = spawn("pbcopy");
+		const child = spawn("tmux", ["load-buffer", "-w", "-"]);
 		let stderr = "";
 		let isSettled = false;
 
@@ -171,7 +171,7 @@ function copyToClipboard(text: string): Promise<void> {
 			if (isSettled) return;
 			isSettled = true;
 			if (code === 0) resolve();
-			else reject(new Error(stderr.trim() || `pbcopy exited with code ${code}`));
+			else reject(new Error(stderr.trim() || `tmux exited with code ${code}`));
 		});
 
 		child.stdin.end(text);
