@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
-# Watches a tmux pane for common agent approval/input prompts and sends a macOS
-# notification. Prefer --pane mode for full-screen TUIs such as Claude Code,
-# because tmux pipe-pane can miss or mangle redraw-only prompt screens.
+# Watches a tmux pane for common agent approval/input prompts and raises tmux
+# and terminal attention. Prefer --pane mode for full-screen TUIs such as Claude
+# Code, because tmux pipe-pane can miss or mangle redraw-only prompt screens.
 
 require 'fileutils'
 require 'shellwords'
@@ -26,6 +26,7 @@ COOLDOWN_SECONDS = Integer(ENV.fetch('TMUX_AGENT_NOTIFY_COOLDOWN', '60'))
 POLL_SECONDS = Float(ENV.fetch('TMUX_AGENT_NOTIFY_POLL_SECONDS', '1.5'))
 MAX_RUNTIME_SECONDS = Integer(ENV.fetch('TMUX_AGENT_NOTIFY_MAX_RUNTIME_SECONDS', (12 * 60 * 60).to_s))
 LOG_PATH = ENV.fetch('TMUX_AGENT_NOTIFY_LOG', '/tmp/tmux-agent-attention.log')
+MACHINE_NAME = ENV.fetch('MACHINE_NAME')
 
 def log_event(message)
   File.open(LOG_PATH, 'a') do |file|
@@ -43,7 +44,22 @@ def ghostty_frontmost?
   frontmost_application_name == 'ghostty'
 end
 
-def notify(pane_id, pane_label)
+def signal_attached_terminals(pane_id, pane_label)
+  format = '#{client_tty}'
+  client_ttys = `tmux list-clients -F #{Shellwords.escape(format)} 2>/dev/null`
+    .lines
+    .map(&:strip)
+    .select { |tty| tty.match?(%r{\A/dev/pts/\d+\z}) }
+
+  log_event("send terminal bell pane=#{pane_id || '-'} label=#{pane_label} clients=#{client_ttys.size}")
+  client_ttys.each do |tty|
+    File.open(tty, 'w') { |terminal| terminal.write("\a") }
+  rescue SystemCallError => error
+    log_event("terminal bell failed tty=#{tty} error=#{error.message}")
+  end
+end
+
+def send_macos_notification(pane_id, pane_label)
   if ghostty_frontmost?
     log_event("skip notification pane=#{pane_id || '-'} label=#{pane_label} reason=ghostty_frontmost")
     return
@@ -60,6 +76,14 @@ def notify(pane_id, pane_label)
     out: File::NULL,
     err: File::NULL
   )
+end
+
+def deliver_attention(pane_id, pane_label)
+  if MACHINE_NAME == 'oma'
+    signal_attached_terminals(pane_id, pane_label)
+  else
+    send_macos_notification(pane_id, pane_label)
+  end
 end
 
 def clean(text)
@@ -224,7 +248,7 @@ def run_pane_watcher(pane_id)
 
       if Time.now - last_notification_at >= COOLDOWN_SECONDS
         last_notification_at = Time.now
-        notify(pane_id, label)
+        deliver_attention(pane_id, label)
       end
     elsif is_marked
       clear_tmux_attention_marker(pane_id)
@@ -243,7 +267,7 @@ if ARGV[0] == '--manager-set'
   pane_id = ARGV[1] || ENV['TMUX_PANE']
   unless pane_id.nil? || pane_id.empty?
     set_tmux_attention_marker(pane_id)
-    notify(pane_id, pane_label(pane_id))
+    deliver_attention(pane_id, pane_label(pane_id))
   end
   exit 0
 end
@@ -300,7 +324,7 @@ loop do
 
   if watched_text_matches?(buffer) && Time.now - last_notification_at >= COOLDOWN_SECONDS
     last_notification_at = Time.now
-    notify(nil, pane_label)
+    deliver_attention(nil, pane_label)
   end
 rescue EOFError
   exit 0

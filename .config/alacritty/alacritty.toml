@@ -6,6 +6,9 @@ import = ['~/.dots/no_stow/active_theme/alacritty.toml']
 working_directory = '.dots'
 live_config_reload = true
 
+[bell]
+command = { program = '/usr/bin/osascript', args = ['-e', 'display notification "Approval or input requested on Oma" with title "Oma tmux agent needs attention"'] }
+
 [cursor]
 style = 'Underline'
 unfocused_hollow = true
