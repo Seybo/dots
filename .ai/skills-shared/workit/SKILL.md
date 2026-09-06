@@ -193,6 +193,8 @@ and select the matching ordinal workspace. Applied to `/workit`:
      - do not invoke Autoimplement for any other reply or before the user chooses it
    - write `steps.md` using simple, precise technical language
    - structure `steps.md` as gradual, reviewable implementation slices; each step should leave the repo in a working state
+   - every `## Step N` must be an implementation slice expected to change repository files
+   - do not create numbered steps for final verification, reporting, staging, committing, or baseline checkpoints; put task-specific checks inside the implementation step they validate because Workit and Autoimplement own final review, checks, staging, commits, and reporting
    - use parseable step headings for every step:
      ```md
      ## Step 1: Short title
