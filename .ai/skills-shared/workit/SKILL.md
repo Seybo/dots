@@ -180,7 +180,17 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - if `steps.md` is missing and `step_mode` is not active, create it first from `task.md` before implementation
    - after creating `steps.md`, or after making substantive updates to an existing `steps.md`:
      - in `non_stop_mode`, continue implementation immediately without suggesting Autoimplement or requesting plan confirmation
-     - otherwise, stop and ask the user to review the plan, then offer two paths: confirm that Workit should implement it, or invoke `/skill:autoimplement <resolved-project-or-session> <task_id>` to approve the plan and hand implementation to Autoimplement; do not invoke Autoimplement automatically
+     - otherwise, stop and ask the user to review the plan, then show:
+       ```text
+       Plan ready. Choose how to implement it:
+
+       - continue with workit / 1 — implement one step at a time with approval between steps
+       - autoimplement / 2 — approve the plan and complete it autonomously
+       ```
+     - preserve the resolved project or session, task ID, and plan for the next turn
+     - treat exact bare `continue with workit` or `1` as approval for Workit to begin implementing the plan one step at a time
+     - treat exact bare `autoimplement` or `2` as an explicit Autoimplement invocation; read and follow `../autowork/autoimplement/SKILL.md` immediately as `/skill:autoimplement <resolved-project-or-session> <task_id>`
+     - do not invoke Autoimplement for any other reply or before the user chooses it
    - write `steps.md` using simple, precise technical language
    - structure `steps.md` as gradual, reviewable implementation slices; each step should leave the repo in a working state
    - use parseable step headings for every step:

@@ -295,8 +295,8 @@ edit and rerun Taskit when their reply itself clearly resolves the decision.
      ```text
      What's next?
 
-     - workit / 1
-     - workit non-stop / 2
+     - workit / 1 — create and review the implementation plan, then choose Workit or Autoimplement
+     - workit non-stop / 2 — plan and implement entirely with Workit
      ```
 
    - if the next user message is exactly `workit` or `1`, treat it as an explicit Workit invocation; read and follow `../workit/SKILL.md` immediately as `/workit <resolved-project-or-session> <task_id>`
