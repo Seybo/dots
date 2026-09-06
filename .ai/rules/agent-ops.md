@@ -13,6 +13,11 @@ Language- and project-neutral rules for all agents unless a project's local inst
 - Put agent-owned temporary files in `agents_tmp/` at the active repository root instead of the operating system's temporary directory.
 - Never stage or commit `agents_tmp/`.
 
+## Machine-specific dotfiles
+
+- For dotfiles work, use `MACHINE_NAME` and the active repository in `STOW_DIR`: Squirrel uses `$HOME/.dots`; Oma uses `$HOME/.omadots`.
+- On Oma, `$HOME/.dots` is pull-only shared content. Inspect the active target and `$STOW_DIR` adapter before its shared source, and resolve dev-env refs through `$STOW_DIR/refs/dev-env`.
+
 ## Shell command safety
 
 - When processing dynamically discovered paths, first list the paths, then run the follow-up command on those literal paths in a separate tool call.
@@ -64,7 +69,7 @@ Language- and project-neutral rules for all agents unless a project's local inst
 
 ## Dotfiles stow safety
 
-- In the dotfiles repo, never manually create symlinks from `~/.dots` into `$HOME`. Dotfile linking must go through the user's `stow_check` dry-run and `stow_do` apply commands.
+- Never manually create symlinks from `$STOW_DIR` into `$HOME`. Dotfile linking must go through `$STOW_DIR/bin/stow_check` and `$STOW_DIR/bin/stow_do`.
 - If `stow_check` reports a conflict, stop and explain the conflict. Do not work around Stow by running `ln -s`, replacing targets manually, or using `stow --adopt` unless the user explicitly approves that exact action.
 
 ## GitHub PR reviews

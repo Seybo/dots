@@ -11,11 +11,16 @@ Runtime files:
 - task root: `$DEV_ROOT/_tasks/<project>/`
 - helper commands: `$DEV_ROOT/bin/skills/`
 
-## Development root
+## Machine roots
 
 `DEV_ROOT` is the machine's development tree. Squirrel uses `/Volumes/dev`;
 Oma uses `/home/svin/dev`.
 
+`STOW_DIR` is the active dotfiles checkout: `$HOME/.dots` on Squirrel and
+`$HOME/.omadots` on Oma. Oma's separate `$HOME/.dots` is pull-only shared
+content.
+
+The exact registry value `$STOW_DIR` resolves through that environment variable.
 Registry paths beginning with `/` are absolute. Expand paths beginning with `~`
 against the current user's home. Resolve every other `checkout_path` or
 `code_root` relative to `DEV_ROOT`. Prefer relative registry paths for projects
@@ -63,7 +68,7 @@ Checkouts live below `code_root` in canonical ordinal folders such as `1st`,
 shaka_gtm2 -> project shaka_gtm, workspace 2nd
 ```
 
-`env` is a direct infrastructure project mapped to `~/.dots`.
+`env` is a direct infrastructure project mapped to `$STOW_DIR`.
 
 ## Registering a direct project
 

@@ -6,7 +6,7 @@ version: 2
 projects:
   env:
     checkout_layout: direct
-    checkout_path: ~/.dots
+    checkout_path: $STOW_DIR
     is_infrastructure: true
   misc_axel_be:
     checkout_layout: ordinal_workspaces

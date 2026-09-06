@@ -160,7 +160,7 @@ and select the matching ordinal workspace. Applied to `/workit`:
      ```bash
      git -C <code-working-directory> branch --show-current
      ```
-   - **Treat `main` and `master` as protected except for the `env` project (`~/.dots`) and registered projects whose project key starts with `my_`.** If the current branch is protected, stop before editing and switch to a task branch.
+   - **Treat `main` and `master` as protected except for the `env` project and registered projects whose project key starts with `my_`.** If the current branch is protected, stop before editing and switch to a task branch.
    - Read and follow [`../components/task-branch-config.md`](../components/task-branch-config.md) completely before branch/config setup.
    - For registered workspace tasks whose registry entry has `task_provider: shortcut`, fetch the Shortcut story and generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from its current `name`. Do not use the task folder suffix. Apply the shared component's **Shortcut Task branch setup** rules with the resolved Task folder, selected workspace, generated branch name, and optional exact `base_ref`.
    - For `task_provider: local`, never fetch Shortcut stories or create/switch branches. Apply the shared component's **Local Task setup** rules immediately before planning and Autoimplement initialization.
