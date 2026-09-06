@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { appendFileSync, chmodSync, mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -20,11 +22,28 @@ const MAX_PROMPT_DETAIL_LENGTH = 1200;
 
 type FrontmatterParser = (content: string) => Record<string, unknown>;
 
-export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: FrontmatterParser): void {
+type PermissionRequestLogEntry = {
+	timestamp: string;
+	mode: PermissionMode;
+	status: "prompted" | "blocked-unattended" | "blocked-no-ui";
+	cwd: string;
+	tool: string;
+	detail: string;
+	reason: string;
+};
+
+type PermissionRequestLogger = (entry: PermissionRequestLogEntry) => void;
+
+export function registerRepoPermissions(
+	pi: ExtensionAPI,
+	parseFrontmatter: FrontmatterParser,
+	logPermissionRequest: PermissionRequestLogger = appendPermissionRequest,
+): void {
 	let mode: PermissionMode = "ask";
 	let repository: RepositoryState | undefined;
 	let hasGitRoot = false;
 	let skillRules: string[] | undefined;
+	let hasLogWarning = false;
 	const sshDestinations = new Set<string>();
 
 	function renderStatus(ctx: ExtensionContext): void {
@@ -72,6 +91,7 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 		repository = undefined;
 		hasGitRoot = false;
 		skillRules = undefined;
+		hasLogWarning = false;
 		sshDestinations.clear();
 		await loadRepository(ctx);
 	});
@@ -96,6 +116,24 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 
 		if (decision.kind === "allow") return;
 		if (decision.kind === "block") return { block: true, reason: decision.reason };
+
+		try {
+			logPermissionRequest({
+				timestamp: new Date().toISOString(),
+				mode,
+				status: mode === "unattended" ? "blocked-unattended" : ctx.hasUI ? "prompted" : "blocked-no-ui",
+				cwd: ctx.cwd,
+				tool: event.toolName,
+				detail: truncatePromptDetail(getToolDetail(event.toolName, input)),
+				reason: decision.reason,
+			});
+		} catch (error) {
+			if (!hasLogWarning) {
+				hasLogWarning = true;
+				ctx.ui.notify(`Could not write the permission request log: ${String(error)}`, "warning");
+			}
+		}
+
 		if (mode === "unattended") {
 			return {
 				block: true,
@@ -130,14 +168,27 @@ export function registerRepoPermissions(pi: ExtensionAPI, parseFrontmatter: Fron
 	});
 }
 
+export function getPermissionLogPath(): string {
+	const defaultStateHome =
+		process.platform === "darwin" ? join(homedir(), "Library", "Logs") : join(homedir(), ".local", "state");
+	return join(process.env.XDG_STATE_HOME ?? defaultStateHome, "pi", "repo-permissions.jsonl");
+}
+
+function appendPermissionRequest(entry: PermissionRequestLogEntry): void {
+	const path = getPermissionLogPath();
+	mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+	appendFileSync(path, `${JSON.stringify(entry)}\n`, { encoding: "utf8", mode: 0o600 });
+	chmodSync(path, 0o600);
+}
+
 function formatPrompt(toolName: string, input: Record<string, unknown>, reason: string): string {
-	const detail =
-		toolName === "bash" && typeof input.command === "string"
-			? input.command
-			: typeof input.path === "string"
-				? input.path
-				: JSON.stringify(input);
-	return `${toolName}: ${truncatePromptDetail(detail)}\n\n${reason}`;
+	return `${toolName}: ${truncatePromptDetail(getToolDetail(toolName, input))}\n\n${reason}`;
+}
+
+function getToolDetail(toolName: string, input: Record<string, unknown>): string {
+	if (toolName === "bash" && typeof input.command === "string") return input.command;
+	if (typeof input.path === "string") return input.path;
+	return JSON.stringify(input);
 }
 
 function truncatePromptDetail(detail: string): string {

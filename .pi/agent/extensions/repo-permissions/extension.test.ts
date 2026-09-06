@@ -17,14 +17,15 @@ function createHarness(
 ) {
 	const handlers = new Map<string, Handler>();
 	const commands = new Map<string, { handler: Handler }>();
+	const permissionRequests: Record<string, unknown>[] = [];
 	const pi = {
 		exec: async () => results.shift() ?? { code: 1, stdout: "", stderr: "" },
 		on: (name: string, handler: Handler) => handlers.set(name, handler),
 		registerCommand: (name: string, command: { handler: Handler }) => commands.set(name, command),
 		getCommands: () => skillCommands,
 	};
-	registerRepoPermissions(pi as never, parseFrontmatter);
-	return { handlers, commands };
+	registerRepoPermissions(pi as never, parseFrontmatter, (entry) => permissionRequests.push(entry));
+	return { handlers, commands, permissionRequests };
 }
 
 function createContext(cwd: string, hasUI = true) {
@@ -152,6 +153,7 @@ test("Unattended mode blocks approval-required work without prompting", async ()
 		},
 	);
 	assert.equal(context.selections.length, selectionCount);
+	assert.equal(harness.permissionRequests[0]?.status, "blocked-unattended");
 	assert.equal(
 		await harness.handlers.get("tool_call")!({ toolName: "read", input: { path: "README.md" } }, context),
 		undefined,
@@ -212,6 +214,32 @@ test("standard scalar allowed-tools rules are loaded from trusted local skills",
 	}
 });
 
+test("approval-required operations are logged with prompt context", async () => {
+	const root = process.cwd();
+	const harness = createHarness([gitResult(0, `${root}\n`), gitResult(0)]);
+	const context = createContext(root);
+	await harness.handlers.get("session_start")!({}, context);
+
+	context.answers.push("Reject");
+	await harness.handlers.get("tool_call")!(
+		{ toolName: "bash", input: { command: "git push origin main" } },
+		context,
+	);
+
+	assert.deepEqual(harness.permissionRequests, [
+		{
+			timestamp: harness.permissionRequests[0]?.timestamp,
+			mode: "repository",
+			status: "prompted",
+			cwd: root,
+			tool: "bash",
+			detail: "git push origin main",
+			reason: "This Git operation requires approval.",
+		},
+	]);
+	assert.match(String(harness.permissionRequests[0]?.timestamp), /^\d{4}-\d{2}-\d{2}T/);
+});
+
 test("approval prompts truncate large Bash and custom-tool details", async () => {
 	const harness = createHarness([gitResult(1)]);
 	const context = createContext("/tmp");
@@ -226,6 +254,11 @@ test("approval prompts truncate large Bash and custom-tool details", async () =>
 		const title = context.selectionTitles.at(-1) ?? "";
 		assert.ok(title.length < 1_500, `${event.toolName} title was ${title.length} characters`);
 		assert.match(title, /truncated/i);
+	}
+	assert.equal(harness.permissionRequests.length, 2);
+	for (const entry of harness.permissionRequests) {
+		assert.ok(String(entry.detail).length < 1_500);
+		assert.match(String(entry.detail), /truncated/i);
 	}
 });
 

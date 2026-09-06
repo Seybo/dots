@@ -62,6 +62,17 @@ When processing dynamically discovered paths, first list the paths, then run the
 
 For `find`, approval-required examples include `-exec`, `-execdir`, `-ok`, `-okdir`, `-delete`, `-fprint`, `-fprint0`, `-fprintf`, and `-fls`.
 
+## Permission request log
+
+The extension records every approval-required operation as one JSON line. Entries include the timestamp, mode, prompt status, working directory, tool, reason, and request detail capped at 1,200 characters. The private local log persists across sessions and may contain sensitive command arguments, so never commit or share it without reviewing the content.
+
+Log paths:
+
+- macOS: `~/Library/Logs/pi/repo-permissions.jsonl`
+- Linux: `pi/repo-permissions.jsonl` under the `XDG_STATE_HOME` directory when set; otherwise `~/.local/state/pi/repo-permissions.jsonl`
+
+When the user asks to review the permission log, read this file and discuss which prompts are expected before changing policy. After the user settles the review, truncate the log so the next review contains only new requests.
+
 ## Trusted skill rules
 
 Trusted top-level user and project skills may declare narrow `allowed-tools` rules for Ask mode. Pi's standard space-delimited scalar and the existing YAML list form are supported:
