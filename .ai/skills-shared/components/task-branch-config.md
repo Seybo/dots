@@ -104,21 +104,35 @@ Do not configure the new task branch to track its parent.
 ## Local Task setup
 
 Taskit creates or converts the Task folder but does not record local Git
-metadata. Workit records it immediately before planning and Autoimplement
-initialization, after applying the shared protected-branch rules. This component
-does not infer, create, rename, or switch a local branch.
+metadata. Workit owns local branch setup immediately before planning and
+Autoimplement initialization.
 
-When Workit created the current branch for this Task during the active
-invocation, it supplies the exact source base ref and full SHA retained from that
-creation. Record:
+When the checkout is on a protected `main` or `master`, derive the Task branch
+name from the Task folder basename. The explicit Workit invocation authorizes
+creating and switching to this one deterministic new branch:
 
-- `name`: current branch
-- every original/active base ref: the exact creation base ref
-- every original/active base commit SHA: the full creation base SHA
+1. Require a clean worktree and require the Task branch not to exist.
+2. Fetch `origin`.
+3. Use the exact supplied `base_ref` when present. Otherwise require the current
+   protected branch to have an upstream and use that exact upstream ref.
+4. Resolve the base ref to its full SHA. Without an explicit `base_ref`, require
+   the current protected `HEAD` to be an ancestor of that fetched base.
+5. Create the Task branch without parent tracking:
 
-Otherwise the local Task uses the current branch as-is. Record the current
-branch as `name` and the current full `HEAD` SHA as every original/active base
-ref and SHA.
+   ```bash
+   git -C <checkout> checkout --no-track -b <task-folder-basename> <base-ref>
+   ```
+
+6. Record the Task branch name, exact base ref, and full base SHA in both the
+   original and active config fields.
+
+If the Task branch already exists but is not checked out, stop and ask before
+switching. Never reset or overwrite it.
+
+For an exempt project or an already checked-out non-protected branch, use the
+current branch as-is. Record the current branch as `name` and the current full
+`HEAD` SHA as every original/active base ref and SHA unless complete config
+already preserves the branch's known creation base.
 
 If branch config already exists, validate the configured branch and do not
 rewrite original values. Preserve unrelated config sections. Taskit and Workit

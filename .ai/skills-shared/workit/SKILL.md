@@ -56,7 +56,7 @@ Examples:
 /workit 0003 non-stop
 ```
 
-Do not auto-use this skill from a general "work on this task" request. Wait for the explicit slash command.
+Do not auto-use this skill from a general "work on this task" request. Wait for the explicit slash command. That invocation authorizes the deterministic new local Task branch creation defined by `task-branch-config.md` when the checkout is on a protected branch; it does not authorize switching to or replacing an existing branch.
 
 ## What it does
 
@@ -160,10 +160,10 @@ and select the matching ordinal workspace. Applied to `/workit`:
      ```bash
      git -C <code-working-directory> branch --show-current
      ```
-   - **Treat `main` and `master` as protected except for the `env` project and registered projects whose project key starts with `my_`.** If the current branch is protected, stop before editing and switch to a task branch.
+   - **Treat `main` and `master` as protected except for the `env` project and registered projects whose project key starts with `my_`.** Never plan or edit on a protected branch; the provider-specific setup below must first select the Task branch.
    - Read and follow [`../components/task-branch-config.md`](../components/task-branch-config.md) completely before branch/config setup.
    - For registered workspace tasks whose registry entry has `task_provider: shortcut`, fetch the Shortcut story and generate `mikhail/sc-{story_id}/{shortcut_story_name_slug}` from its current `name`. Do not use the task folder suffix. Apply the shared component's **Shortcut Task branch setup** rules with the resolved Task folder, selected workspace, generated branch name, and optional exact `base_ref`.
-   - For `task_provider: local`, never fetch Shortcut stories. When the operator explicitly approved creating the current Task branch during this active Workit invocation, preserve the exact source base ref and full SHA used for branch creation and pass them to the shared component; do not replace the known ref with its SHA. Apply the shared component's **Local Task setup** rules immediately before planning and Autoimplement initialization.
+   - For `task_provider: local`, never fetch Shortcut stories. Apply the shared component's **Local Task setup** rules with the resolved Task folder, checkout, and optional exact `base_ref`. On a protected branch, continue automatically through its safe new-branch path without asking for another approval.
 
 7. **Create or load the steps plan before implementation:**
    - before writing or updating `steps.md`, inspect existing implementation patterns relevant to the task:

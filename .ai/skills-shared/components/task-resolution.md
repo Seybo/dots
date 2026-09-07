@@ -182,12 +182,12 @@ load Feature context and preserve existing unfeatured behavior.
 
 ## Local task branch rules
 
-For `task_provider: local`, task skills normally use the currently checked-out
-branch. Taskit never creates or switches one. Workit may use branch creation the
-operator explicitly approved during the active invocation; it must preserve the
-exact source base ref and SHA under [`task-branch-config.md`](task-branch-config.md).
-Otherwise task skills do not infer, create, rename, or switch branches. Refuse
-`main` and `master` for local/ad-hoc work, except:
+For `task_provider: local`, Taskit never creates or switches a branch. An
+explicit Workit invocation authorizes creating the one deterministic new Task
+branch defined by [`task-branch-config.md`](task-branch-config.md) when the
+checkout is on a protected branch. Otherwise local task skills use the current
+branch and do not infer, create, rename, or switch one. Refuse `main` and
+`master` for local/ad-hoc work, except:
 
 - `env` may use either branch.
 - Any registered project whose project key starts with `my_` may use either branch.
