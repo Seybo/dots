@@ -308,9 +308,17 @@ function decideDirectMutation(
 	const pathInfo = resolvePathInfo(rawPath, cwd);
 	if (!pathInfo) return { kind: "ask", reason: `Could not resolve ${rawPath} safely.` };
 
+	const lexicalScratchRoot = join(repository.root, "agents_tmp");
+	const isLexicallyInScratch = isStrictlyInside(lexicalScratchRoot, pathInfo.lexical);
+	const isScratchTarget = isAgentScratchTarget(repository.root, pathInfo.lexical, pathInfo.canonical);
+	if (isLexicallyInScratch && !isScratchTarget) {
+		return { kind: "ask", reason: `The agents_tmp target of ${rawPath} resolves outside its scratch directory.` };
+	}
+
 	if (
-		repository.startupIgnoredPaths.has(pathInfo.lexical) ||
-		repository.startupIgnoredPaths.has(pathInfo.canonical)
+		!isScratchTarget &&
+		(repository.startupIgnoredPaths.has(pathInfo.lexical) ||
+			repository.startupIgnoredPaths.has(pathInfo.canonical))
 	) {
 		return {
 			kind: "ask",
@@ -348,7 +356,13 @@ function decideGuardedBash(
 		);
 		if (reason) return { kind: "ask", reason };
 		const commandName = commandTokens ? basename(commandTokens[0]!) : undefined;
-		if (commandName && ["cd", "popd", "pushd"].includes(commandName)) hasChangedDirectory = true;
+		if (
+			commandName &&
+			["cd", "popd", "pushd"].includes(commandName) &&
+			changesWorkingDirectory(segment, commandTokens!, cwd)
+		) {
+			hasChangedDirectory = true;
+		}
 	}
 	return undefined;
 }
@@ -399,6 +413,14 @@ function guardedSegmentReason(
 	return undefined;
 }
 
+function changesWorkingDirectory(segment: string, commandTokens: string[], cwd: string): boolean {
+	if (basename(commandTokens[0]!) !== "cd") return true;
+	if (commandTokens.length !== 2 || hasUnsafeShellSyntax(segment)) return true;
+	const currentDirectory = canonicalPath(cwd);
+	const target = currentDirectory ? resolveShellPathInfo(commandTokens[1]!, cwd) : undefined;
+	return !currentDirectory || target?.canonical !== currentDirectory;
+}
+
 function guardedDeletionReason(
 	command: "rm" | "rmdir",
 	segment: string,
@@ -431,10 +453,15 @@ function guardedDeletionReason(
 		) {
 			return `${command} target ${target} resolves outside the repository or cannot be evaluated safely.`;
 		}
+		const scratchRoot = canonicalPath(join(repository.root, "agents_tmp"));
+		if (scratchRoot && deletionPath === scratchRoot) {
+			return `${command} cannot remove the agents_tmp scratch directory itself without approval.`;
+		}
 		if (isGitMetadata(repository.root, deletionPath)) {
 			return `${command} target ${target} is Git metadata and requires approval.`;
 		}
 		if (
+			!(scratchRoot && isStrictlyInside(scratchRoot, deletionPath)) &&
 			[...repository.startupIgnoredPaths].some(
 				(ignoredPath) => ignoredPath === deletionPath || isInside(deletionPath, ignoredPath),
 			)
@@ -895,6 +922,20 @@ function canonicalPath(target: string, depth = 0): string | undefined {
 
 function isMissingPathError(error: unknown): boolean {
 	return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
+function isAgentScratchTarget(root: string, lexical: string, canonical: string): boolean {
+	const lexicalRoot = join(root, "agents_tmp");
+	const canonicalRoot = canonicalPath(lexicalRoot);
+	return Boolean(
+		canonicalRoot &&
+			isStrictlyInside(lexicalRoot, lexical) &&
+			isStrictlyInside(canonicalRoot, canonical),
+	);
+}
+
+function isStrictlyInside(root: string, target: string): boolean {
+	return target !== root && isInside(root, target);
 }
 
 function isGitMetadata(root: string, target: string): boolean {

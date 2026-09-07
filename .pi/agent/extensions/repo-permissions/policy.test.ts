@@ -26,13 +26,16 @@ function withRepository(run: (state: RepositoryState, outside: string) => void):
 	const outside = realpathSync(outsidePath);
 	writeFileSync(join(root, "tracked.txt"), "tracked\n");
 	writeFileSync(join(root, ".env"), "secret\n");
+	mkdirSync(join(root, "agents_tmp"));
+	writeFileSync(join(root, "agents_tmp", "old.scratch"), "scratch\n");
 	writeFileSync(join(outside, "outside.txt"), "outside\n");
 	symlinkSync(outside, join(root, "outside-link"));
+	symlinkSync(outside, join(root, "agents_tmp", "outside-link"));
 	symlinkSync(".env", join(root, "ignored-alias"));
 	symlinkSync("loop", join(root, "loop"));
 
 	try {
-		run({ root, startupIgnoredPaths: new Set([join(root, ".env")]) }, outside);
+		run({ root, startupIgnoredPaths: new Set([join(root, ".env"), join(root, "agents_tmp", "old.scratch")]) }, outside);
 	} finally {
 		rmSync(base, { recursive: true, force: true });
 	}
@@ -79,6 +82,10 @@ test("repository modes redirect direct OS-temp mutations to agents_tmp", () => {
 		}
 
 		assert.equal(call("repository", "write", { path: "agents_tmp/file" }, repository.root, repository).kind, "allow");
+		for (const mode of ["repository", "unattended"] as const) {
+			assert.equal(call(mode, "edit", { path: "agents_tmp/old.scratch" }, repository.root, repository).kind, "allow");
+		}
+		assert.notEqual(call("repository", "edit", { path: "agents_tmp/outside-link/file" }, repository.root, repository).kind, "allow");
 		assert.equal(call("repository", "read", { path: join(tmpdir(), "output.log") }, repository.root, repository).kind, "allow");
 		assert.equal(call("ask", "write", { path: join(tmpdir(), "output.log") }, repository.root, repository).kind, "ask");
 		assert.equal(
@@ -92,6 +99,9 @@ test("repository mode allows literal in-repository rm targets", () => {
 	withRepository((repository) => {
 		for (const command of [
 			"rm tracked.txt",
+			"rm agents_tmp/old.scratch",
+			`cd ${repository.root} && rm agents_tmp/old.scratch`,
+			"cd . && rm agents_tmp/old.scratch",
 			"rm -rf subdir",
 			"rm outside-link",
 			"rmdir empty-dir",
@@ -109,6 +119,7 @@ test("repository mode asks for rm targets that are outside, dynamic, or speciall
 			`rm ${outside}/outside.txt`,
 			"rm ../outside/outside.txt",
 			"rm outside-link/outside.txt",
+			"rm agents_tmp/outside-link/outside.txt",
 			"rm -rf outside-link/",
 			"rm -rf outside-link/.",
 			"cd /tmp && rm outside.txt",
@@ -117,6 +128,8 @@ test("repository mode asks for rm targets that are outside, dynamic, or speciall
 			"rm .env",
 			"rm .git/config",
 			"rm -rf .",
+			"rm -rf agents_tmp",
+			"cd \"$PWD\" && rm agents_tmp/old.scratch",
 			`rmdir ${outside}`,
 			"rmdir ../outside",
 			"rmdir \"$TARGET\"",

@@ -11,6 +11,7 @@ Language- and project-neutral rules for all agents unless a project's local inst
 ## Agent temporary files
 
 - Put agent-owned temporary files in `agents_tmp/` at the active repository root instead of the operating system's temporary directory.
+- Treat files inside `agents_tmp/` as disposable scratch data. Direct mutations and literal deletion of its contents are allowed, but do not remove the `agents_tmp/` directory itself.
 - Never stage or commit `agents_tmp/`.
 
 ## Machine-specific dotfiles
