@@ -430,7 +430,7 @@ set without another Manager review unless an explicit final-stage rebase has
 persisted a fresh Manager-review requirement. Passing checks on clean Git persist only
 `final_checks_passed`. Stable terminal resume returns completion without checks,
 Git inspection, a new Work Cycle, or another squash offer. Autoimplement never
-pushes.
+pushes before a successful squash or without an explicit post-squash choice.
 
 ## Optional squash
 
@@ -485,9 +485,114 @@ operator's next reply while the question is active:
 - A question or unrelated message is not an answer. Answer it without invoking
   the helper, then ask `[MM_NTF] Should i squash?` again.
 
-Return squash success or failure unchanged. A failure, decline, or successful
-squash leaves durable Task state unchanged. Never resume, persist squash
-metadata, push, or automatically retry.
+Return squash failure or decline unchanged. Both leave durable Task state
+unchanged. Never resume, persist squash metadata, push, or automatically retry
+after either outcome.
+
+After successful squash, preserve the Task ID, canonical checkout, configured
+Task branch, starting commit SHA, and squashed `HEAD` SHA for the next turn.
+Begin the complete turn with `[MM_NTF]`, retain the squash helper output, then
+show:
+
+```text
+What's next?
+
+- push only / 1
+- push and merge / 2
+```
+
+## Post-squash delivery
+
+This continuation is available only immediately after a successful squash in
+the current conversation. Do not offer or perform either action after a failed
+or declined squash, before squash, or from a later normal Autoimplement resume.
+Do not persist the menu, selection, push, pull request, or merge as workflow
+state.
+
+For the operator's next reply while the menu is active:
+
+- Treat exact bare `push`, `push only`, or `1` as approval to push the squashed
+  Task branch only.
+- Treat exact bare `push and merge` or `2` as approval to push the squashed Task
+  branch, create or reuse its GitHub pull request, and merge it with a merge
+  commit.
+- Treat `no`, `skip`, or `leave` as declining delivery. Make no remote change.
+- A question or unrelated message is not a selection. Answer it without making
+  a remote change, then show the menu again with `[MM_NTF]`.
+
+Before either approved action:
+
+1. Require the worktree to be clean, the configured Task branch to remain
+   checked out, `HEAD` to equal the retained squashed SHA, and `HEAD^` to equal
+   the Task starting commit SHA. Stop before any remote change when validation
+   fails.
+2. Push exactly the configured Task branch:
+
+   ```text
+   git -C <canonical-checkout> push --set-upstream origin <task-branch>
+   ```
+
+   Never force-push automatically. If the normal push is rejected because the
+   squash rewrote an existing remote branch, begin with `[MM_NTF]`, explain that
+   `--force-with-lease` is required, and ask for explicit approval while
+   preserving the selected push-only or push-and-merge action. On approval, run:
+
+   ```text
+   git -C <canonical-checkout> push --force-with-lease --set-upstream origin <task-branch>
+   ```
+
+   Continue the preserved action only after that push succeeds. Surface any
+   other push failure and stop.
+
+For push only, report the pushed branch and stop. Do not create or merge a pull
+request.
+
+For push and merge, after the push succeeds:
+
+1. Run `gh pr view --json number,url,state,baseRefName,headRefOid` from the
+   canonical checkout to find the Task branch's pull request. Reuse it only when
+   it is open. Treat only GitHub CLI's explicit no-pull-request result as absence;
+   surface authentication, network, repository, and other failures unchanged.
+2. When no open pull request exists, resolve its base from the Task's configured
+   `active_base_ref`. Strip an exact `origin/` or `refs/remotes/origin/` prefix;
+   otherwise use it only when it names a local branch other than the Task branch.
+   If it is a commit SHA, tag, missing branch, or otherwise ambiguous, begin with
+   `[MM_NTF]` and ask the operator for the exact base branch before creating the
+   pull request.
+3. Create the pull request non-interactively with:
+
+   ```text
+   gh pr create --base <base-branch> --head <task-branch> --fill
+   ```
+
+4. Re-read the pull request. Require it to be open and its `headRefOid` to equal
+   the retained squashed `HEAD` SHA. When an expected configured base was
+   resolved, also require `baseRefName` to match it. Stop and ask before merging
+   any mismatch.
+5. Merge the exact pull request with a merge commit and pin the expected head:
+
+   ```text
+   gh pr merge <number> --merge --match-head-commit <squashed-head-sha>
+   ```
+
+Do not use administrator bypass, enable auto-merge, or delete either branch.
+After the merge succeeds:
+
+1. Fetch `origin` and require the pull request's local base branch to exist.
+2. Require the worktree to remain clean, then switch to that local base branch.
+3. Fast-forward it to `origin/<base-branch>` with:
+
+   ```text
+   git -C <canonical-checkout> merge --ff-only origin/<base-branch>
+   ```
+
+4. Verify the base branch is checked out, its `HEAD` equals
+   `origin/<base-branch>`, and the worktree is clean.
+
+If any step fails, stop and report the error. Do not create a missing base
+branch, reset, detach, delete a branch, or attempt another recovery path. Report
+the pull request URL, merge result, and updated checkout, then stop. A push,
+merge, or checkout update changes no durable Autoimplement Task state.
 
 ## Issue assessment
 
@@ -551,4 +656,5 @@ classification, or start debate.
 SQLite is authoritative for generated workflow state. Do not create Task logs,
 review reports, or other durable generated artifacts. Structured result files
 are temporary transport owned by the Work Cycle protocol. Manager remains the
-only workflow database writer. Autoimplement never pushes.
+only workflow database writer. Autoimplement pushes or merges only after a successful
+squash and the operator's explicit post-squash choice.
