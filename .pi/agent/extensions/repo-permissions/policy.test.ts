@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
 	decideToolCall,
+	getHttpOrigin,
 	getSshDestination,
 	matchRule,
 	parseStartupIgnoredPaths,
@@ -45,7 +46,8 @@ const call = (
 	repository?: RepositoryState,
 	skillRules: string[] = [],
 	sshDestinations: Set<string> = new Set(),
-) => decideToolCall({ mode, toolName, input, cwd, repository, skillRules, sshDestinations });
+	httpOrigins: Set<string> = new Set(),
+) => decideToolCall({ mode, toolName, input, cwd, repository, skillRules, sshDestinations, httpOrigins });
 
 test("repository mode allows ordinary tools inside and outside the repository", () => {
 	withRepository((repository, outside) => {
@@ -404,6 +406,55 @@ test("SSH grants allow one exact destination for the session", () => {
 			destination,
 		);
 		assert.equal(getSshDestination(`ssh ${destination} true && rm tracked.txt`), undefined);
+	});
+});
+
+test("HTTP grants allow mutating curl requests to one exact loopback origin", () => {
+	withRepository((repository) => {
+		const origin = "http://localhost:1337";
+		const grants = new Set([origin]);
+		for (const mode of ["repository", "ask"] as const) {
+			for (const command of [
+				"curl -X POST http://localhost:1337/api/items -d '{}'",
+				"curl -XPUT http://localhost:1337/api/items/1 -d '{}'",
+				"curl -X DELETE http://localhost:1337/api/items/1 && curl -X POST http://localhost:1337/api/items",
+			]) {
+				assert.equal(
+					call(mode, "bash", { command }, repository.root, repository, [], new Set(), grants).kind,
+					"allow",
+					command,
+				);
+			}
+		}
+
+		for (const command of [
+			"curl -X POST http://localhost:3000/api/items",
+			"curl -X POST https://localhost:1337/api/items",
+			"curl -L -X POST http://localhost:1337/api/items",
+			"curl -K curl.conf -X POST http://localhost:1337/api/items",
+			"curl --proxy http://localhost:8080 -X POST http://localhost:1337/api/items",
+			"HTTP_PROXY=http://localhost:8080 curl -X POST http://localhost:1337/api/items",
+			"curl --resolve localhost:1337:192.0.2.10 -X POST http://localhost:1337/api/items",
+			"curl --connect-to localhost:1337:192.0.2.10:80 -X POST http://localhost:1337/api/items",
+			"curl -H 'Host: admin.localhost' -X POST http://localhost:1337/api/items",
+			"curl --unix-socket /var/run/service.sock -X POST http://localhost:1337/api/items",
+			"curl -X POST https://example.test/api/items",
+			"curl -X POST http://localhost:1337/api/items && kill 123",
+		]) {
+			assert.equal(
+				call("repository", "bash", { command }, repository.root, repository, [], new Set(), grants).kind,
+				"ask",
+				command,
+			);
+		}
+
+		assert.equal(
+			getHttpOrigin("curl -X POST http://localhost:1337/api/items && curl -X PUT http://localhost:1337/api/other"),
+			origin,
+		);
+		assert.equal(getHttpOrigin("curl -X POST http://127.0.0.1:1337/api/items"), "http://127.0.0.1:1337");
+		assert.equal(getHttpOrigin("curl -X POST http://[::1]:1337/api/items"), "http://[::1]:1337");
+		assert.equal(getHttpOrigin("curl -X POST https://example.test/api/items"), undefined);
 	});
 });
 

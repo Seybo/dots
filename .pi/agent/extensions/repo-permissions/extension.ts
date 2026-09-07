@@ -6,6 +6,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 import {
 	decideToolCall,
+	getHttpOrigin,
 	getSshDestination,
 	parseRuleList,
 	type PermissionMode,
@@ -45,6 +46,7 @@ export function registerRepoPermissions(
 	let skillRules: string[] | undefined;
 	let hasLogWarning = false;
 	const sshDestinations = new Set<string>();
+	const httpOrigins = new Set<string>();
 
 	function renderStatus(ctx: ExtensionContext): void {
 		const label = mode === "repository" ? "repo" : mode;
@@ -93,6 +95,7 @@ export function registerRepoPermissions(
 		skillRules = undefined;
 		hasLogWarning = false;
 		sshDestinations.clear();
+		httpOrigins.clear();
 		await loadRepository(ctx);
 	});
 
@@ -112,6 +115,7 @@ export function registerRepoPermissions(
 			repository,
 			skillRules: (skillRules ??= getSkillRules(pi, parseFrontmatter)),
 			sshDestinations,
+			httpOrigins,
 		});
 
 		if (decision.kind === "allow") return;
@@ -148,14 +152,33 @@ export function registerRepoPermissions(
 		}
 
 		const sshChoice = sshDestination ? `Allow SSH access to ${sshDestination} for this session` : undefined;
-		const choices = sshChoice
-			? ["Allow once", sshChoice, "Allow everything for this session", "Reject"]
+		const httpOrigin = command
+			? grantableHttpOrigin(
+					command,
+					mode,
+					input,
+					ctx.cwd,
+					repository,
+					skillRules,
+					sshDestinations,
+					httpOrigins,
+				)
+			: undefined;
+		const httpChoice = httpOrigin ? `Allow HTTP access to ${httpOrigin} for this session` : undefined;
+		const sessionChoice = sshChoice ?? httpChoice;
+		const choices = sessionChoice
+			? ["Allow once", sessionChoice, "Allow everything for this session", "Reject"]
 			: PROMPT_CHOICES;
 		const choice = await ctx.ui.select(formatPrompt(event.toolName, input, decision.reason), choices);
 		if (choice === "Allow once") return;
 		if (sshDestination && choice === sshChoice) {
 			sshDestinations.add(sshDestination);
 			ctx.ui.notify(`SSH access to ${sshDestination} is allowed for this session.`, "info");
+			return;
+		}
+		if (httpOrigin && choice === httpChoice) {
+			httpOrigins.add(httpOrigin);
+			ctx.ui.notify(`HTTP access to ${httpOrigin} is allowed for this session.`, "info");
 			return;
 		}
 		if (choice === "Allow everything for this session") {
@@ -166,6 +189,34 @@ export function registerRepoPermissions(
 		ctx.abort();
 		return { block: true, reason: "Rejected by user" };
 	});
+}
+
+function grantableHttpOrigin(
+	command: string,
+	mode: PermissionMode,
+	input: Record<string, unknown>,
+	cwd: string,
+	repository: RepositoryState | undefined,
+	skillRules: string[],
+	sshDestinations: Set<string>,
+	httpOrigins: Set<string>,
+): string | undefined {
+	const origin = getHttpOrigin(command);
+	if (!origin) return undefined;
+
+	const candidateOrigins = new Set(httpOrigins);
+	candidateOrigins.add(origin);
+	const decision = decideToolCall({
+		mode,
+		toolName: "bash",
+		input,
+		cwd,
+		repository,
+		skillRules,
+		sshDestinations,
+		httpOrigins: candidateOrigins,
+	});
+	return decision.kind === "allow" ? origin : undefined;
 }
 
 export function getPermissionLogPath(): string {

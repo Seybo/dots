@@ -121,5 +121,6 @@ Do not add skill rules for ordinary Repository-mode work; it is already allowed.
 - Repository mode allows ordinary outside task/workflow paths; it is not filesystem confinement.
 - Pi clipboard images named `pi-clipboard-<UUID>.png` are readable from the OS temporary directory in Repository and Ask modes.
 - SSH access through conservative `ssh`, `scp`, and `sftp` forms may be approved for one exact destination for the current session. Quoted local `scp` paths may use simple environment variables. The safe options `-q`, `-o BatchMode=yes`, and `-o ConnectTimeout=<seconds>` may precede the destination.
+- Conservative mutating `curl` requests may be approved for one exact loopback HTTP origin for the current session. Grants support `localhost`, `127.0.0.1`, and `::1`; redirects, proxies, alternate connection targets, config files, Unix sockets, and custom Host headers remain guarded.
 - High-impact commands prompt even when a trusted skill rule matches.
 - Unattended and non-interactive operations that require approval are blocked.

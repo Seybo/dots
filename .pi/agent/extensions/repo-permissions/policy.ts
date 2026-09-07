@@ -22,6 +22,7 @@ type ToolCall = {
 	repository?: RepositoryState;
 	skillRules: string[];
 	sshDestinations: Set<string>;
+	httpOrigins: Set<string>;
 };
 
 type PathInfo = {
@@ -230,6 +231,7 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 			call.cwd,
 			call.repository,
 			call.sshDestinations,
+			call.httpOrigins,
 		);
 		if (guardedDecision) return guardedDecision;
 	}
@@ -238,7 +240,8 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 		if (
 			call.toolName === "bash" &&
 			argValue &&
-			isAllowedBySessionSsh(argValue, call.sshDestinations)
+			(isAllowedBySessionSsh(argValue, call.sshDestinations) ||
+				isAllowedBySessionHttp(argValue, call.httpOrigins))
 		) {
 			return ALLOW;
 		}
@@ -261,6 +264,20 @@ export function getSshDestination(command: string): string | undefined {
 	const destinations = segments.map(parseSshAccessSegment);
 	const destination = destinations[0];
 	return destination && destinations.every((candidate) => candidate === destination) ? destination : undefined;
+}
+
+export function getHttpOrigin(command: string): string | undefined {
+	const segments = splitShellCommand(command);
+	if (!segments) return undefined;
+
+	const origins = segments.flatMap((segment) => {
+		const tokens = getCommandTokens(segment);
+		return tokens && basename(tokens[0]!) === "curl" && isMutatingCurl(tokens.slice(1))
+			? [curlLoopbackOrigin(segment, tokens.slice(1))]
+			: [];
+	});
+	const origin = origins[0];
+	return origin && origins.every((candidate) => candidate === origin) ? origin : undefined;
 }
 
 function decideOsTempMutation(
@@ -315,6 +332,7 @@ function decideGuardedBash(
 	cwd: string,
 	repository: RepositoryState | undefined,
 	sshDestinations: Set<string>,
+	httpOrigins: Set<string>,
 ): PermissionDecision | undefined {
 	let hasChangedDirectory = false;
 	for (const segment of splitShellCommand(command) ?? [command]) {
@@ -325,6 +343,7 @@ function decideGuardedBash(
 			cwd,
 			repository,
 			sshDestinations,
+			httpOrigins,
 			hasChangedDirectory,
 		);
 		if (reason) return { kind: "ask", reason };
@@ -340,6 +359,7 @@ function guardedSegmentReason(
 	cwd: string,
 	repository: RepositoryState | undefined,
 	sshDestinations: Set<string>,
+	httpOrigins: Set<string>,
 	hasChangedDirectory: boolean,
 ): string | undefined {
 	if (!commandTokens) return undefined;
@@ -368,7 +388,11 @@ function guardedSegmentReason(
 	}
 	if (command === "git" && isGuardedGit(commandTokens)) return "This Git operation requires approval.";
 	if (command === "tmux" && args.some(isGuardedTmuxCommand)) return "This tmux operation requires approval.";
-	if (command === "curl" && isMutatingCurl(args)) return "This curl request can mutate an external service.";
+	if (command === "curl" && isMutatingCurl(args)) {
+		return isAllowedHttpAccessSegment(segment, args, httpOrigins)
+			? undefined
+			: "This curl request can mutate an HTTP service.";
+	}
 	if (command === "gh" && isMutatingGh(args)) return "This GitHub operation can mutate remote state.";
 	if (isHostPackageMutation(command, args)) return "Global package changes require approval.";
 	if (isPublish(command, args)) return "Publishing requires approval.";
@@ -515,6 +539,44 @@ function isGuardedTmuxCommand(arg: string): boolean {
 	return GUARDED_TMUX_COMMANDS.has(arg) || arg.startsWith("kill-") || arg.startsWith("respawn-");
 }
 
+function isAllowedHttpAccessSegment(segment: string, args: string[], origins: Set<string>): boolean {
+	const origin = curlLoopbackOrigin(segment, args);
+	return Boolean(origin && origins.has(origin));
+}
+
+function curlLoopbackOrigin(segment: string, args: string[]): string | undefined {
+	if (hasUnsafeCurlGrantOptions(segment, args)) return undefined;
+
+	const origins = args
+		.filter((arg) => /^https?:\/\//i.test(arg))
+		.map(loopbackHttpOrigin);
+	const origin = origins[0];
+	return origin && origins.every((candidate) => candidate === origin) ? origin : undefined;
+}
+
+function loopbackHttpOrigin(value: string): string | undefined {
+	try {
+		const url = new URL(value);
+		if (!["http:", "https:"].includes(url.protocol)) return undefined;
+		if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname.toLowerCase())) return undefined;
+		return url.origin;
+	} catch {
+		return undefined;
+	}
+}
+
+function hasUnsafeCurlGrantOptions(segment: string, args: string[]): boolean {
+	if (/\b(?:all_proxy|https?_proxy)=/i.test(segment)) return true;
+	return args.some((arg, index) => {
+		if (/^-[^-]*[LKx]/.test(arg)) return true;
+		if (/^--(?:abstract-unix-socket|config|connect-to|location(?:-trusted)?|next|preproxy|proxy|resolve|unix-socket)(?:=|$)/.test(arg)) {
+			return true;
+		}
+		if (["-H", "--header"].includes(arg)) return /^Host\s*:/i.test(args[index + 1] ?? "");
+		return /^--header=Host\s*:/i.test(arg);
+	});
+}
+
 function isMutatingCurl(args: string[]): boolean {
 	return args.some((arg, index) => {
 		if (/^-X(?!GET$|HEAD$)/i.test(arg)) return true;
@@ -566,6 +628,19 @@ function isPublish(command: string, args: string[]): boolean {
 function isAllowedBySessionSsh(command: string, destinations: Set<string>): boolean {
 	const segments = splitShellCommand(command);
 	return Boolean(segments && segments.every((segment) => isAllowedSshAccessSegment(segment, destinations)));
+}
+
+function isAllowedBySessionHttp(command: string, origins: Set<string>): boolean {
+	const segments = splitShellCommand(command);
+	return Boolean(
+		segments &&
+			segments.every((segment) => {
+				const tokens = getCommandTokens(segment);
+				if (!tokens || basename(tokens[0]!) !== "curl") return false;
+				const origin = curlLoopbackOrigin(segment, tokens.slice(1));
+				return Boolean(origin && origins.has(origin));
+			}),
+	);
 }
 
 function isAllowedSshAccessSegment(segment: string, destinations: Set<string>): boolean {

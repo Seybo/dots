@@ -317,6 +317,60 @@ test("SSH destination approval is scoped to the current session", async () => {
 	assert.deepEqual(reset, { block: true, reason: "Rejected by user" });
 });
 
+test("HTTP origin approval is scoped to the current session", async () => {
+	const root = process.cwd();
+	const origin = "http://localhost:1337";
+	const httpChoice = `Allow HTTP access to ${origin} for this session`;
+	const harness = createHarness([
+		gitResult(0, `${root}\n`),
+		gitResult(0),
+		gitResult(0, `${root}\n`),
+		gitResult(0),
+	]);
+	const context = createContext(root);
+	await harness.handlers.get("session_start")!({}, context);
+
+	context.answers.push(httpChoice);
+	assert.equal(
+		await harness.handlers.get("tool_call")!(
+			{ toolName: "bash", input: { command: `curl -X POST ${origin}/api/items -d '{}'` } },
+			context,
+		),
+		undefined,
+	);
+	assert.deepEqual(context.selections.at(-1), [
+		"Allow once",
+		httpChoice,
+		"Allow everything for this session",
+		"Reject",
+	]);
+
+	const selectionCount = context.selections.length;
+	assert.equal(
+		await harness.handlers.get("tool_call")!(
+			{ toolName: "bash", input: { command: `cd ${root} && curl -X PUT ${origin}/api/items/1 -d '{}' | head -c 100` } },
+			context,
+		),
+		undefined,
+	);
+	assert.equal(context.selections.length, selectionCount);
+
+	context.answers.push("Allow once");
+	await harness.handlers.get("tool_call")!(
+		{ toolName: "bash", input: { command: `curl -X POST ${origin}/api/items && kill 123` } },
+		context,
+	);
+	assert.deepEqual(context.selections.at(-1), ["Allow once", "Allow everything for this session", "Reject"]);
+
+	await harness.handlers.get("session_start")!({}, context);
+	context.answers.push("Reject");
+	await harness.handlers.get("tool_call")!(
+		{ toolName: "bash", input: { command: `curl -X POST ${origin}/api/items` } },
+		context,
+	);
+	assert.ok(context.selections.at(-1)?.includes(httpChoice));
+});
+
 test("noninteractive approval is blocked while interactive unrestricted approval is session-only", async () => {
 	const harness = createHarness([gitResult(1), gitResult(1)]);
 	const noninteractive = createContext("/tmp", false);
