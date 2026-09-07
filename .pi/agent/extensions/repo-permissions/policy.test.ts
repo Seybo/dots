@@ -28,6 +28,8 @@ function withRepository(run: (state: RepositoryState, outside: string) => void):
 	writeFileSync(join(root, ".env"), "secret\n");
 	mkdirSync(join(root, "agents_tmp"));
 	writeFileSync(join(root, "agents_tmp", "old.scratch"), "scratch\n");
+	writeFileSync(join(root, "agents_tmp", "process.pid"), "12345\n");
+	writeFileSync(join(root, "agents_tmp", "unsafe.pid"), "-1\n");
 	writeFileSync(join(outside, "outside.txt"), "outside\n");
 	symlinkSync(outside, join(root, "outside-link"));
 	symlinkSync(outside, join(root, "agents_tmp", "outside-link"));
@@ -229,6 +231,8 @@ test("repository mode allows normal skill and development commands", () => {
 			"systemctl list-units --type service --state failed",
 			"rsync -a --exclude node_modules agents_tmp/scaffold/ ./",
 			"cd /home/example/project && rsync -a --exclude node_modules agents_tmp/scaffold/ ./ && git status --short",
+			"kill $(cat agents_tmp/process.pid)",
+			`cd ${repository.root} && kill $(cat agents_tmp/process.pid) 2>/dev/null`,
 		]) {
 			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "allow", command);
 		}
@@ -252,6 +256,10 @@ test("repository mode asks for high-impact command families", () => {
 			"find . -fls results.txt",
 			"shred tracked.txt",
 			"kill 123",
+			"kill -9 $(cat agents_tmp/process.pid)",
+			"kill $(cat agents_tmp/missing.pid)",
+			"kill $(cat agents_tmp/unsafe.pid)",
+			"kill $(cat .env)",
 			"pkill Pi",
 			"systemctl --user start example.service",
 			"systemctl --user restart example.service",
@@ -312,6 +320,9 @@ test("ordinary Git writes are allowed while destructive and remote operations as
 			`git -C ${outside} checkout --no-track -b feature origin/main`,
 			"git switch -c feature",
 			"git switch -c feature origin/main",
+			"git push --set-upstream origin feature",
+			"git push -u origin feature",
+			`git -C ${outside} push --set-upstream origin feature`,
 			"git worktree list",
 		]) {
 			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "allow", command);
@@ -334,6 +345,17 @@ test("ordinary Git writes are allowed while destructive and remote operations as
 			"git rebase main",
 			"git push origin main",
 			"CI=1 git push origin main",
+			"git push --set-upstream origin main",
+			"git push -u origin master",
+			"git push -u origin refs/heads/main",
+			"git push -u upstream feature",
+			"git push -u origin feature other-feature",
+			"git push -u origin feature:other-feature",
+			"git push -u origin :feature",
+			"git push -u origin \"$BRANCH\"",
+			"git push -u origin HEAD",
+			"git push --tags -u origin feature",
+			"git push --force-with-lease -u origin feature",
 			"git remote set-url origin example.test/repo",
 			"git stash drop stash@{0}",
 			"git worktree remove ../review",

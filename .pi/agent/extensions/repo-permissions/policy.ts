@@ -1,4 +1,4 @@
-import { lstatSync, readlinkSync, realpathSync } from "node:fs";
+import { lstatSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
@@ -389,6 +389,7 @@ function guardedSegmentReason(
 		return isReadOnlySystemctl(args) ? undefined : "This systemctl operation requires approval.";
 	}
 	if (command === "rsync" && isGuardedRsync(args)) return "This rsync operation requires approval.";
+	if (command === "kill" && isSafeAgentPidKill(segment, cwd, repository, hasChangedDirectory)) return undefined;
 	if (ASK_COMMANDS.has(command)) return `${command} requires approval.`;
 	if (command === "rm" || command === "rmdir") {
 		if (command === "rmdir" && args.some(hasParentRemovalFlag)) {
@@ -411,6 +412,27 @@ function guardedSegmentReason(
 	if (isHostPackageMutation(command, args)) return "Global package changes require approval.";
 	if (isPublish(command, args)) return "Publishing requires approval.";
 	return undefined;
+}
+
+function isSafeAgentPidKill(
+	segment: string,
+	cwd: string,
+	repository: RepositoryState | undefined,
+	hasChangedDirectory: boolean,
+): boolean {
+	if (!repository || hasChangedDirectory) return false;
+	const match = segment.match(/^kill\s+\$\(cat\s+([^()\s]+)\)(?:\s+2>\/dev\/null)?\s*$/);
+	const rawPath = match?.[1];
+	if (!rawPath || hasUnsafeShellSyntax(rawPath)) return false;
+
+	const pathInfo = resolveShellPathInfo(rawPath, cwd);
+	if (!pathInfo || !isAgentScratchTarget(repository.root, pathInfo.lexical, pathInfo.canonical)) return false;
+	try {
+		const pid = readFileSync(pathInfo.canonical, "utf8").trim();
+		return /^[1-9]\d*$/.test(pid) && Number(pid) > 1 && Number.isSafeInteger(Number(pid));
+	} catch {
+		return false;
+	}
 }
 
 function changesWorkingDirectory(segment: string, commandTokens: string[], cwd: string): boolean {
@@ -525,7 +547,9 @@ function isGuardedGit(segment: string, tokens: string[]): boolean {
 	if (!parsed) return false;
 	const { command, args } = parsed;
 
-	if (isSafeGitBranchCreation(segment, command, args)) return false;
+	if (isSafeGitBranchCreation(segment, command, args) || isSafeUpstreamPush(segment, command, args)) {
+		return false;
+	}
 	if (GUARDED_GIT_COMMANDS.has(command)) return true;
 	if (command === "commit") return args.includes("--amend");
 	if (command === "branch") {
@@ -541,6 +565,20 @@ function isGuardedGit(segment: string, tokens: string[]): boolean {
 	if (command === "notes") return !["list", "show"].includes(args[0] ?? "");
 	if (command === "config") return isMutatingGitConfig(args);
 	return false;
+}
+
+function isSafeUpstreamPush(segment: string, command: string, args: string[]): boolean {
+	if (command !== "push" || hasUnsafeShellSyntax(segment) || args.length !== 3) return false;
+	if (!["-u", "--set-upstream"].includes(args[0]!) || args[1] !== "origin") return false;
+
+	const branch = args[2]!;
+	return (
+		/^[a-z0-9][a-z0-9._/-]*$/i.test(branch) &&
+		!branch.includes("..") &&
+		!branch.endsWith(".lock") &&
+		!branch.startsWith("refs/") &&
+		!["head", "main", "master"].includes(branch.toLowerCase())
+	);
 }
 
 function isSafeGitBranchCreation(segment: string, command: string, args: string[]): boolean {

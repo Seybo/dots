@@ -135,6 +135,7 @@ Language- and project-neutral rules for all agents unless a project's local inst
 
 - Put agent-owned temporary files in `agents_tmp/` at the active repository root instead of the operating system's temporary directory.
 - Treat files inside `agents_tmp/` as disposable scratch data. Direct mutations and literal deletion of its contents are allowed, but do not remove the `agents_tmp/` directory itself.
+- To stop a process whose positive numeric PID is stored in a literal scratch file, use the default `kill $(cat agents_tmp/<name>.pid)` form. Other signals, paths, and process-selection commands require approval.
 - Never stage or commit `agents_tmp/`.
 
 ## Machine-specific dotfiles

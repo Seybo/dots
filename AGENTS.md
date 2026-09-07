@@ -27,7 +27,9 @@
 - For browser CPU spike investigations from this repo, use the exact approved wrapper commands: `/Users/inseybo/.dots/no_stow/bin/browser-spike-investigate brave` or `/Users/inseybo/.dots/no_stow/bin/browser-spike-investigate chrome`. Do not run ad-hoc `ps`/`sample`/`lsof`/`awk` investigation chains unless the wrapper is insufficient and the user approves.
 - Pi's Repository mode allows ordinary commands and tools by default but prompts for explicit high-impact operations. Unattended mode uses the same policy but blocks approval-required operations immediately. Prefer path-aware `read`, `edit`, and `write` when they express the work clearly and preserve startup ignored-file and Git-metadata checks.
 - Files inside repository-root `agents_tmp/` are disposable scratch data. Direct mutations and literal deletion of its contents are allowed, but deleting the scratch directory itself remains guarded.
+- Default `kill $(cat agents_tmp/<name>.pid)` is allowed only when the literal scratch file contains one positive numeric PID. Other kill forms remain guarded.
 - Literal `rm` and plain `rmdir` targets that resolve inside the repository are allowed. Dynamic, escaping, and parent-removing `rmdir` targets require approval, and are blocked in Unattended mode.
+- Exact non-force upstream pushes of one literal non-protected branch to `origin` are allowed by Repository mode. Agent workflow rules still require explicit authorization to push.
 
 ### Shell command safety
 
