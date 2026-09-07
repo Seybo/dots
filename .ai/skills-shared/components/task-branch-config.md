@@ -105,13 +105,20 @@ Do not configure the new task branch to track its parent.
 
 Taskit creates or converts the Task folder but does not record local Git
 metadata. Workit records it immediately before planning and Autoimplement
-initialization, after applying the shared protected-branch rules.
+initialization, after applying the shared protected-branch rules. This component
+does not infer, create, rename, or switch a local branch.
 
-Local Tasks use the current branch as-is. Never infer, create, rename, or switch
-a local branch. Record:
+When Workit created the current branch for this Task during the active
+invocation, it supplies the exact source base ref and full SHA retained from that
+creation. Record:
 
 - `name`: current branch
-- every original/active base ref/SHA: current full `HEAD` SHA
+- every original/active base ref: the exact creation base ref
+- every original/active base commit SHA: the full creation base SHA
+
+Otherwise the local Task uses the current branch as-is. Record the current
+branch as `name` and the current full `HEAD` SHA as every original/active base
+ref and SHA.
 
 If branch config already exists, validate the configured branch and do not
 rewrite original values. Preserve unrelated config sections. Taskit and Workit
