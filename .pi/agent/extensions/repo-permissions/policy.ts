@@ -386,7 +386,7 @@ function guardedSegmentReason(
 	if (command === "find" && args.some(isMutatingFindArgument)) {
 		return "find execution or mutation requires approval. For read-only processing, list paths first, then run the follow-up command on those literal paths in a separate tool call.";
 	}
-	if (command === "git" && isGuardedGit(commandTokens)) return "This Git operation requires approval.";
+	if (command === "git" && isGuardedGit(segment, commandTokens)) return "This Git operation requires approval.";
 	if (command === "tmux" && args.some(isGuardedTmuxCommand)) return "This tmux operation requires approval.";
 	if (command === "curl" && isMutatingCurl(args)) {
 		return isAllowedHttpAccessSegment(segment, args, httpOrigins)
@@ -493,11 +493,12 @@ function isMutatingFindArgument(arg: string): boolean {
 	return ["-delete", "--delete", "-exec", "-execdir", "-fls", "-ok", "-okdir"].includes(arg) || arg.startsWith("-fprint");
 }
 
-function isGuardedGit(tokens: string[]): boolean {
+function isGuardedGit(segment: string, tokens: string[]): boolean {
 	const parsed = parseGitCommand(tokens);
 	if (!parsed) return false;
 	const { command, args } = parsed;
 
+	if (isSafeGitBranchCreation(segment, command, args)) return false;
 	if (GUARDED_GIT_COMMANDS.has(command)) return true;
 	if (command === "commit") return args.includes("--amend");
 	if (command === "branch") {
@@ -513,6 +514,31 @@ function isGuardedGit(tokens: string[]): boolean {
 	if (command === "notes") return !["list", "show"].includes(args[0] ?? "");
 	if (command === "config") return isMutatingGitConfig(args);
 	return false;
+}
+
+function isSafeGitBranchCreation(segment: string, command: string, args: string[]): boolean {
+	if (hasUnsafeShellSyntax(segment)) return false;
+	if (command === "switch") {
+		return (
+			args[0] === "-c" &&
+			args.length >= 2 &&
+			args.length <= 3 &&
+			args.slice(1).every((arg) => !arg.startsWith("-"))
+		);
+	}
+	if (command !== "checkout") return false;
+
+	const createIndex = args.indexOf("-b");
+	if (createIndex === -1 || args.lastIndexOf("-b") !== createIndex) return false;
+	const options = args.slice(0, createIndex);
+	const operands = args.slice(createIndex + 1);
+	return (
+		options.length <= 1 &&
+		options.every((arg) => arg === "--no-track") &&
+		operands.length >= 1 &&
+		operands.length <= 2 &&
+		operands.every((arg) => !arg.startsWith("-"))
+	);
 }
 
 function parseGitCommand(tokens: string[]): { command: string; args: string[] } | undefined {

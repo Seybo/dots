@@ -75,6 +75,7 @@ test("real Git snapshots include standard excludes but not files created later",
 				repository: discovered.repository,
 				skillRules: [],
 				sshDestinations: new Set(),
+				httpOrigins: new Set(),
 			}).kind,
 			"allow",
 		);
