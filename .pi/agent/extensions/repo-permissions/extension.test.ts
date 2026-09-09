@@ -154,6 +154,17 @@ test("Unattended mode blocks approval-required work without prompting", async ()
 	);
 	assert.equal(context.selections.length, selectionCount);
 	assert.equal(harness.permissionRequests[0]?.status, "blocked-unattended");
+	assert.deepEqual(
+		await harness.handlers.get("tool_call")!(
+			{ toolName: "bash", input: { command: "docker compose up" } },
+			context,
+		),
+		{
+			block: true,
+			reason:
+				"Blocked in Unattended mode: docker requires approval. Continue with permitted work and report this blocked operation.",
+		},
+	);
 	assert.equal(
 		(await harness.handlers.get("tool_call")!(
 			{ toolName: "write", input: { path: "/tmp/agent-owned.tmp" } },
@@ -161,7 +172,11 @@ test("Unattended mode blocks approval-required work without prompting", async ()
 		) as { block?: boolean }).block,
 		true,
 	);
-	assert.deepEqual(harness.permissionRequests.map((entry) => entry.status), ["blocked-unattended", "blocked-policy"]);
+	assert.deepEqual(harness.permissionRequests.map((entry) => entry.status), [
+		"blocked-unattended",
+		"blocked-unattended",
+		"blocked-policy",
+	]);
 	assert.equal(
 		await harness.handlers.get("tool_call")!({ toolName: "read", input: { path: "README.md" } }, context),
 		undefined,

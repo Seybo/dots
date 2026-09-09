@@ -244,6 +244,10 @@ test("repository mode asks for high-impact command families", () => {
 		for (const command of [
 			"sudo touch /tmp/system",
 			"doas pacman -Syu",
+			"docker ps",
+			"docker compose up",
+			"docker-compose up",
+			"/usr/bin/docker run --rm alpine true",
 			"pacman -Syu",
 			"brew install jq",
 			"brew update",

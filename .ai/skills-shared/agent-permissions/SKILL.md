@@ -44,13 +44,26 @@ Repository mode is default-allow so normal skills, interpreters, tests, helpers,
 Keep the ask list short. Add a command family only when it represents a concrete, high-impact operation in this environment, such as:
 
 - privilege or host service changes
+- direct Docker daemon commands:
+  - require approval in Repository mode
+  - are blocked in Unattended mode
+  - can provide host-root control where socket access is root-equivalent
+  - are matched only when visible, not when hidden inside an arbitrary executable
 - host/global package changes
 - mass or irreversible filesystem operations
 - process or tmux destruction
 - destructive Git history, branch, stash, worktree, config, or remote operations
 - external mutations and package publishing
 
-Normal `git add`, `git rm`, ordinary `git commit`, literal non-resetting branch creation with `git checkout -b`, `git checkout --no-track -b`, or `git switch -c`, and exact non-force `git push -u origin <literal-branch>` or `git push --set-upstream origin <literal-branch>` remain allowed. Upstream pushes to `main`, `master`, `HEAD`, full refs, other remotes, multiple or dynamic refspecs, tags, deletion, force options, existing-branch switches, resetting or forced creation, path restoration, branch deletion or renaming, and other destructive or remote Git operations remain guarded. Agent authorization rules still decide when branch creation or push is permitted. Literal `rm` and plain `rmdir` targets are allowed when their resolved deletion paths stay inside the repository. `rmdir -p` remains guarded. Ordinary local `rsync` is allowed; remote transfers, deletion, source-file removal, and custom remote-shell options remain guarded.
+Repository mode allows:
+
+- normal `git add`, `git rm`, and ordinary `git commit`
+- literal non-resetting branch creation with `git checkout -b`, `git checkout --no-track -b`, or `git switch -c`; existing-branch switches, resetting or forced creation, path restoration, branch deletion, and branch renaming remain guarded
+- exact non-force `git push -u origin <literal-branch>` or `git push --set-upstream origin <literal-branch>`; pushes to `main`, `master`, `HEAD`, full refs, other remotes, multiple or dynamic refspecs, tags, deletion, and force options remain guarded
+- literal `rm` and plain `rmdir` targets when their resolved deletion paths stay inside the repository; `rmdir -p` remains guarded
+- ordinary local `rsync`; remote transfers, deletion, source-file removal, and custom remote-shell options remain guarded
+
+Other destructive or remote Git operations remain guarded. Agent authorization rules still decide when branch creation or push is permitted.
 
 Direct `edit` and `write` calls still prompt for files that were untracked and Git-ignored when Repository mode started, and for Git metadata. Repository-root `agents_tmp/` contents are the exception: they are disposable and remain mutable after reload, while the directory itself and symlink escapes remain guarded. In Repository and Unattended modes, direct mutations in OS temporary directories are blocked with guidance to use this visible, never-commit scratch directory. Literal deletion commands also prompt for other startup-ignored targets, repository escapes, and dynamic targets that cannot be resolved safely. A literal `cd` resolving to the current working directory is treated as a no-op when evaluating a later deletion; actual directory changes remain guarded. Default `kill $(cat agents_tmp/<name>.pid)` is allowed when that resolved literal scratch file contains one positive numeric PID; explicit signals, other paths, missing or invalid files, and other process selectors remain guarded. Skill rules cannot bypass these checks or the high-impact Bash ask list.
 

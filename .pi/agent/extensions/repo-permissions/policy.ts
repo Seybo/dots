@@ -36,6 +36,8 @@ const ASK_COMMANDS = new Set([
 	"dd",
 	"diskutil",
 	"doas",
+	"docker",
+	"docker-compose",
 	"exec",
 	"kill",
 	"killall",
