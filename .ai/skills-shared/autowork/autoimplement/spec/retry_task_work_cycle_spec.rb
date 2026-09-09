@@ -165,7 +165,7 @@ RSpec.describe RetryTaskWorkCycle do
   end
 
   def result_path
-    "/tmp/autoimplement-work-cycle-#{work_cycle_id}.json"
+    TaskWorkCycleResultPath.call(work_cycle_id: work_cycle_id)
   end
 
   def git!(*arguments)

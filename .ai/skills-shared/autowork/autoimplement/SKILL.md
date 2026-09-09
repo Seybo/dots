@@ -361,16 +361,19 @@ For a persisted `manager`/`review` Work Cycle, run it inline in the current Mana
    judgment over prior decisions. Do not suppress duplicate concerns merely
    because history contains a similar concern.
 7. Publish one completed `manager`/`review` result with normal provenance and a
-   `reported_issues` array. Write the complete payload first to:
+   `reported_issues` array. Resolve the transport paths from the environment:
 
-   ```text
-   /tmp/autoimplement-work-cycle-<id>.json.tmp
+   ```bash
+   : "${AUTOWORK_RESULT_DIR:?AUTOWORK_RESULT_DIR must be set}"
+   result_tmp_path="$AUTOWORK_RESULT_DIR/autoimplement-work-cycle-<id>.json.tmp"
+   result_path="$AUTOWORK_RESULT_DIR/autoimplement-work-cycle-<id>.json"
    ```
 
-   Then atomically publish it with:
+   The configured directory must already exist. Write the complete payload to
+   `$result_tmp_path`, then atomically publish it with:
 
-   ```text
-   mv /tmp/autoimplement-work-cycle-<id>.json.tmp /tmp/autoimplement-work-cycle-<id>.json
+   ```bash
+   mv "$result_tmp_path" "$result_path"
    ```
 
 8. Run `$DEV_ROOT/bin/skills/autoimplement wait-work-cycle <id>` directly and

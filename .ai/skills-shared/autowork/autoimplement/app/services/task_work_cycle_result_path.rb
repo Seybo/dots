@@ -6,6 +6,9 @@ class TaskWorkCycleResultPath
   arguments :work_cycle_id
 
   def call
-    "/tmp/autoimplement-work-cycle-#{work_cycle_id}.json"
+    File.join(
+      ENV.fetch('AUTOWORK_RESULT_DIR'),
+      "autoimplement-work-cycle-#{work_cycle_id}.json"
+    )
   end
 end

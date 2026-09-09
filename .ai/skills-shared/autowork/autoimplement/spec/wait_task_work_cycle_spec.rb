@@ -20,6 +20,13 @@ RSpec.describe WaitTaskWorkCycle do
     )
   end
 
+  around do |example|
+    original_result_dir = ENV.fetch('AUTOWORK_RESULT_DIR')
+    example.run
+  ensure
+    ENV['AUTOWORK_RESULT_DIR'] = original_result_dir
+  end
+
   before do
     File.write(
       File.join(task_path, 'steps.md'),
@@ -58,6 +65,18 @@ RSpec.describe WaitTaskWorkCycle do
     expect(reviewer_work_cycle).to include(role: 'reviewer', action: 'review', completed_at: nil)
     expect(db[:tasks].where(id: task_id).get(:state)).to eq('initialized')
     expect(File.exist?(result_path(work_cycle_id))).to be(false)
+  end
+
+  it 'imports and removes a result from the configured result directory' do
+    result_dir = File.join(task_path, 'results')
+    FileUtils.mkdir_p(result_dir)
+    ENV['AUTOWORK_RESULT_DIR'] = result_dir
+    work_cycle_id = insert_implementation(step_number: 1)
+    write_result(work_cycle_id, implementation_result(work_cycle_id))
+
+    described_class.call(work_cycle_id: work_cycle_id)
+
+    expect(File.exist?(File.join(result_dir, "autoimplement-work-cycle-#{work_cycle_id}.json"))).to be(false)
   end
 
   it 'uses the step number when the initial authored heading has no title' do
@@ -609,6 +628,6 @@ RSpec.describe WaitTaskWorkCycle do
   end
 
   def result_path(work_cycle_id)
-    "/tmp/autoimplement-work-cycle-#{work_cycle_id}.json"
+    TaskWorkCycleResultPath.call(work_cycle_id: work_cycle_id)
   end
 end

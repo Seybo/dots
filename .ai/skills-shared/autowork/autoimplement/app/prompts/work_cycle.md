@@ -133,16 +133,20 @@ For role `manager` and action `review`:
 
 ## Report
 
-After the action finishes, write the complete valid JSON payload to this temporary path:
+Resolve the result directory and both transport paths from the environment:
 
-```text
-/tmp/autoimplement-work-cycle-<id>.json.tmp
+```bash
+: "${AUTOWORK_RESULT_DIR:?AUTOWORK_RESULT_DIR must be set}"
+result_tmp_path="$AUTOWORK_RESULT_DIR/autoimplement-work-cycle-<id>.json.tmp"
+result_path="$AUTOWORK_RESULT_DIR/autoimplement-work-cycle-<id>.json"
 ```
 
-Do not create the final result path until the temporary file is complete. Then publish the result with this same-directory atomic rename:
+The configured directory must already exist.
 
-```text
-mv /tmp/autoimplement-work-cycle-<id>.json.tmp /tmp/autoimplement-work-cycle-<id>.json
+After the action finishes, write the complete valid JSON payload to `$result_tmp_path`. Do not create the final result path until the temporary file is complete. Then publish the result with this same-directory atomic rename:
+
+```bash
+mv "$result_tmp_path" "$result_path"
 ```
 
 Outside a super-review's own temporary artifact and worktree lifecycle, the temporary and final result paths are the only files the Work Cycle executor may intentionally author outside the returned project path. Focused tools may manage their own ignored caches or temporary files; do not treat those as workflow state. Autoimplement imports only the final `.json` path.

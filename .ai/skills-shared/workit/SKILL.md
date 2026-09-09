@@ -194,7 +194,8 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - write `steps.md` using simple, precise technical language
    - structure `steps.md` as gradual, reviewable implementation slices; each step should leave the repo in a working state
    - every `## Step N` must be an implementation slice expected to change repository files
-   - do not create numbered steps for final verification, reporting, staging, committing, or baseline checkpoints; put task-specific checks inside the implementation step they validate because Workit and Autoimplement own final review, checks, staging, commits, and reporting
+   - do not create numbered steps for final verification, reporting, staging, committing, or baseline checkpoints; put focused checks inside the implementation step they validate because Workit and Autoimplement own final review, full checks, staging, commits, and reporting
+   - after each numbered step, run only the focused specs and linters needed for that slice; run complete project spec and lint suites once after all numbered steps are complete
    - use parseable step headings for every step:
      ```md
      ## Step 1: Short title

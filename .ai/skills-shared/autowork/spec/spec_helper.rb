@@ -5,6 +5,7 @@ require 'tmpdir'
 
 default_test_db_path = File.join(Dir.tmpdir, "autowork-test-#{Process.pid}.db")
 ENV['AUTOWORK_DB_PATH'] = ENV.fetch('AUTOWORK_TEST_DB_PATH', default_test_db_path)
+ENV['AUTOWORK_RESULT_DIR'] = ENV.fetch('AUTOWORK_TEST_RESULT_DIR', Dir.tmpdir)
 
 require_relative '../config/boot'
 require_relative 'support/review_factory'
