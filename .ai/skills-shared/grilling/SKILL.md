@@ -49,7 +49,7 @@ For every other file-backed session:
 - Keep the interview read-only while questions remain. Do not rewrite the file after each answer.
 - When each material point is settled, discoverable, or explicitly deferred, automatically update the source file before the final summary. The invocation authorizes this update; do not require a second save request.
 - Integrate settled decisions into the relevant sections, replace obsolete or conflicting statements, remove resolved alternatives, and preserve unrelated content and the file's established structure. Do not append a transcript or generic grilling report.
-- Put every explicitly deferred question in a final `# Deferred decisions` section using the complete Question / Why this is open / Recommendation format. Remove questions once resolved, omit the section when empty, and do not infer a deferral merely because the user has not answered yet.
+- Put every explicitly deferred question in a final `# Deferred decisions` section using the complete Question / Why this is open / Recommendation / Complexity / Conventionality format. Remove questions once resolved, omit the section when empty, and do not infer a deferral merely because the user has not answered yet.
 - Before editing, determine whether version control can restore the current content. If it cannot, create and verify a backup outside the affected path first.
 - Update only the identified source file. Do not edit implementation code, related plans, roadmaps, or other files unless the user explicitly requests them.
 - Re-read the updated file and verify it reflects every settled decision and explicit deferral before reporting completion.
@@ -70,6 +70,13 @@ When starting from a feature idea:
 4. Build on prior answers without inventing unstated requirements or hypothetical alternatives.
 
 Treat references as evidence to inspect, not as proof. Investigate relevant local code and documentation, official or upstream sources, and focused external sources only when they are likely to resolve a material decision. Do not research merely to satisfy a checklist.
+
+Whenever this workflow provides a recommendation—in a question, deferred decision, final summary, or elsewhere—also rate:
+
+- **Complexity:** `Low`, `Medium`, or `High`, based on the implementation effort, number of moving parts, and ongoing maintenance the recommendation introduces.
+- **Conventionality:** `Conventional`, `Somewhat conventional`, or `Unconventional`, based on how closely the recommendation follows established project patterns and common industry practice.
+
+Give a brief, concrete reason for each rating. Use local code and documentation first. If the complexity or conventionality rating is still uncertain, read and follow [`web-search`](../web-search/SKILL.md) and research the uncertain point before presenting the recommendation. Cite the sources used, as required by that skill.
 
 Before asking a question, classify the relevant point as:
 
@@ -104,9 +111,14 @@ Use this format:
 
 **Recommendation:** <recommended answer grounded in the plan and evidence>
 
-Treat the recommendation as the proposal the user should accept, reject, or
-correct. End the turn with the recommendation. Do not append another question,
-prompt, or restatement after it; that makes the decision target ambiguous.
+**Complexity:** <Low | Medium | High> — <brief concrete reason>
+
+**Conventionality:** <Conventional | Somewhat conventional | Unconventional> — <brief concrete reason>
+
+Treat the Recommendation / Complexity / Conventionality block as the proposal
+the user should accept, reject, or correct. End the turn with the
+Conventionality line. Do not append another question, prompt, or restatement
+after it; that makes the decision target ambiguous.
 
 Ask one question at a time and wait for feedback. When the user explicitly defers a question or says they cannot answer it, record it for `# Deferred decisions`, do not ask it again, and continue with the next point.
 
