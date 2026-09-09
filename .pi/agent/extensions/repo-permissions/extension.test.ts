@@ -155,6 +155,14 @@ test("Unattended mode blocks approval-required work without prompting", async ()
 	assert.equal(context.selections.length, selectionCount);
 	assert.equal(harness.permissionRequests[0]?.status, "blocked-unattended");
 	assert.equal(
+		(await harness.handlers.get("tool_call")!(
+			{ toolName: "write", input: { path: "/tmp/agent-owned.tmp" } },
+			context,
+		) as { block?: boolean }).block,
+		true,
+	);
+	assert.deepEqual(harness.permissionRequests.map((entry) => entry.status), ["blocked-unattended", "blocked-policy"]);
+	assert.equal(
 		await harness.handlers.get("tool_call")!({ toolName: "read", input: { path: "README.md" } }, context),
 		undefined,
 	);
@@ -181,6 +189,8 @@ test("Repository mode redirects direct OS-temp mutations without prompting", asy
 		},
 	);
 	assert.equal(context.selections.length, selectionCount);
+	assert.deepEqual(harness.permissionRequests.map((entry) => entry.status), ["blocked-policy"]);
+	assert.match(String(harness.permissionRequests[0]?.reason), /OS temporary directories/);
 });
 
 test("standard scalar allowed-tools rules are loaded from trusted local skills", async () => {

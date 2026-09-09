@@ -64,7 +64,7 @@ For `find`, approval-required examples include `-exec`, `-execdir`, `-ok`, `-okd
 
 ## Permission request log
 
-The extension records every approval-required operation as one JSON line. Entries include the timestamp, mode, prompt status, working directory, tool, reason, and request detail capped at 1,200 characters. The private local log persists across sessions and may contain sensitive command arguments, so never commit or share it without reviewing the content.
+The extension records every approval-required operation and direct policy block as one JSON line. Entries include the timestamp, mode, status (`prompted`, `blocked-unattended`, `blocked-no-ui`, or `blocked-policy`), working directory, tool, reason, and request detail capped at 1,200 characters. The private local log persists across sessions and may contain sensitive command arguments, so never commit or share it without reviewing the content.
 
 Log paths:
 

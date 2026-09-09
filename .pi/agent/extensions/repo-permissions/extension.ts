@@ -26,7 +26,7 @@ type FrontmatterParser = (content: string) => Record<string, unknown>;
 type PermissionRequestLogEntry = {
 	timestamp: string;
 	mode: PermissionMode;
-	status: "prompted" | "blocked-unattended" | "blocked-no-ui";
+	status: "prompted" | "blocked-policy" | "blocked-unattended" | "blocked-no-ui";
 	cwd: string;
 	tool: string;
 	detail: string;
@@ -119,13 +119,19 @@ export function registerRepoPermissions(
 		});
 
 		if (decision.kind === "allow") return;
-		if (decision.kind === "block") return { block: true, reason: decision.reason };
 
 		try {
 			logPermissionRequest({
 				timestamp: new Date().toISOString(),
 				mode,
-				status: mode === "unattended" ? "blocked-unattended" : ctx.hasUI ? "prompted" : "blocked-no-ui",
+				status:
+					decision.kind === "block"
+						? "blocked-policy"
+						: mode === "unattended"
+							? "blocked-unattended"
+							: ctx.hasUI
+								? "prompted"
+								: "blocked-no-ui",
 				cwd: ctx.cwd,
 				tool: event.toolName,
 				detail: truncatePromptDetail(getToolDetail(event.toolName, input)),
@@ -138,6 +144,7 @@ export function registerRepoPermissions(
 			}
 		}
 
+		if (decision.kind === "block") return { block: true, reason: decision.reason };
 		if (mode === "unattended") {
 			return {
 				block: true,
