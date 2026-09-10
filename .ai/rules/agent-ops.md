@@ -6,6 +6,7 @@ Language- and project-neutral rules for all agents unless a project's local inst
 
 - Perform state-changing work only when the current explicit request or invoked skill authorizes it. Planning, grilling, review, and explanation workflows are read-only unless they explicitly say otherwise.
 - Before moving, replacing, or deleting anything, identify state that version control cannot restore. If any exists, stop until it has a verified backup outside the affected paths.
+- Do not create a separate safety backup when version control already preserves the exact state being replaced.
 - Inspection must not create or mutate the thing being inspected. Verify existence first and use read-only modes.
 
 ## Agent temporary files
@@ -31,6 +32,7 @@ Language- and project-neutral rules for all agents unless a project's local inst
 - Give routine read-only remote verification commands a tool timeout of at most 15 seconds.
 - For non-interactive SSH verification, use `BatchMode=yes` and a short `ConnectTimeout`.
 - Prefer one simple remote command per SSH call.
+- For Oma, run `systemctl --user --failed --no-legend` once after a grouped state-changing operation or service change, not after each read-only check or each command in the group.
 - Use interactive SSH or a longer timeout only when the operation specifically requires it.
 
 ## Git safety
