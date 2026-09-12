@@ -45,8 +45,6 @@ keybind = cmd+u=text:
 keybind = cmd+m=text:
 
 # Tmux session navigation
-# cmd+s => enter session navigation mode
-keybind = cmd+s=text:
 # cmd+shift+comma/period/slash => attention, base, and session picker
 keybind = cmd+shift+comma=text:⟬
 keybind = cmd+shift+period=text:⟭
