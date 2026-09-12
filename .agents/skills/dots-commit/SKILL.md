@@ -74,15 +74,6 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
      ```
    - Read diffs for tracked changes. Use targeted `git -C <repo> diff -- <paths>` / `git -C <repo> diff --cached -- <paths>` commands when the full diff is large.
    - For untracked files, list the files first, then read only relevant text files. Do not dump large binaries or generated artifacts.
-   - Only when `MACHINE_NAME=squirrel`, check Claude settings drift. `~/.claude/settings.json` is deliberately not stow-linked because Claude Code rewrites it. Its ignored repo-local baseline is `.claude/settings.json`:
-     ```bash
-     diff "$HOME/.claude/settings.json" "$STOW_DIR/.claude/settings.json"
-     ```
-     If they differ, show the diff and ask whether the live changes are intentional. After the operator confirms, copy the live file over the baseline, then scan it:
-     ```bash
-     "$HOME/.dots/.agents/skills/dots-check/scripts/scan.rb" --file "$STOW_DIR/.claude/settings.json"
-     ```
-     Apply the dots-check exit-code rules from step 2. The baseline is ignored and must not be staged or included in a commit group.
 
 4. **Check repo fit**
    - Run `$STOW_DIR/bin/stow_check`. Stop on any conflict.
