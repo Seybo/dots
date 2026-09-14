@@ -24,31 +24,33 @@ return {
 
     -- if no action is done in the fzf window, it moves cursor to the last change after close
     -- lets preserve cursor position
+    local function with_cursor_restore(picker, picker_opts)
+      -- grab current position
+      local cur_win = vim.api.nvim_get_current_win()
+      local cur_pos = vim.api.nvim_win_get_cursor(cur_win)
+
+      -- 1st arg = "force", 2nd arg = {} (base), 3rd = user opts, 4th = our winopts
+      local resulting_opts = vim.tbl_deep_extend(
+        'force', -- merge mode
+        {}, -- start with an empty table
+        picker_opts or {}, -- supplied opts (must be a table or nil)
+        { -- injected opts
+          winopts = {
+            on_close = function()
+              if vim.api.nvim_win_is_valid(cur_win) then
+                vim.api.nvim_set_current_win(cur_win)
+                vim.api.nvim_win_set_cursor(cur_win, cur_pos)
+              end
+            end,
+          },
+        }
+      )
+
+      picker(resulting_opts)
+    end
+
     local function map_with_cursor_restore(mode, lhs, picker, picker_opts, desc)
-      vim.keymap.set(mode, lhs, function()
-        -- grab current position
-        local cur_win = vim.api.nvim_get_current_win()
-        local cur_pos = vim.api.nvim_win_get_cursor(cur_win)
-
-        -- 1st arg = "force", 2nd arg = {} (base), 3rd = user opts, 4th = our winopts
-        local resulting_opts = vim.tbl_deep_extend(
-          'force', -- merge mode
-          {}, -- start with an empty table
-          picker_opts or {}, -- supplied opts (must be a table or nil)
-          { -- injected opts
-            winopts = {
-              on_close = function()
-                if vim.api.nvim_win_is_valid(cur_win) then
-                  vim.api.nvim_set_current_win(cur_win)
-                  vim.api.nvim_win_set_cursor(cur_win, cur_pos)
-                end
-              end,
-            },
-          }
-        )
-
-        picker(resulting_opts)
-      end, { desc = desc })
+      vim.keymap.set(mode, lhs, function() with_cursor_restore(picker, picker_opts) end, { desc = desc })
     end
 
     map_with_cursor_restore('n', '<leader>fb', fzf.builtin, nil, '[Fzf] Builtin')
@@ -59,14 +61,31 @@ return {
     end, nil, '[Fzf] Search Current File Directory')
     map_with_cursor_restore('n', '<leader>fp', fzf.files, { cwd = dev_root .. '/_apis' }, '[Fzf] Search in my api')
     map_with_cursor_restore('n', '<leader>fm', fzf.files, { cwd = '../_mydev' }, '[Fzf] Search in my dev')
-    map_with_cursor_restore('n', '<leader>ft', fzf.files, { cwd = dev_root .. '/_tasks' }, '[Fzf] Search in all tasks')
-    map_with_cursor_restore('n', '<leader>tta', fzf.files, { cwd = dev_root .. '/_tasks', raw_cmd = 'rg --files --sortr modified misc_axel_*' }, '[Fzf] Search Axel tasks')
-    map_with_cursor_restore('n', '<leader>ttk', fzf.files, { cwd = dev_root .. '/_tasks', raw_cmd = 'rg --files --sortr modified misc_kaamp_*' }, '[Fzf] Search Kaamp tasks')
-    map_with_cursor_restore('n', '<leader>ttg', fzf.files, { cwd = dev_root .. '/_tasks/shaka_gtm', raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search Shaka GTM tasks')
-    map_with_cursor_restore('n', '<leader>tto', fzf.files, { cwd = dev_root .. '/_tasks/shaka_outreach', raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search Shaka Outreach tasks')
-    map_with_cursor_restore('n', '<leader>ttp', fzf.files, { cwd = dev_root .. '/_tasks/shaka_trp', raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search Shaka TRP tasks')
-    map_with_cursor_restore('n', '<leader>tte', fzf.files, { cwd = dev_root .. '/_tasks/env', raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search env tasks')
-    map_with_cursor_restore('n', '<leader>ttm', fzf.files, { cwd = dev_root .. '/_tasks', raw_cmd = 'rg --files --sortr modified my_*' }, '[Fzf] Search my_ tasks')
+    local task_root = dev_root .. '/_tasks'
+    local function select_task_project(prefix, prompt)
+      local projects = {}
+      for name, entry_type in vim.fs.dir(task_root) do
+        if entry_type == 'directory' and vim.startswith(name, prefix) then
+          table.insert(projects, name)
+        end
+      end
+      table.sort(projects)
+
+      vim.ui.select(projects, { prompt = prompt }, function(project)
+        if project then
+          with_cursor_restore(fzf.files, {
+            cwd = task_root .. '/' .. project,
+            raw_cmd = 'rg --files --sortr modified',
+          })
+        end
+      end)
+    end
+
+    map_with_cursor_restore('n', '<leader>ft', fzf.files, { cwd = task_root }, '[Fzf] Search in all tasks')
+    vim.keymap.set('n', '<leader>tas', function() select_task_project('shaka_', 'Shaka tasks project') end, { desc = '[Fzf] Choose Shaka task project' })
+    vim.keymap.set('n', '<leader>tap', function() select_task_project('my_', 'Personal tasks project') end, { desc = '[Fzf] Choose personal task project' })
+    vim.keymap.set('n', '<leader>tam', function() select_task_project('misc_', 'Misc tasks project') end, { desc = '[Fzf] Choose misc task project' })
+    map_with_cursor_restore('n', '<leader>tae', fzf.files, { cwd = task_root .. '/env', raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search env tasks')
     map_with_cursor_restore('n', '<leader>fgc', fzf.git_status, nil, '[Fzf] Search Git Changed Files')
     map_with_cursor_restore('n', '<leader>fha', fzf.oldfiles, nil, '[Fzf] Files History (all)')
     map_with_cursor_restore('n', '<leader>fhf', function() fzf.oldfiles({ cwd_only = true }) end, nil, '[Fzf] Files History (within repo)')
