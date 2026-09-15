@@ -3,7 +3,7 @@ name: super-review
 description: >-
   Explicit-only multi-agent code review for PRs, branches, commits, staged changes,
   or diffs. Invoke only with /super-review (or /skill:super-review). Supports
-  --agent claude and --agent codex, defaulting to Codex. Do not invoke for
+  --agent claude and --agent codex, defaulting to Claude. Do not invoke for
   ordinary review requests.
 ---
 
@@ -18,7 +18,7 @@ description: >-
 /skill:super-review [--agent claude|codex] [scope]
 ```
 
-Default agent: `codex`. Reject missing or unsupported `--agent` values.
+Default agent: `claude`. Reject missing or unsupported `--agent` values.
 
 Both modes preserve the same reviewer roles, hard rules, phases, synthesis, report, and posting workflow:
 
