@@ -179,6 +179,25 @@ function copyToClipboard(text: string): Promise<void> {
 }
 
 export default function copyPartExtension(pi: ExtensionAPI) {
+	pi.registerShortcut("ctrl+shift+y", {
+		description: "Copy current prompt to clipboard",
+		handler: async (ctx) => {
+			const text = ctx.ui.getEditorText();
+			if (!text) {
+				ctx.ui.notify("Prompt is empty", "warning");
+				return;
+			}
+
+			try {
+				await copyToClipboard(text);
+				ctx.ui.notify("Copied prompt to clipboard", "info");
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				ctx.ui.notify(`Failed to copy prompt: ${message}`, "error");
+			}
+		},
+	});
+
 	pi.registerCommand("cp", {
 		description: "Browse and copy response parts, or open a referenced file in Neovim",
 		handler: async (args, ctx) => {
