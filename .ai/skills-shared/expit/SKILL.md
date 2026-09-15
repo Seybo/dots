@@ -40,7 +40,8 @@ Examples demonstrate explanation structure only. They do not establish facts, po
 
 Before the first response, rank the examples by how well their explanation structure fits the current subject:
 
-- Prefer a complete-flow trace when the user needs to understand what happened through an ordered process.
+- Prefer an end-to-end business and data flow when the user needs a broad workflow across actors, databases, external systems, automatic actions, human actions, and branches.
+- Prefer a focused item lifecycle when the user needs to trace one record, value, or occurrence and resolve a specific ambiguity.
 - Prefer a claim-by-claim analysis when the user needs to evaluate criticism, competing claims, or a proposed fix.
 - When examples fit equally well, prefer their listed order.
 
@@ -56,7 +57,165 @@ After an attempt:
 
 ## Explanation examples, in order
 
-### Example 1 — Complete-flow trace
+### Example 1 — End-to-end business and data flow
+
+#### End-to-end business and data-flow explanation
+
+Explain the complete flow in plain language, from the initial operator action to the final result.
+
+For each numbered stage, state:
+
+- Who performs the action.
+- What information enters and leaves.
+- Which database records are read or written.
+- Which external systems are involved.
+- What happens automatically and what requires human action.
+- The main branches, including success, no action, and failure or noise.
+- Why each important difference exists in business terms.
+
+Finish with a short arrow diagram showing the whole flow. Focus on observable business behavior, not classes, methods, or implementation details.
+
+#### Expected HeyReach tracking flow
+
+##### 1. Prepare qualified recipients locally
+
+Before generating tracking tokens:
+
+1. Generate a fresh Google PageSpeed report for each website.
+2. Keep only recipients whose mobile FCP is greater than 3 seconds.
+3. Produce a private CSV containing at least:
+   - LinkedIn URL
+   - Website domain
+   - PageSpeed permalink
+
+Keep this data outside Git.
+
+**Tracking database:** no read or write.
+
+##### 2. Generate tracking tokens on the VPS
+
+Production tokens must exist in the production tracking database. The expected process is:
+
+1. SSH to the VPS.
+2. Securely copy the private recipient CSV there.
+3. Run `tracking-mint` using the real HeyReach campaign ID.
+   - Reads `tracking_tokens` to find an existing token for each campaign and LinkedIn URL.
+   - Writes a new `tracking_tokens` row only when no matching token exists.
+   - Does not read or write GTM campaign, prospect, or push records.
+4. Receive a CSV containing exactly:
+   - `linkedin_url`
+   - `check_token`
+   - `check_url`
+   - `report_url`
+5. Securely copy that output back to the private local campaign workspace.
+
+Running this on the VPS ensures the public tracking endpoint recognizes the generated tokens.
+
+##### 3. Build the HeyReach import locally
+
+Join the tracking output with:
+
+- Recipient information
+- PageSpeed permalink
+- Message fields
+- A/B variant assignment
+
+Then produce the final private HeyReach import.
+
+The two variants are:
+
+- **Variant A:** self-check prompt plus bare `checkUrl`
+- **Variant B:** the same prompt plus `checkUrl` and the direct `reportUrl`
+
+Import the file into HeyReach and launch the separate campaign.
+
+**Tracking database:** no read or write. HeyReach stores the imported campaign data in its own system.
+
+##### 4. What happens after HeyReach sends the message
+
+###### Path A: The message is never read
+
+Normally, nothing happens.
+
+A LinkedIn previewer might fetch the bare `checkUrl`. The tracking service reads `tracking_tokens`, then writes a `tracking_events` noise row without `yes` or `no`. An unknown token causes no write.
+
+The system cannot reliably distinguish between:
+
+- Never opened
+- Opened but ignored
+- Read without running the prompt
+
+The system measures prompt usage, not message opens.
+
+###### Path B: The recipient reads it but does nothing
+
+Nothing meaningful is recorded. Opening the Google PageSpeed link does not read or write the tracking database.
+
+###### Path C: The recipient gives the prompt to their AI
+
+1. The recipient copies the prompt into their AI agent.
+2. The AI reads the Google PageSpeed report.
+3. The AI decides whether mobile speed is a real problem.
+4. The AI constructs `checkUrl?v=yes` or `checkUrl?v=no`.
+5. The AI opens that URL.
+6. The tracking service reads `tracking_tokens` to identify the recipient and reads `tracking_events` for duplicate and rate-limit checks.
+7. It writes a `tracking_events` row containing the `yes` or `no` assessment.
+
+At present, neither answer changes HeyReach or requests a report.
+
+###### Path D: The recipient requests the report
+
+In Variant B:
+
+1. The recipient opens `reportUrl`.
+2. Opening the page alone does not count as a request.
+3. The recipient submits the report form.
+4. The report service informs the tracking service.
+5. The tracking service reads `tracking_tokens` and checks `tracking_events` for duplicates.
+6. It writes a separate `tracking_events` row with `event_type = report_requested`.
+
+This is the explicit human request.
+
+##### 5. Read the results
+
+The operator runs the tracking report on the VPS. It reads `tracking_tokens` and `tracking_events` and writes nothing. It shows:
+
+- Tokens issued
+- Bare-link noise
+- AI `yes` assessments
+- AI `no` assessments
+- Human report requests
+- LinkedIn URL for each person
+
+A private local mapping can connect each LinkedIn URL to the exact A/B message sent.
+
+Nothing automatically:
+
+- Changes the HeyReach campaign
+- Stops a sequence
+- Sends a report
+- Suppresses a recipient
+- Calls the HeyReach API
+
+Any operator action happens later and is separate.
+
+##### Complete flow
+
+```text
+Qualified private CSV
+  → copy to VPS
+  → mint production tokens
+  → copy tracking CSV locally
+  → join with PSI and message data
+  → import into HeyReach
+  → send LinkedIn message
+  → recipient gives prompt to AI
+  → AI records yes/no assessment
+  → human may separately request report
+  → operator reads tracking report
+```
+
+### Example 2 — Focused item lifecycle
 
 #### Lactate’s complete flow
 
@@ -106,7 +265,7 @@ After an attempt:
 
 The omitted item is the Summary Report appearance, not the Lactate result itself.
 
-### Example 2 — Claim-by-claim analysis
+### Example 3 — Claim-by-claim analysis
 
 #### One HeyReach page approval flow
 
