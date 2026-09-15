@@ -178,19 +178,6 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - in `step_mode`, if `steps.md` is missing, stop and tell the user to run `/workit` without `step` first to create and approve the plan
    - if `steps.md` already exists, read it and follow it; update it only if the task needs a corrected or more incremental plan and `step_mode` is not active
    - if `steps.md` is missing and `step_mode` is not active, create it first from `task.md` before implementation
-   - after creating `steps.md`, or after making substantive updates to an existing `steps.md`:
-     - in `non_stop_mode`, continue implementation immediately without suggesting Autoimplement or requesting plan confirmation
-     - otherwise, stop and ask the user to review the plan, then show:
-       ```text
-       Plan ready. Choose how to implement it:
-
-       - continue with workit / 1 — implement one step at a time with approval between steps
-       - autoimplement / 2 — approve the plan and complete it autonomously
-       ```
-     - preserve the resolved project or session, task ID, and plan for the next turn
-     - treat exact bare `continue with workit` or `1` as approval for Workit to begin implementing the plan one step at a time
-     - treat exact bare `autoimplement` or `2` as an explicit Autoimplement invocation; read and follow `../autowork/autoimplement/SKILL.md` immediately as `/skill:autoimplement <resolved-project-or-session> <task_id>`
-     - do not invoke Autoimplement for any other reply or before the user chooses it
    - write `steps.md` using simple, precise technical language
    - structure `steps.md` as gradual, reviewable implementation slices; each step should leave the repo in a working state
    - every `## Step N` must be an implementation slice expected to change repository files
@@ -211,6 +198,46 @@ and select the matching ordinal workspace. Applied to `/workit`:
    - fix real bugs discovered in existing logic when they block correctness or violate documented behavior
    - actively notice and capture useful improvements, validations, edge-case handling, and behavior changes; if they are not already in the task/current implementation, keep them out of the implementation and propose them to the user as a separate follow-up conversation before doing that work
    - keep the plan aligned with the task's acceptance criteria and non-goals
+   - after creating `steps.md`, or after making substantive updates to an existing `steps.md`, start one fresh isolated Pi process from the code working directory with no session, context files, skills, extensions, or prompt templates and only the read tool:
+     ```bash
+     pi -p --no-session --no-context-files --no-skills --no-extensions --no-prompt-templates --tools read --model "$PI_PROVIDER/$PI_MODEL" --thinking "$PI_REASONING_LEVEL" "Read <task_folder>/task.md, <task_folder>/steps.md, and $HOME/.ai/rules/development-principles.md. Validate the plan against the Task and every development principle. Report only substantive objections, suggestions, and questions that could change implementation correctness, scope, simplicity, or maintainability. Do not edit files, run commands, report style or nits, or add speculative complexity. Return exactly 'All clear' when there are no findings."
+     ```
+   - capture the complete validator output; if the process fails, stop and report the failure instead of continuing with an unvalidated plan
+   - assess every validator finding in the main Workit agent against the Task, relevant code patterns, and the development principles:
+     - apply accepted, unambiguous, in-scope findings directly to `steps.md`
+     - reject invalid, speculative, conflicting, or out-of-scope findings with a short reason
+     - keep only questions that require a user decision before implementation
+     - do not modify `task.md` and do not rerun the validator recursively after updating `steps.md`
+   - present the plan path, validation result, and main-agent assessment concisely; report only the substance, never the full validator transcript, full plan, or plan diff
+   - when there are no findings, show:
+     ```text
+     Plan: <full-steps.md-path>
+
+     Validation: all clear
+     ```
+   - when there are findings, show only non-empty lines from:
+     ```text
+     Plan: <full-steps.md-path>
+
+     Validation:
+     - Applied: <substantive accepted changes>
+     - Rejected: <substantive rejected findings and short reasons>
+     - Open questions: <questions requiring the user>
+     ```
+   - if open questions remain, stop and ask them before implementation; apply the answers to `steps.md`, then present the concise final assessment without rerunning the validator
+   - after validation and assessment complete with no open questions:
+     - in `non_stop_mode`, continue implementation immediately without suggesting Autoimplement or requesting plan confirmation
+     - otherwise, stop and show:
+       ```text
+       Plan ready. Choose how to implement it:
+
+       - continue with workit / 1 — implement one step at a time with approval between steps
+       - autoimplement / 2 — approve the plan and complete it autonomously
+       ```
+     - preserve the resolved project or session, task ID, and plan for the next turn
+     - treat exact bare `continue with workit` or `1` as approval for Workit to begin implementing the plan one step at a time
+     - treat exact bare `autoimplement` or `2` as an explicit Autoimplement invocation; read and follow `../autowork/autoimplement/SKILL.md` immediately as `/skill:autoimplement <resolved-project-or-session> <task_id>`
+     - do not invoke Autoimplement for any other reply or before the user chooses it
 
 8. **Proceed with the task:**
    - work in the resolved code working directory
