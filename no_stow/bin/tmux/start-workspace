@@ -19,17 +19,15 @@ def ordinal(number)
   raise WorkspaceError, 'workspace number must be positive' unless number.positive?
 
   suffix = if (11..13).cover?(number % 100)
-    'th'
-  else
-    { 1 => 'st', 2 => 'nd', 3 => 'rd' }.fetch(number % 10, 'th')
-  end
+             'th'
+           else
+             { 1 => 'st', 2 => 'nd', 3 => 'rd' }.fetch(number % 10, 'th')
+           end
   "#{number}#{suffix}"
 end
 
 def project_workspace(target, projects)
-  if projects.key?(target) && !projects.fetch(target)['is_infrastructure']
-    return [target, '1st']
-  end
+  return [target, '1st'] if projects.key?(target) && !projects.fetch(target)['is_infrastructure']
 
   projects.keys.sort_by { |project| -project.length }.each do |project|
     next if projects.fetch(project)['is_infrastructure']
@@ -85,6 +83,7 @@ def main
   if workspace_number && !workspace_number.match?(/\A\d+\z/)
     raise WorkspaceError, 'workspace number must be a positive integer'
   end
+
   target = workspace_number ? "#{project_or_target}#{workspace_number}" : project_or_target
 
   projects = load_projects
@@ -100,6 +99,7 @@ def main
   task_root = File.join(TASK_ROOT, project)
   raise WorkspaceError, "workspace does not exist: #{code_dir}" unless File.directory?(code_dir)
   raise WorkspaceError, "task project does not exist: #{task_root}" unless File.directory?(task_root)
+
   exit 0 if check_only
 
   if system('tmux', 'has-session', '-t', target, out: File::NULL, err: File::NULL)
