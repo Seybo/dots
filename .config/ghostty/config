@@ -11,6 +11,10 @@ font-size = 14
 keybind = cmd+shift+0=reset_font_size
 # cmd+ctrl+shift+r => reload Ghostty configuration
 keybind = cmd+ctrl+shift+r=reload_config
+# Move the command palette from cmd+shift+p to cmd+shift+c.
+keybind = cmd+shift+c=toggle_command_palette
+# cmd+shift+p => toggle between the two most recently used tmux sessions
+keybind = cmd+shift+p=text:⟪
 font-thicken = false
 adjust-cell-height = 0
 adjust-box-thickness = 0
