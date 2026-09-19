@@ -53,6 +53,11 @@ projects:
     code_root: projects/shaka/outreach
     tmux_layout: shaka_outreach
     task_provider: local
+  shaka_shaka-skill:
+    checkout_layout: ordinal_workspaces
+    code_root: projects/shaka/shaka-skill
+    tmux_layout: shaka_shaka-skill
+    task_provider: local
   shaka_trp:
     checkout_layout: ordinal_workspaces
     code_root: projects/shaka/trp
