@@ -26,3 +26,6 @@ When the meaning is clear, act on them without asking for clarification.
 
 - `00rvu` — Review unstaged changes only.
   Do not run specs or RuboCop. Only review the logic, looking for bugs, unhandled edge cases, and similar correctness issues.
+
+- `00rw` — Rewrite the response using precise, natural, simple, and concise wording.
+  Prefer lists when they improve clarity.
