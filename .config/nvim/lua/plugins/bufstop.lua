@@ -3,8 +3,8 @@ return {
     'mihaifm/bufstop',
     event = 'BufEnter',
     keys = {
-      { '<pageup>', ':BufstopBack<cr>', desc = '[ Buffers ] Prev buffer (in scope of window)' },
-      { '<pagedown>', ':BufstopForward<cr>', desc = '[ Buffers ] Next buffer (in scope of window)' },
+      { '<c-,>', ':BufstopBack<cr>', desc = '[ Buffers ] Prev buffer (in scope of window)' },
+      { '<c-.>', ':BufstopForward<cr>', desc = '[ Buffers ] Next buffer (in scope of window)' },
     },
   },
 }
