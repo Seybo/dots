@@ -15,3 +15,11 @@ auditors:
     ref: main
     adapter: sentry_skill_scanner
     source_path: skills/skill-scanner
+
+skills:
+  shaka:
+    origin: https://github.com/shakacode/shaka.git
+    ref: main
+    audit_path: skills/shaka
+    install:
+      - type: pi_install

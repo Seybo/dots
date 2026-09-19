@@ -71,6 +71,42 @@ class SkillsManagerTest < Minitest::Test
     end
   end
 
+  def test_audit_path_scopes_scanners_without_changing_install_target
+    scoped_skill = {
+      'scoped-skill' => {
+        'origin' => 'https://example.test/scoped.git',
+        'ref' => 'main',
+        'audit_path' => 'skills/scoped'
+      }
+    }
+
+    with_manager(scoped_skill) do |manager|
+      skill = manager.send(:fetch_skill, 'scoped-skill')
+      checkout = manager.send(:checkout_path, skill)
+      FileUtils.mkdir_p(checkout.join('skills/scoped'))
+
+      assert_equal checkout, manager.send(:target_path, skill)
+      assert_equal checkout.join('skills/scoped'), manager.send(:audit_target_path, skill)
+    end
+  end
+
+  def test_audit_path_must_stay_inside_target
+    scoped_skill = {
+      'scoped-skill' => {
+        'origin' => 'https://example.test/scoped.git',
+        'ref' => 'main',
+        'audit_path' => '../other'
+      }
+    }
+
+    with_manager(scoped_skill) do |manager|
+      skill = manager.send(:fetch_skill, 'scoped-skill')
+      error = assert_raises(SkillsManager::Error) { manager.send(:audit_target_path, skill) }
+
+      assert_match(/audit_path must stay inside target/, error.message)
+    end
+  end
+
   def test_plugin_install_actions_print_expected_commands
     with_manager do |manager|
       dry_manager = SkillsManager::Manager.new(repo_root: manager.repo_root, external_root: manager.external_root, manifest_path: manager.manifest_path, dry_run: true)

@@ -103,7 +103,7 @@ module SkillsManager
 
       bundle = create_audit_bundle(name, skill)
       results = audit_plan(name).map do |auditor_name|
-        run_auditor(auditor_name, target_path(skill), bundle)
+        run_auditor(auditor_name, audit_target_path(skill), bundle)
       end
       write_audit_summary(name, skill, bundle, results)
       print_audit_summary(bundle, results)
@@ -191,6 +191,17 @@ module SkillsManager
         end
         path
       end
+    end
+
+    def audit_target_path(skill)
+      target = target_path(skill)
+      path = target.join(skill.fetch('audit_path', '.')).expand_path
+      unless inside_path?(path, target)
+        raise Error, "audit_path must stay inside target #{target}: #{path}"
+      end
+      raise Error, "audit target does not exist: #{path}" unless dry_run || path.exist?
+
+      path
     end
 
     def default_checkout(skill)
@@ -442,7 +453,7 @@ module SkillsManager
     def write_audit_summary(name, skill, bundle, results)
       summary_yml = {
         'skill' => name,
-        'target' => target_path(skill).to_s,
+        'target' => audit_target_path(skill).to_s,
         'head' => git_head(checkout_path(skill), short: false),
         'audited_at' => Time.now.utc.iso8601,
         'policy' => policy_text(skill['auditor']),
