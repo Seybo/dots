@@ -28,7 +28,8 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
 - Prepare and present commit groups first; wait for explicit user approval before staging or committing.
 - Do not mutate git history, branches, tags, stashes, remotes, or commit state before approval.
 - After approval, stage and commit only the approved paths and groups in their stated repository.
-- If `dots-check` reports any finding in either repository, stop before proposing commits. Ask whether each finding should be fixed or explicitly ignored.
+- If `dots-check` reports any finding in either repository, inspect the reported source context, then stop before proposing commits. Ask whether each finding should be fixed or explicitly ignored.
+- When a `high_entropy` finding is clearly an ordinary filesystem path rather than a secret, label it as a likely false positive and recommend explicitly ignoring that finding. Never ignore it automatically.
 - After approved commits, run `dots-check` again for every commit created in each repository and verify that every finding is expected.
 
 ## Workflow
@@ -61,7 +62,10 @@ Do not ask the user to invoke it again. Treat the invocation and/or received ski
    - If a changed repository has staged changes, also run its default staged scan from that repository.
    - Interpret exit codes separately for each repository:
      - `0`: continue.
-     - `1`: findings present. Stop and summarize the findings with their repository. Ask the user whether to fix or explicitly ignore them. If the user explicitly ignores a finding, remember its repository/rule/path/snippet as an expected finding for the post-commit scan.
+     - `1`: findings present. Inspect each reported line in the same source that was scanned: the worktree for `--unstaged` or `--untracked`, and the index for the default staged scan. Then stop and summarize the findings with their repository.
+       - For a `high_entropy` finding, use the source context to distinguish an opaque token from structured text. If the matched value is clearly an ordinary filesystem path, such as an environment-variable-rooted path with normal directory components, label it `likely false positive (path)` and recommend explicitly ignoring that specific finding.
+       - Do not classify a finding as a path false positive if any component resembles a credential or opaque token. Never auto-ignore a finding.
+       - Ask the user whether to fix or explicitly ignore each finding. If the user explicitly ignores a finding, remember its repository/rule/path/snippet as an expected finding for the post-commit scan.
      - `2`: usage/fatal error. Stop and report the error.
 
 3. **Inspect all uncommitted changes**
