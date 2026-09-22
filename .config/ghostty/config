@@ -7,6 +7,8 @@ font-family-italic = "Iosevka Nerd Font Mono"
 font-family-bold-italic = "Hack Nerd Font"
 
 font-size = 14
+# cmd+, => leave unbound instead of opening this config
+keybind = cmd+,=unbind
 # cmd+shift+0 => reset font size to configured default
 keybind = cmd+shift+0=reset_font_size
 # cmd+ctrl+shift+r => reload Ghostty configuration
