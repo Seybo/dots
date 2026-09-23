@@ -11,6 +11,7 @@ PATTERNS = [
   /Would you like to run the following command\?/,
   /Would you like to make the following edits\?/,
   /Dangerous Command/,
+  /This GitHub operation can mutate remote state\./,
   /Add to permanent allowlist/,
   /Agent wants to run shell command\./,
   /Agent wants to (?:write|edit|create|update|read) [^.]{1,200}\./,
