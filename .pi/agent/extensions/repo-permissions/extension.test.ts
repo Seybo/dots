@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -177,6 +177,16 @@ test("Unattended mode blocks approval-required work without prompting", async ()
 		"blocked-unattended",
 		"blocked-policy",
 	]);
+	assert.equal(
+		(
+			(await harness.handlers.get("tool_call")!(
+				{ toolName: "write", input: { path: join(homedir(), "other-repo", "file.txt") } },
+				context,
+			)) as { block?: boolean }
+		).block,
+		true,
+	);
+	assert.equal(harness.permissionRequests.at(-1)?.status, "blocked-unattended");
 	assert.equal(
 		await harness.handlers.get("tool_call")!({ toolName: "read", input: { path: "README.md" } }, context),
 		undefined,
@@ -394,6 +404,70 @@ test("HTTP origin approval is scoped to the current session", async () => {
 		context,
 	);
 	assert.ok(context.selections.at(-1)?.includes(httpChoice));
+});
+
+test("an additional repository can be allowed for the current session", async () => {
+	const root = process.cwd();
+	const additionalRoot = realpathSync(join(root, "refs", "dev-env"));
+	const repositoryChoice = `Allow changes in ${additionalRoot} for this session`;
+	const harness = createHarness([
+		gitResult(0, `${root}\n`),
+		gitResult(0),
+		gitResult(0, `${additionalRoot}\n`),
+		gitResult(0),
+		gitResult(0, `${root}\n`),
+		gitResult(0),
+		gitResult(0, `${additionalRoot}\n`),
+		gitResult(0),
+	]);
+	const context = createContext(root);
+	await harness.handlers.get("session_start")!({}, context);
+
+	context.answers.push("Allow once");
+	assert.equal(
+		await harness.handlers.get("tool_call")!(
+			{ toolName: "bash", input: { command: `rm ${join(additionalRoot, "old-reference.md")}` } },
+			context,
+		),
+		undefined,
+	);
+	assert.deepEqual(context.selections.at(-1), ["Allow once", "Allow everything for this session", "Reject"]);
+
+	context.answers.push(repositoryChoice);
+	assert.equal(
+		await harness.handlers.get("tool_call")!(
+			{ toolName: "edit", input: { path: join(additionalRoot, "agent-permissions.md") } },
+			context,
+		),
+		undefined,
+	);
+	assert.deepEqual(context.selections.at(-1), [
+		"Allow once",
+		repositoryChoice,
+		"Allow everything for this session",
+		"Reject",
+	]);
+
+	const selectionCount = context.selections.length;
+	assert.equal(
+		await harness.handlers.get("tool_call")!(
+			{ toolName: "write", input: { path: join(additionalRoot, "new-reference.md") } },
+			context,
+		),
+		undefined,
+	);
+	assert.equal(context.selections.length, selectionCount);
+
+	await harness.handlers.get("session_start")!({}, context);
+	context.answers.push("Reject");
+	assert.deepEqual(
+		await harness.handlers.get("tool_call")!(
+			{ toolName: "edit", input: { path: join(additionalRoot, "agent-permissions.md") } },
+			context,
+		),
+		{ block: true, reason: "Rejected by user" },
+	);
+	assert.ok(context.selections.at(-1)?.includes(repositoryChoice));
 });
 
 test("noninteractive approval is blocked while interactive unrestricted approval is session-only", async () => {

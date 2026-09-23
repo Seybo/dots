@@ -1,4 +1,5 @@
-import { realpathSync } from "node:fs";
+import { lstatSync, realpathSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 import { parseStartupIgnoredPaths, type RepositoryState } from "./policy.ts";
 
@@ -18,6 +19,26 @@ export type RepositoryDiscovery = {
 	repository?: RepositoryState;
 	warning?: string;
 };
+
+export async function discoverRepositoryContaining(
+	target: string,
+	exec: GitExec,
+): Promise<RepositoryDiscovery> {
+	let candidate = resolve(target);
+	while (true) {
+		try {
+			const stat = lstatSync(candidate);
+			return discoverRepository(stat.isDirectory() ? candidate : dirname(candidate), exec);
+		} catch (error) {
+			if (!(error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT")) {
+				return { hasGitRoot: false };
+			}
+		}
+		const parent = dirname(candidate);
+		if (parent === candidate) return { hasGitRoot: false };
+		candidate = parent;
+	}
+}
 
 export async function discoverRepository(cwd: string, exec: GitExec): Promise<RepositoryDiscovery> {
 	let rootResult: GitExecResult;

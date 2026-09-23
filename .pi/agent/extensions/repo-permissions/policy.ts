@@ -19,7 +19,7 @@ type ToolCall = {
 	toolName: string;
 	input: Record<string, unknown>;
 	cwd: string;
-	repository?: RepositoryState;
+	repositories: RepositoryState[];
 	skillRules: string[];
 	sshDestinations: Set<string>;
 	httpOrigins: Set<string>;
@@ -218,12 +218,12 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 		return { kind: "ask", reason: `${call.toolName} has no path to evaluate.` };
 	}
 
-	if ((call.toolName === "edit" || call.toolName === "write") && call.repository && argValue) {
+	if ((call.toolName === "edit" || call.toolName === "write") && call.repositories.length > 0 && argValue) {
 		if (call.mode === "repository" || call.mode === "unattended") {
-			const tempDecision = decideOsTempMutation(call.toolName, argValue, call.cwd, call.repository);
+			const tempDecision = decideOsTempMutation(call.toolName, argValue, call.cwd, call.repositories);
 			if (tempDecision) return tempDecision;
 		}
-		const mutationDecision = decideDirectMutation(argValue, call.cwd, call.repository);
+		const mutationDecision = decideDirectMutation(argValue, call.cwd, call.repositories);
 		if (mutationDecision) return mutationDecision;
 	}
 
@@ -231,7 +231,7 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 		const guardedDecision = decideGuardedBash(
 			argValue,
 			call.cwd,
-			call.repository,
+			call.repositories,
 			call.sshDestinations,
 			call.httpOrigins,
 		);
@@ -252,7 +252,7 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 			: { kind: "ask", reason: "Ask mode requires approval." };
 	}
 
-	if (!call.repository) return { kind: "ask", reason: "Repository mode is unavailable." };
+	if (call.repositories.length === 0) return { kind: "ask", reason: "Repository mode is unavailable." };
 	if (call.toolName === "bash" && !argValue) {
 		return { kind: "ask", reason: "Bash has no command to evaluate." };
 	}
@@ -286,10 +286,10 @@ function decideOsTempMutation(
 	toolName: string,
 	rawPath: string,
 	cwd: string,
-	repository: RepositoryState,
+	repositories: RepositoryState[],
 ): PermissionDecision | undefined {
 	const pathInfo = resolvePathInfo(rawPath, cwd);
-	if (!pathInfo || isInside(repository.root, pathInfo.canonical)) return undefined;
+	if (!pathInfo || repositoryForMutationPath(repositories, pathInfo.canonical)) return undefined;
 
 	const isOsTemp = [tmpdir(), "/tmp"]
 		.map(canonicalPath)
@@ -298,17 +298,22 @@ function decideOsTempMutation(
 
 	return {
 		kind: "block",
-		reason: `Direct ${toolName} targets in OS temporary directories are blocked. Use ${join(repository.root, "agents_tmp")} for agent-owned temporary files. Never commit agents_tmp.`,
+		reason: `Direct ${toolName} targets in OS temporary directories are blocked. Use ${join(repositories[0]!.root, "agents_tmp")} for agent-owned temporary files. Never commit agents_tmp.`,
 	};
 }
 
 function decideDirectMutation(
 	rawPath: string,
 	cwd: string,
-	repository: RepositoryState,
+	repositories: RepositoryState[],
 ): PermissionDecision | undefined {
 	const pathInfo = resolvePathInfo(rawPath, cwd);
 	if (!pathInfo) return { kind: "ask", reason: `Could not resolve ${rawPath} safely.` };
+
+	const repository = repositoryForMutationPath(repositories, pathInfo.canonical);
+	if (!repository) {
+		return { kind: "ask", reason: `The target of ${rawPath} resolves outside repositories allowed for this session.` };
+	}
 
 	const lexicalScratchRoot = join(repository.root, "agents_tmp");
 	const isLexicallyInScratch = isStrictlyInside(lexicalScratchRoot, pathInfo.lexical);
@@ -340,7 +345,7 @@ function decideDirectMutation(
 function decideGuardedBash(
 	command: string,
 	cwd: string,
-	repository: RepositoryState | undefined,
+	repositories: RepositoryState[],
 	sshDestinations: Set<string>,
 	httpOrigins: Set<string>,
 ): PermissionDecision | undefined {
@@ -351,7 +356,7 @@ function decideGuardedBash(
 			segment,
 			commandTokens,
 			cwd,
-			repository,
+			repositories,
 			sshDestinations,
 			httpOrigins,
 			hasChangedDirectory,
@@ -373,7 +378,7 @@ function guardedSegmentReason(
 	segment: string,
 	commandTokens: string[] | undefined,
 	cwd: string,
-	repository: RepositoryState | undefined,
+	repositories: RepositoryState[],
 	sshDestinations: Set<string>,
 	httpOrigins: Set<string>,
 	hasChangedDirectory: boolean,
@@ -391,13 +396,13 @@ function guardedSegmentReason(
 		return isReadOnlySystemctl(args) ? undefined : "This systemctl operation requires approval.";
 	}
 	if (command === "rsync" && isGuardedRsync(args)) return "This rsync operation requires approval.";
-	if (command === "kill" && isSafeAgentPidKill(segment, cwd, repository, hasChangedDirectory)) return undefined;
+	if (command === "kill" && isSafeAgentPidKill(segment, cwd, repositories[0], hasChangedDirectory)) return undefined;
 	if (ASK_COMMANDS.has(command)) return `${command} requires approval.`;
 	if (command === "rm" || command === "rmdir") {
 		if (command === "rmdir" && args.some(hasParentRemovalFlag)) {
 			return "rmdir parent removal requires approval.";
 		}
-		return guardedDeletionReason(command, segment, args, cwd, repository, hasChangedDirectory);
+		return guardedDeletionReason(command, segment, args, cwd, repositories, hasChangedDirectory);
 	}
 	if (args.some((arg) => arg.startsWith("--force"))) return `${command} --force requires approval.`;
 	if (command === "find" && args.some(isMutatingFindArgument)) {
@@ -410,7 +415,7 @@ function guardedSegmentReason(
 			? undefined
 			: "This curl request can mutate an HTTP service.";
 	}
-	if (command === "gh" && isMutatingGh(args)) return "This GitHub operation can mutate remote state.";
+	if (command === "gh" && isMutatingGh(segment, args)) return "This GitHub operation can mutate remote state.";
 	if (isHostPackageMutation(command, args)) return "Global package changes require approval.";
 	if (isPublish(command, args)) return "Publishing requires approval.";
 	return undefined;
@@ -450,10 +455,10 @@ function guardedDeletionReason(
 	segment: string,
 	args: string[],
 	cwd: string,
-	repository: RepositoryState | undefined,
+	repositories: RepositoryState[],
 	hasChangedDirectory: boolean,
 ): string | undefined {
-	if (!repository) return `${command} targets require an active repository.`;
+	if (repositories.length === 0) return `${command} targets require an active repository.`;
 	if (hasChangedDirectory || hasUnsafeShellSyntax(segment)) {
 		return `${command} targets cannot be resolved safely from this shell command.`;
 	}
@@ -469,13 +474,14 @@ function guardedDeletionReason(
 		const deletionPath = canonicalParent && targetInfo
 			? join(canonicalParent, basename(targetInfo.lexical))
 			: undefined;
+		const repository = deletionPath ? repositoryForMutationPath(repositories, deletionPath) : undefined;
 		if (
 			!deletionPath ||
+			!repository ||
 			deletionPath === repository.root ||
-			!isInside(repository.root, deletionPath) ||
 			(deletionMayDereferenceTarget(target) && !isInside(repository.root, targetInfo.canonical))
 		) {
-			return `${command} target ${target} resolves outside the repository or cannot be evaluated safely.`;
+			return `${command} target ${target} resolves outside repositories allowed for this session or cannot be evaluated safely.`;
 		}
 		const scratchRoot = canonicalPath(join(repository.root, "agents_tmp"));
 		if (scratchRoot && deletionPath === scratchRoot) {
@@ -681,12 +687,42 @@ function isMutatingCurl(args: string[]): boolean {
 	});
 }
 
-function isMutatingGh(args: string[]): boolean {
+function isReadOnlyGraphqlQuery(segment: string, args: string[]): boolean {
+	if (args[0] !== "api" || args[1] !== "graphql" || hasUnsafeShellSyntax(segment)) return false;
+	if (
+		args.some(
+			(arg) =>
+				arg.startsWith("-X") ||
+				arg.startsWith("-F") ||
+				["--method", "--input", "--field", "--raw-field"].some(
+					(option) => arg === option || arg.startsWith(`${option}=`),
+				),
+		)
+	) {
+		return false;
+	}
+
+	const queries: string[] = [];
+	for (let index = 2; index < args.length; index++) {
+		if (args[index] !== "-f") continue;
+		const field = args[++index];
+		if (!field) return false;
+		if (field.startsWith("query=")) queries.push(field.slice("query=".length));
+	}
+
+	if (queries.length !== 1) return false;
+	const query = queries[0]!.trimStart();
+	return /^query(?:\s|\(|\{)/.test(query) && !/\bmutation\b/.test(query);
+}
+
+function isMutatingGh(segment: string, args: string[]): boolean {
 	const [area, action] = args;
 	if (area === "api") {
+		if (isReadOnlyGraphqlQuery(segment, args)) return false;
 		return args.some((arg, index) => {
 			if (/^(?:-[fF].+|--field=|--raw-field=|--input=)/.test(arg)) return true;
 			if (["-f", "-F", "--field", "--raw-field", "--input"].includes(arg)) return true;
+			if (/^-X(?!(?:GET|HEAD)$).+/i.test(arg)) return true;
 			if (arg === "-X" || arg === "--method") return !/^(?:GET|HEAD)$/i.test(args[index + 1] ?? "");
 			return /^--method=(?!GET$|HEAD$)/i.test(arg);
 		});
@@ -962,6 +998,36 @@ function canonicalPath(target: string, depth = 0): string | undefined {
 
 function isMissingPathError(error: unknown): boolean {
 	return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
+function repositoryForMutationPath(repositories: RepositoryState[], target: string): RepositoryState | undefined {
+	const containingRoot = findContainingRepositoryRoot(target);
+	if (containingRoot && !repositories.some((repository) => repository.root === containingRoot)) return undefined;
+	return repositories
+		.filter((repository) => isInside(repository.root, target))
+		.sort((left, right) => right.root.length - left.root.length)[0];
+}
+
+function findContainingRepositoryRoot(target: string): string | undefined {
+	let candidate = target;
+	try {
+		if (!lstatSync(candidate).isDirectory()) candidate = dirname(candidate);
+	} catch (error) {
+		if (!isMissingPathError(error)) return undefined;
+		candidate = dirname(candidate);
+	}
+
+	while (true) {
+		try {
+			lstatSync(join(candidate, ".git"));
+			return canonicalPath(candidate);
+		} catch (error) {
+			if (!isMissingPathError(error)) return undefined;
+		}
+		const parent = dirname(candidate);
+		if (parent === candidate) return undefined;
+		candidate = parent;
+	}
 }
 
 function isAgentScratchTarget(root: string, lexical: string, canonical: string): boolean {

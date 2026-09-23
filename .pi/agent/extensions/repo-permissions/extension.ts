@@ -1,6 +1,6 @@
 import { appendFileSync, chmodSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -12,7 +12,7 @@ import {
 	type PermissionMode,
 	type RepositoryState,
 } from "./policy.ts";
-import { discoverRepository } from "./repository.ts";
+import { discoverRepository, discoverRepositoryContaining, type GitExec } from "./repository.ts";
 
 const STATUS_ID = "repo-permissions";
 const PROMPT_CHOICES = ["Allow once", "Allow everything for this session", "Reject"];
@@ -47,6 +47,7 @@ export function registerRepoPermissions(
 	let hasLogWarning = false;
 	const sshDestinations = new Set<string>();
 	const httpOrigins = new Set<string>();
+	const repositoryGrants = new Map<string, RepositoryState>();
 
 	function renderStatus(ctx: ExtensionContext): void {
 		const label = mode === "repository" ? "repo" : mode;
@@ -96,6 +97,7 @@ export function registerRepoPermissions(
 		hasLogWarning = false;
 		sshDestinations.clear();
 		httpOrigins.clear();
+		repositoryGrants.clear();
 		await loadRepository(ctx);
 	});
 
@@ -107,12 +109,13 @@ export function registerRepoPermissions(
 		const input = event.input as Record<string, unknown>;
 		const command = event.toolName === "bash" && typeof input.command === "string" ? input.command : undefined;
 		const sshDestination = command ? getSshDestination(command) : undefined;
+		const repositories = repository ? [repository, ...repositoryGrants.values()] : [];
 		const decision = decideToolCall({
 			mode,
 			toolName: event.toolName,
 			input,
 			cwd: ctx.cwd,
-			repository,
+			repositories,
 			skillRules: (skillRules ??= getSkillRules(pi, parseFrontmatter)),
 			sshDestinations,
 			httpOrigins,
@@ -165,14 +168,28 @@ export function registerRepoPermissions(
 					mode,
 					input,
 					ctx.cwd,
-					repository,
+					repositories,
 					skillRules,
 					sshDestinations,
 					httpOrigins,
 				)
 			: undefined;
 		const httpChoice = httpOrigin ? `Allow HTTP access to ${httpOrigin} for this session` : undefined;
-		const sessionChoice = sshChoice ?? httpChoice;
+		const grantRepository = await grantableRepository(
+			event.toolName,
+			input,
+			ctx.cwd,
+			mode,
+			repositories,
+			skillRules,
+			sshDestinations,
+			httpOrigins,
+			(command, args, options) => pi.exec(command, args, options),
+		);
+		const repositoryChoice = grantRepository
+			? `Allow changes in ${grantRepository.root} for this session`
+			: undefined;
+		const sessionChoice = sshChoice ?? httpChoice ?? repositoryChoice;
 		const choices = sessionChoice
 			? ["Allow once", sessionChoice, "Allow everything for this session", "Reject"]
 			: PROMPT_CHOICES;
@@ -188,6 +205,11 @@ export function registerRepoPermissions(
 			ctx.ui.notify(`HTTP access to ${httpOrigin} is allowed for this session.`, "info");
 			return;
 		}
+		if (grantRepository && choice === repositoryChoice) {
+			repositoryGrants.set(grantRepository.root, grantRepository);
+			ctx.ui.notify(`Changes in ${grantRepository.root} are allowed for this session.`, "info");
+			return;
+		}
 		if (choice === "Allow everything for this session") {
 			setMode("unrestricted", ctx);
 			return;
@@ -198,12 +220,48 @@ export function registerRepoPermissions(
 	});
 }
 
+async function grantableRepository(
+	toolName: string,
+	input: Record<string, unknown>,
+	cwd: string,
+	mode: PermissionMode,
+	repositories: RepositoryState[],
+	skillRules: string[],
+	sshDestinations: Set<string>,
+	httpOrigins: Set<string>,
+	exec: GitExec,
+): Promise<RepositoryState | undefined> {
+	if (
+		repositories.length === 0 ||
+		!["edit", "write"].includes(toolName) ||
+		typeof input.path !== "string"
+	) {
+		return undefined;
+	}
+
+	const discovery = await discoverRepositoryContaining(resolve(cwd, input.path), exec);
+	const candidate = discovery.repository;
+	if (!candidate || repositories.some((allowed) => allowed.root === candidate.root)) return undefined;
+
+	const decision = decideToolCall({
+		mode,
+		toolName,
+		input,
+		cwd,
+		repositories: [...repositories, candidate],
+		skillRules,
+		sshDestinations,
+		httpOrigins,
+	});
+	return decision.kind === "allow" ? candidate : undefined;
+}
+
 function grantableHttpOrigin(
 	command: string,
 	mode: PermissionMode,
 	input: Record<string, unknown>,
 	cwd: string,
-	repository: RepositoryState | undefined,
+	repositories: RepositoryState[],
 	skillRules: string[],
 	sshDestinations: Set<string>,
 	httpOrigins: Set<string>,
@@ -218,7 +276,7 @@ function grantableHttpOrigin(
 		toolName: "bash",
 		input,
 		cwd,
-		repository,
+		repositories,
 		skillRules,
 		sshDestinations,
 		httpOrigins: candidateOrigins,

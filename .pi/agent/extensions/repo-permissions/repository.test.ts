@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { decideToolCall } from "./policy.ts";
-import { discoverRepository, type GitExec } from "./repository.ts";
+import { discoverRepository, discoverRepositoryContaining, type GitExec } from "./repository.ts";
 
 const result = (code: number, stdout = "") => ({ code, stdout, stderr: "" });
 
@@ -37,6 +37,20 @@ test("repository discovery fails closed when the Git-ignored file snapshot fails
 	assert.equal(discovered.hasGitRoot, true);
 	assert.equal(discovered.repository, undefined);
 	assert.match(discovered.warning ?? "", /snapshot failed/i);
+});
+
+test("repository discovery resolves a repository containing a new target", async () => {
+	const base = mkdtempSync(join(tmpdir(), "repo-containing-"));
+	const root = join(base, "repo");
+	mkdirSync(join(root, "nested"), { recursive: true });
+
+	try {
+		execFileSync("git", ["init", "-q", root]);
+		const discovered = await discoverRepositoryContaining(join(root, "nested", "new.txt"), gitExec);
+		assert.equal(discovered.repository?.root, realpathSync(root));
+	} finally {
+		rmSync(base, { recursive: true, force: true });
+	}
 });
 
 test("real Git snapshots include standard excludes but not files created later", async () => {
@@ -72,7 +86,7 @@ test("real Git snapshots include standard excludes but not files created later",
 				toolName: "edit",
 				input: { path: "generated.log" },
 				cwd: root,
-				repository: discovered.repository,
+				repositories: discovered.repository ? [discovered.repository] : [],
 				skillRules: [],
 				sshDestinations: new Set(),
 				httpOrigins: new Set(),

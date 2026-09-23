@@ -52,9 +52,20 @@ const call = (
 	skillRules: string[] = [],
 	sshDestinations: Set<string> = new Set(),
 	httpOrigins: Set<string> = new Set(),
-) => decideToolCall({ mode, toolName, input, cwd, repository, skillRules, sshDestinations, httpOrigins });
+	additionalRepositories: RepositoryState[] = [],
+) =>
+	decideToolCall({
+		mode,
+		toolName,
+		input,
+		cwd,
+		repositories: repository ? [repository, ...additionalRepositories] : [],
+		skillRules,
+		sshDestinations,
+		httpOrigins,
+	});
 
-test("repository mode allows ordinary tools inside and outside the repository", () => {
+test("repository mode allows outside reads but asks before outside mutations", () => {
 	withRepository((repository, outside) => {
 		const outsideHomePath = join(homedir(), "repo-permissions-outside", "file.txt");
 		assert.equal(call("repository", "read", { path: "tracked.txt" }, repository.root, repository).kind, "allow");
@@ -64,9 +75,71 @@ test("repository mode allows ordinary tools inside and outside the repository", 
 			call("repository", "read", { path: join(outside, "outside.txt") }, repository.root, repository).kind,
 			"allow",
 		);
-		assert.equal(call("repository", "edit", { path: outsideHomePath }, repository.root, repository).kind, "allow");
-		assert.equal(call("repository", "write", { path: outsideHomePath }, repository.root, repository).kind, "allow");
+		assert.equal(call("repository", "edit", { path: outsideHomePath }, repository.root, repository).kind, "ask");
+		assert.equal(call("repository", "write", { path: outsideHomePath }, repository.root, repository).kind, "ask");
+		assert.equal(call("unattended", "write", { path: outsideHomePath }, repository.root, repository).kind, "ask");
 		assert.equal(call("repository", "custom", { payload: "work" }, repository.root, repository).kind, "allow");
+	});
+});
+
+test("repository mode keeps OS-temp blocking until a nested repository is granted", () => {
+	withRepository((repository) => {
+		const nestedRoot = join(repository.root, "nested-repo");
+		mkdirSync(join(nestedRoot, ".git"), { recursive: true });
+		writeFileSync(join(nestedRoot, "tracked.txt"), "nested\n");
+
+		assert.equal(
+			call("repository", "edit", { path: join(nestedRoot, "tracked.txt") }, repository.root, repository).kind,
+			"block",
+		);
+		assert.equal(
+			call(
+				"repository",
+				"edit",
+				{ path: join(nestedRoot, "tracked.txt") },
+				repository.root,
+				repository,
+				[],
+				new Set(),
+				new Set(),
+				[{ root: nestedRoot, startupIgnoredPaths: new Set() }],
+			).kind,
+			"allow",
+		);
+	});
+});
+
+test("repository mode applies normal protections to an additional repository", () => {
+	withRepository((repository, outside) => {
+		const additionalRepository = { root: outside, startupIgnoredPaths: new Set([join(outside, "outside.txt")]) };
+		assert.equal(
+			call(
+				"repository",
+				"write",
+				{ path: join(outside, "new.txt") },
+				repository.root,
+				repository,
+				[],
+				new Set(),
+				new Set(),
+				[additionalRepository],
+			).kind,
+			"allow",
+		);
+		assert.equal(
+			call(
+				"repository",
+				"edit",
+				{ path: join(outside, "outside.txt") },
+				repository.root,
+				repository,
+				[],
+				new Set(),
+				new Set(),
+				[additionalRepository],
+			).kind,
+			"ask",
+		);
 	});
 });
 
@@ -142,6 +215,25 @@ test("repository mode asks for rm targets that are outside, dynamic, or speciall
 		]) {
 			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "ask", command);
 		}
+	});
+});
+
+test("repository mode allows literal deletion in an additional repository", () => {
+	withRepository((repository, outside) => {
+		assert.equal(
+			call(
+				"repository",
+				"bash",
+				{ command: `rm ${outside}/outside.txt` },
+				repository.root,
+				repository,
+				[],
+				new Set(),
+				new Set(),
+				[{ root: outside, startupIgnoredPaths: new Set() }],
+			).kind,
+			"allow",
+		);
 	});
 });
 
@@ -239,6 +331,30 @@ test("repository mode allows normal skill and development commands", () => {
 	});
 });
 
+test("repository mode allows literal read-only GitHub GraphQL queries", () => {
+	withRepository((repository) => {
+		for (const command of [
+			`gh api graphql -f query='query { repository(owner:"shakacode", name:"gtm-tracking") { name } }'`,
+			`gh api graphql -f query='query($owner:String!) { repository(owner:$owner, name:"gtm-tracking") { name } }' -f owner=shakacode`,
+		]) {
+			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "allow", command);
+		}
+
+		for (const command of [
+			`gh api graphql -f query='mutation { deleteProjectV2(input:{projectV2Id:"PVT_1"}) { projectV2 { id } } }'`,
+			`gh api graphql -f query="$QUERY"`,
+			"gh api graphql -f query=@query.graphql",
+			"gh api graphql --input request.json",
+			`gh api graphql -X POST -f query='query { viewer { login } }'`,
+			`gh api graphql -X DELETE -f query='query { viewer { login } }'`,
+			`gh api graphql -XDELETE -f query='query { viewer { login } }'`,
+			`gh api graphql -X -f query='query { viewer { login } }'`,
+		]) {
+			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "ask", command);
+		}
+	});
+});
+
 test("repository mode asks for high-impact command families", () => {
 	withRepository((repository) => {
 		for (const command of [
@@ -286,6 +402,7 @@ test("repository mode asks for high-impact command families", () => {
 			"curl -XPOST https://example.test",
 			"curl -dpayload https://example.test",
 			"gh api repos/example/repo -X DELETE",
+			"gh api repos/example/repo -XDELETE",
 			"gh api repos/example/repo -fstate=closed",
 			"gh pr merge 123",
 			"npm publish",
