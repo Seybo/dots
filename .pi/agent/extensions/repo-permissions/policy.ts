@@ -555,7 +555,7 @@ function isGuardedGit(segment: string, tokens: string[]): boolean {
 	if (!parsed) return false;
 	const { command, args } = parsed;
 
-	if (isSafeGitBranchCreation(segment, command, args) || isSafeUpstreamPush(segment, command, args)) {
+	if (isSafeGitBranchCreation(segment, command, args) || isSafeOriginPush(segment, command, args)) {
 		return false;
 	}
 	if (GUARDED_GIT_COMMANDS.has(command)) return true;
@@ -575,11 +575,16 @@ function isGuardedGit(segment: string, tokens: string[]): boolean {
 	return false;
 }
 
-function isSafeUpstreamPush(segment: string, command: string, args: string[]): boolean {
-	if (command !== "push" || hasUnsafeShellSyntax(segment) || args.length !== 3) return false;
-	if (!["-u", "--set-upstream"].includes(args[0]!) || args[1] !== "origin") return false;
+function isSafeOriginPush(segment: string, command: string, args: string[]): boolean {
+	if (command !== "push" || hasUnsafeShellSyntax(segment)) return false;
+	const [remote, branch] =
+		args.length === 2
+			? args
+			: args.length === 3 && ["-u", "--set-upstream"].includes(args[0]!)
+				? args.slice(1)
+				: [];
+	if (remote !== "origin" || !branch) return false;
 
-	const branch = args[2]!;
 	return (
 		/^[a-z0-9][a-z0-9._/-]*$/i.test(branch) &&
 		!branch.includes("..") &&

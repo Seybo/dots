@@ -59,7 +59,7 @@ Repository mode allows:
 
 - normal `git add`, `git rm`, and ordinary `git commit`
 - literal non-resetting branch creation with `git checkout -b`, `git checkout --no-track -b`, or `git switch -c`; existing-branch switches, resetting or forced creation, path restoration, branch deletion, and branch renaming remain guarded
-- exact non-force `git push -u origin <literal-branch>` or `git push --set-upstream origin <literal-branch>`; pushes to `main`, `master`, `HEAD`, full refs, other remotes, multiple or dynamic refspecs, tags, deletion, and force options remain guarded
+- exact non-force `git push origin <literal-branch>`, optionally with `-u` or `--set-upstream`; pushes to `main`, `master`, `HEAD`, full refs, other remotes, multiple or dynamic refspecs, tags, deletion, and force options remain guarded
 - literal `rm` and plain `rmdir` targets when their resolved deletion paths stay inside the repository; `rmdir -p` remains guarded
 - ordinary local `rsync`; remote transfers, deletion, source-file removal, and custom remote-shell options remain guarded
 - literal `gh api graphql -f query='query ...'` documents; mutations, dynamic or file-backed query documents, input files, explicit methods, and other field forms remain guarded
