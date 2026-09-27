@@ -107,6 +107,7 @@ copying another slash command.
 4. **Write useful task content:**
    - use the derived task slug as the source for the concise task title
    - store the title in `# Story details`; do not render the slug as a heading inside `# Context`
+   - write `PR: ` immediately below `Name:` and leave it blank; the operator populates it manually
    - lead `# Context` with the user/product problem, not implementation details
    - include expected behavior and acceptance criteria when context supports them
    - do not add implementation planning; `/workit` creates `steps.md` later
@@ -119,6 +120,7 @@ copying another slash command.
      # Story details
 
      Name: {task slug with `-` replaced by spaces}
+     PR:
 
      # Context
 
