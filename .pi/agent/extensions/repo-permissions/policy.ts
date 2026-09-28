@@ -23,6 +23,7 @@ type ToolCall = {
 	skillRules: string[];
 	sshDestinations: Set<string>;
 	httpOrigins: Set<string>;
+	taskRoot?: string;
 };
 
 type PathInfo = {
@@ -220,10 +221,10 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 
 	if ((call.toolName === "edit" || call.toolName === "write") && call.repositories.length > 0 && argValue) {
 		if (call.mode === "repository" || call.mode === "unattended") {
-			const tempDecision = decideOsTempMutation(call.toolName, argValue, call.cwd, call.repositories);
+			const tempDecision = decideOsTempMutation(call.toolName, argValue, call.cwd, call.repositories, call.taskRoot);
 			if (tempDecision) return tempDecision;
 		}
-		const mutationDecision = decideDirectMutation(argValue, call.cwd, call.repositories);
+		const mutationDecision = decideDirectMutation(argValue, call.cwd, call.repositories, call.taskRoot);
 		if (mutationDecision) return mutationDecision;
 	}
 
@@ -287,9 +288,16 @@ function decideOsTempMutation(
 	rawPath: string,
 	cwd: string,
 	repositories: RepositoryState[],
+	taskRoot?: string,
 ): PermissionDecision | undefined {
 	const pathInfo = resolvePathInfo(rawPath, cwd);
-	if (!pathInfo || repositoryForMutationPath(repositories, pathInfo.canonical)) return undefined;
+	if (
+		!pathInfo ||
+		repositoryForMutationPath(repositories, pathInfo.canonical) ||
+		isTaskMutationPath(taskRoot, pathInfo.canonical)
+	) {
+		return undefined;
+	}
 
 	const isOsTemp = [tmpdir(), "/tmp"]
 		.map(canonicalPath)
@@ -306,9 +314,11 @@ function decideDirectMutation(
 	rawPath: string,
 	cwd: string,
 	repositories: RepositoryState[],
+	taskRoot?: string,
 ): PermissionDecision | undefined {
 	const pathInfo = resolvePathInfo(rawPath, cwd);
 	if (!pathInfo) return { kind: "ask", reason: `Could not resolve ${rawPath} safely.` };
+	if (isTaskMutationPath(taskRoot, pathInfo.canonical)) return undefined;
 
 	const repository = repositoryForMutationPath(repositories, pathInfo.canonical);
 	if (!repository) {
@@ -1003,6 +1013,13 @@ function canonicalPath(target: string, depth = 0): string | undefined {
 
 function isMissingPathError(error: unknown): boolean {
 	return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
+function isTaskMutationPath(taskRoot: string | undefined, target: string): boolean {
+	if (!taskRoot || findContainingRepositoryRoot(target)) return false;
+
+	const canonicalRoot = canonicalPath(taskRoot);
+	return Boolean(canonicalRoot && isStrictlyInside(canonicalRoot, target));
 }
 
 function repositoryForMutationPath(repositories: RepositoryState[], target: string): RepositoryState | undefined {

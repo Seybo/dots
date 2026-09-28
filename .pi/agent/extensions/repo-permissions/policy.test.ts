@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 
 import {
@@ -53,6 +53,7 @@ const call = (
 	sshDestinations: Set<string> = new Set(),
 	httpOrigins: Set<string> = new Set(),
 	additionalRepositories: RepositoryState[] = [],
+	taskRoot?: string,
 ) =>
 	decideToolCall({
 		mode,
@@ -63,7 +64,29 @@ const call = (
 		skillRules,
 		sshDestinations,
 		httpOrigins,
+		taskRoot,
 	});
+
+test("repository mode allows direct task-file mutations under DEV_ROOT", () => {
+	withRepository((repository, outside) => {
+		const taskRoot = join(outside, "_tasks");
+		const taskPath = join(taskRoot, "example", "task.md");
+		mkdirSync(dirname(taskPath), { recursive: true });
+		writeFileSync(taskPath, "# Task\n");
+
+		const taskCall = (mode: PermissionMode, toolName: string, path: string) =>
+			call(mode, toolName, { path }, repository.root, repository, [], new Set(), new Set(), [], taskRoot);
+
+		assert.equal(taskCall("repository", "edit", taskPath).kind, "allow");
+		assert.equal(taskCall("unattended", "write", join(taskRoot, "example", "steps.md")).kind, "allow");
+		assert.equal(taskCall("ask", "write", taskPath).kind, "ask");
+		assert.notEqual(taskCall("repository", "write", join(outside, "other.md")).kind, "allow");
+
+		const nestedRepository = join(taskRoot, "nested-repo");
+		mkdirSync(join(nestedRepository, ".git"), { recursive: true });
+		assert.notEqual(taskCall("repository", "write", join(nestedRepository, "file.md")).kind, "allow");
+	});
+});
 
 test("repository mode allows outside reads but asks before outside mutations", () => {
 	withRepository((repository, outside) => {
