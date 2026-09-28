@@ -137,9 +137,7 @@ export CODEX_DEFAULT_MODEL='openai-codex/gpt-5.6-sol:high'
 export CODEX_SECONDARY_MODEL='openai-codex/gpt-5.6-terra:high'
 export PATH="$DEV_ROOT/bin:$HOME/.codex/bin:$HOME/.local/bin:$PATH"
 
-# bun completions
-[ -s "/Users/inseybo/.bun/_bun" ] && source "/Users/inseybo/.bun/_bun"
-
 # bun
 export BUN_INSTALL="$HOME/.bun"
+[[ -s "$BUN_INSTALL/_bun" ]] && source "$BUN_INSTALL/_bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
