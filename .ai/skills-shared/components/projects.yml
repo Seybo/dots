@@ -48,6 +48,11 @@ projects:
     code_root: projects/shaka/gtm-tracking
     tmux_layout: shaka_gtm-tracking
     task_provider: local
+  shaka_hc:
+    checkout_layout: ordinal_workspaces
+    code_root: projects/shaka/hc
+    tmux_layout: shaka_hc
+    task_provider: local
   shaka_outreach:
     checkout_layout: ordinal_workspaces
     code_root: projects/shaka/outreach
