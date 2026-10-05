@@ -13,4 +13,5 @@ no_stow
 .pi/agent/external_extensions
 ^/AGENTS\.md$
 ^/\.autowork\.yml$
+^/_tasks$
 refs

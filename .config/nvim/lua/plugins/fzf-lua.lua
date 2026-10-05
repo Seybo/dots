@@ -61,31 +61,40 @@ return {
     end, nil, '[Fzf] Search Current File Directory')
     map_with_cursor_restore('n', '<leader>fp', fzf.files, { cwd = dev_root .. '/_apis' }, '[Fzf] Search in my api')
     map_with_cursor_restore('n', '<leader>fm', fzf.files, { cwd = '../_mydev' }, '[Fzf] Search in my dev')
-    local task_root = dev_root .. '/_tasks'
-    local function select_task_project(prefix, prompt)
-      local projects = {}
-      for name, entry_type in vim.fs.dir(task_root) do
-        if entry_type == 'directory' and vim.startswith(name, prefix) then
-          table.insert(projects, name)
+    local task_projects = { env = assert(vim.env.STOW_DIR, 'STOW_DIR is not set') .. '/_tasks' }
+    for _, group in ipairs({ 'misc', 'my', 'shaka' }) do
+      local group_root = dev_root .. '/projects/' .. group
+      for name, entry_type in vim.fs.dir(group_root) do
+        local project_root = group_root .. '/' .. name
+        if entry_type == 'directory' and vim.fn.isdirectory(project_root .. '/_tasks') == 1 then
+          local project = vim.startswith(name, group .. '_') and name or group .. '_' .. name
+          task_projects[project] = project_root .. '/_tasks'
         end
       end
+    end
+
+    local function select_task_project(prefix, prompt)
+      local projects = vim.tbl_filter(function(name) return vim.startswith(name, prefix) end, vim.tbl_keys(task_projects))
       table.sort(projects)
 
       vim.ui.select(projects, { prompt = prompt }, function(project)
         if project then
           with_cursor_restore(fzf.files, {
-            cwd = task_root .. '/' .. project,
+            cwd = task_projects[project],
             raw_cmd = 'rg --files --sortr modified',
           })
         end
       end)
     end
 
-    map_with_cursor_restore('n', '<leader>ft', fzf.files, { cwd = task_root }, '[Fzf] Search in all tasks')
+    local task_roots = vim.tbl_values(task_projects)
+    table.sort(task_roots)
+    local all_tasks_command = 'rg --files --sortr modified ' .. table.concat(vim.tbl_map(vim.fn.shellescape, task_roots), ' ')
+    map_with_cursor_restore('n', '<leader>ft', fzf.files, { cwd = '/', raw_cmd = all_tasks_command }, '[Fzf] Search in all tasks')
     vim.keymap.set('n', '<leader>tas', function() select_task_project('shaka_', 'Shaka tasks project') end, { desc = '[Fzf] Choose Shaka task project' })
     vim.keymap.set('n', '<leader>tap', function() select_task_project('my_', 'Personal tasks project') end, { desc = '[Fzf] Choose personal task project' })
     vim.keymap.set('n', '<leader>tam', function() select_task_project('misc_', 'Misc tasks project') end, { desc = '[Fzf] Choose misc task project' })
-    map_with_cursor_restore('n', '<leader>tae', fzf.files, { cwd = task_root .. '/env', raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search env tasks')
+    map_with_cursor_restore('n', '<leader>tae', fzf.files, { cwd = task_projects.env, raw_cmd = 'rg --files --sortr modified' }, '[Fzf] Search env tasks')
     map_with_cursor_restore('n', '<leader>fgc', fzf.git_status, nil, '[Fzf] Search Git Changed Files')
     map_with_cursor_restore('n', '<leader>fha', fzf.oldfiles, nil, '[Fzf] Files History (all)')
     map_with_cursor_restore('n', '<leader>fhf', function() fzf.oldfiles({ cwd_only = true }) end, nil, '[Fzf] Files History (within repo)')

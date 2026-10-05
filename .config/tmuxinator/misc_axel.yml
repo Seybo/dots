@@ -36,8 +36,8 @@ windows:
         - agent-reviewer:
 
   - misc:
-      root: <%= ENV.fetch("DEV_ROOT") %>/_tasks
+      root: <%= ENV.fetch("DEV_ROOT") %>/projects/misc/axel_be/_tasks
       layout: 9ad5,156x45,0,0{128x45,0,0,59,27x45,129,0,62}
       panes:
         -
-        -
+        - cd <%= ENV.fetch("DEV_ROOT") %>/projects/misc/axel_fe/_tasks
