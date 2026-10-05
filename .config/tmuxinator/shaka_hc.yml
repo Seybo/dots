@@ -21,6 +21,16 @@ windows:
         - agent-worker:
         - agent-reviewer:
 
+  - engine:
+      layout: tiled
+      pre: export RAILS_ENV=development NODE_ENV=development
+      panes:
+        - rails: bundle exec puma -C config/puma.rb
+        - webpack: cd client && SHAKAPACKER_SKIP_PRECOMPILE_HOOK=false corepack yarn start build.dev.webpack_dev_server
+        - mailcatcher: mailcatcher --foreground
+        - sidekiq: bundle exec sidekiq -C config/sidekiq.yml
+        - renderer: cd client && node ../renderer.js
+
   - misc:
       root: <%= @settings.fetch("task_root") %>
       layout: 9ad5,156x45,0,0{128x45,0,0,59,27x45,129,0,62}
