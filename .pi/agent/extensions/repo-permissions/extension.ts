@@ -48,7 +48,6 @@ export function registerRepoPermissions(
 	const sshDestinations = new Set<string>();
 	const httpOrigins = new Set<string>();
 	const repositoryGrants = new Map<string, RepositoryState>();
-	const taskRoot = process.env.DEV_ROOT ? join(process.env.DEV_ROOT, "_tasks") : undefined;
 
 	function renderStatus(ctx: ExtensionContext): void {
 		const label = mode === "repository" ? "repo" : mode;
@@ -120,7 +119,6 @@ export function registerRepoPermissions(
 			skillRules: (skillRules ??= getSkillRules(pi, parseFrontmatter)),
 			sshDestinations,
 			httpOrigins,
-			taskRoot,
 		});
 
 		if (decision.kind === "allow") return;
