@@ -22,7 +22,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `/skill:shortcut` — read Shortcut stories, create minimal Shortcut stories, and update story descriptions.
 - `/skill:projectit` — create a project task root, expected code directory, and git repo for the task workflow.
 - `/skill:featureit` — save a settled Grillme result as one optional `env` Feature, then propose and create an approved ordered draft split.
-- `/skill:taskit` — create task folders under `$DEV_ROOT/_tasks`, or create a Shortcut story from `task.md`.
+- `/skill:taskit` — create task folders under a registered project's task root, or create a Shortcut story from `task.md`.
 - `/skill:draftit` — save selected conversation context into a draft task folder.
 - `/skill:workit` — start work from an existing task folder.
 - `/skill:guideit` — walk through a completed Workit step's unstaged changes and stage approved work with permission.
@@ -55,6 +55,10 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 
 - `/skill:run-in-pry` — run Ruby code inside a project's Pry/Rails console setup.
 
+## Browser automation
+
+- `/skill:playwright-cli` — automate browser interactions, inspect pages, test web flows, and work with Playwright tests.
+
 ## Documentation lookup
 
 - `/skill:find-docs` — fetch current documentation, API references, and examples for libraries, frameworks, SDKs, CLIs, and cloud services.
@@ -80,8 +84,11 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 - `00cc` — copy referenced content exactly to the system clipboard.
 - `00ex` — explain referenced text in simple, precise terms.
 - `00gf` — give feedback on referenced idea or text.
+- `00imp` — implement the solution using the development principles, favoring simple code over special cases.
+- `00osq` — state objections, suggestions, or questions, or confirm everything is clear and correct.
 - `00rtfm` — apply the development principles to the solution and report the updates.
 - `00rvu` — review unstaged changes only; do not run specs or RuboCop.
+- `00rw` — rewrite the response using precise, natural, simple, concise wording.
 
 ## Pi system docs
 

@@ -48,6 +48,10 @@ Use this file to map vague user wording to likely capabilities. The exact source
 
 - `pry`, `rails console`, `ruby console`, `run in console` → `/skill:run-in-pry`
 
+## Browser automation
+
+- `browser automation`, `test web page`, `inspect page`, `playwright`, `UI review`, `design feedback` → `/skill:playwright-cli`
+
 ## Docs
 
 - `docs`, `documentation`, `api reference`, `how do I use library`, `version migration`, `CLI usage` → `/skill:find-docs`
@@ -72,5 +76,8 @@ Use this file to map vague user wording to likely capabilities. The exact source
 - `00cc` → copy referenced content exactly to the system clipboard.
 - `00ex` → explain referenced text.
 - `00gf` → give feedback on referenced text or idea.
+- `00imp` → implement using the development principles, favoring simple code over special cases.
+- `00osq` → state objections, suggestions, or questions, or confirm all clear and correct.
 - `00rtfm` → read the development principles, update the solution to follow them, and report the updates.
 - `00rvu` → review unstaged changes only; no specs or RuboCop.
+- `00rw` → rewrite the response using precise, natural, simple, concise wording.
