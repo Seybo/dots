@@ -98,7 +98,7 @@ select the workspace. Resolve a direct project to its registered checkout.
 Never create a checkout or task root.
 
 When no Task ID can be inferred, list the 10 most recent first-level Task
-folders under `$DEV_ROOT/_tasks/<project>/`:
+folders under the registered `<task-root>/`:
 
 - prefer filesystem creation/birth time, then modification time, then folder
   name ordering

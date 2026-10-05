@@ -1,7 +1,7 @@
 ---
 name: workit
 description: >-
-  Start work on an existing task folder under $DEV_ROOT/_tasks.
+  Start work on an existing task folder under a registered project's task root.
   Reads the task's task.md and proceeds with the work it describes.
   Can infer the project and task/story ID from the current git branch.
   Supports single-step and non-stop modes.
@@ -72,8 +72,8 @@ Resolve `<project>`, the task/story ID, the code working directory, and the work
 using the shared rules in
 [`~/.ai/skills-shared/components/task-resolution.md`](../components/task-resolution.md).
 Read that file whenever any of these must be inferred or normalized. `<project>` resolves to two
-locations: the task folder root `$DEV_ROOT/_tasks/<project>/` (where `task.md`
-lives) and the code working directory (see the shared registry's mapping). Registered session
+locations: the derived `<task-root>/` (where `task.md` lives) and the code working
+directory (see the shared registry's mapping). Registered session
 aliases such as `shaka_gtm1`, `shaka_gtm7`, and `shaka_trp28` normalize to their task project
 and select the matching ordinal workspace. Applied to `/workit`:
 
@@ -112,11 +112,8 @@ and select the matching ordinal workspace. Applied to `/workit`:
 2. **Resolve and validate project:**
    - normalize any registered session alias using the shared task-resolution rules; its trailing
      number selects the matching ordinal workspace (`shaka_trp28` → `28th`)
-   - resolve the task root from the normalized project as:
-     ```text
-     $DEV_ROOT/_tasks/<project>/
-     ```
-   - never look for a session alias under `$DEV_ROOT/_tasks/`; session aliases are not task roots
+   - derive `<task-root>/` from the normalized project's registered checkout using `task-resolution.md`
+   - never treat a session alias as a task-root name; session aliases only select workspaces
    - if the project is not registered, tell the user to add it to `~/.ai/skills-shared/components/projects.yml`
    - if its task root does not exist, report that no tasks have been created for the registered project
    - do not create project folders automatically

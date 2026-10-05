@@ -9,7 +9,7 @@ class LoadTaskStatus
     {
       task_id: task_identifier,
       task_path: canonical_task_path,
-      project: File.basename(File.dirname(canonical_task_path)),
+      project: ResolveTaskProject.call(task_path: canonical_task_path),
       branch: task_config.fetch('branch').fetch('name'),
       task: task,
       autoimplement: autoimplement_status,

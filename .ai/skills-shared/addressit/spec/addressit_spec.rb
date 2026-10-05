@@ -21,8 +21,8 @@ RSpec.describe Addressit do
         .to raise_error(Addressit::Error, /--agent must be one of: claude, codex/)
     end
 
-    it 'derives resume context instead of storing it in state' do
-      task_folder = File.join(@tmpdir, 'tasks', 'rails', '0001-fix-docs')
+    it 'derives resume context from the project registry instead of storing it in state' do
+      task_folder = File.join(@tmpdir, 'tasks', 'rails', '_tasks', '0001-fix-docs')
       code_repo = File.join(@tmpdir, 'code')
       files = Addressit::Files.new(task_folder)
       files.mkdirs
@@ -38,6 +38,8 @@ RSpec.describe Addressit do
       File.write(files.comments_path(1), JSON.generate([
         { 'id' => '1', 'html_url' => 'https://github.com/example/project/pull/123#discussion_r1' }
       ]))
+      resolver = instance_double(Addressit::TaskResolver, project_for_task_folder: 'rails')
+      allow(Addressit::TaskResolver).to receive(:new).and_return(resolver)
       orchestrator = instance_double(Addressit::Orchestrator, approve!: nil)
       expect(Addressit::Orchestrator).to receive(:new) do |context, _files, _state|
         expect(context.project).to eq('rails')
@@ -461,8 +463,8 @@ RSpec.describe Addressit do
   describe Addressit::TaskResolver do
     it 'resolves a direct checkout with an explicit local task id' do
       repo_root = File.join(@tmpdir, 'rails')
-      task_root = File.join(@tmpdir, 'tasks')
-      task_folder = File.join(task_root, 'rails', '0001-fix-docs')
+      task_root = File.join(repo_root, '_tasks')
+      task_folder = File.join(task_root, '0001-fix-docs')
       registry = File.join(@tmpdir, 'projects.yml')
       FileUtils.mkdir_p(repo_root)
       FileUtils.mkdir_p(task_folder)
@@ -479,10 +481,11 @@ RSpec.describe Addressit do
       allow(shell).to receive(:capture!).with('git', '-C', anything, 'rev-parse', '--show-toplevel').and_return(repo_root)
       allow(shell).to receive(:capture!).with('git', '-C', File.realpath(repo_root), 'branch', '--show-current').and_return('fix-docs')
 
-      stub_const('Addressit::TASK_ROOT', task_root)
-      context = described_class.new(cwd: repo_root, shell: shell, projects_file: registry).resolve(task_id: '0001')
+      resolver = described_class.new(cwd: repo_root, shell: shell, projects_file: registry)
+      context = resolver.resolve(task_id: '0001')
 
       expect(context.project).to eq('rails')
+      expect(resolver.project_for_task_folder(task_folder)).to eq('rails')
       expect(context.task_folder).to eq(task_folder)
       expect(context.branch).to eq('fix-docs')
     end
@@ -492,8 +495,8 @@ RSpec.describe Addressit do
       FileUtils.mkdir_p(code_root)
       code_root = File.realpath(code_root)
       repo_root = File.join(code_root, '28th')
-      task_root = File.join(@tmpdir, 'tasks')
-      task_folder = File.join(task_root, 'shaka_trp', '1234-task')
+      task_root = File.join(code_root, '_tasks')
+      task_folder = File.join(task_root, '1234-task')
       registry = File.join(@tmpdir, 'projects.yml')
       FileUtils.mkdir_p(repo_root)
       FileUtils.mkdir_p(task_folder)
@@ -510,7 +513,6 @@ RSpec.describe Addressit do
       allow(shell).to receive(:capture!).with('git', '-C', anything, 'rev-parse', '--show-toplevel').and_return(repo_root)
       allow(shell).to receive(:capture!).with('git', '-C', repo_root, 'branch', '--show-current').and_return('sc-1234/fix')
 
-      stub_const('Addressit::TASK_ROOT', task_root)
       context = described_class.new(cwd: repo_root, shell: shell, projects_file: registry).resolve
 
       expect(context.project).to eq('shaka_trp')

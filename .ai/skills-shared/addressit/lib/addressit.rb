@@ -10,8 +10,7 @@ require_relative '../../autowork/lib/autowork'
 module Addressit
   class Error < StandardError; end
 
-  TASK_ROOT = File.join(File.expand_path(ENV.fetch('DEV_ROOT')), '_tasks')
-  DOTS_REPO = File.expand_path('~/.dots')
+  DOTS_REPO = ENV.fetch('STOW_DIR', File.expand_path('~/.dots'))
   WORKER_STATUS_TIMEOUT_SECONDS = 600
   REVIEW_AGENTS = %w[claude codex].freeze
   DEFAULT_REVIEW_AGENT = 'codex'
@@ -127,8 +126,8 @@ module Addressit
 
     def resolve(task_id: nil)
       repo_root = File.realpath(@shell.capture!('git', '-C', @cwd, 'rev-parse', '--show-toplevel').strip)
-      project = infer_project(repo_root)
-      task_root = File.join(TASK_ROOT, project)
+      project, workspace = infer_project(repo_root)
+      task_root = File.join(workspace ? File.dirname(repo_root) : repo_root, '_tasks')
       raise Error, "Task project not found: #{task_root}" unless File.directory?(task_root)
 
       branch = @shell.capture!('git', '-C', repo_root, 'branch', '--show-current').strip
@@ -147,13 +146,18 @@ module Addressit
       Context.new(project: project, task_id: task_id, task_folder: task_folder, repo_root: repo_root, branch: branch)
     end
 
+    def project_for_task_folder(task_folder)
+      project, = infer_project(File.realpath(task_folder))
+      project
+    end
+
     private
 
     def infer_project(path)
-      return 'env' if path == DOTS_REPO || path.start_with?("#{DOTS_REPO}/")
+      return ['env', nil] if path == DOTS_REPO || path.start_with?("#{DOTS_REPO}/")
 
       project_and_workspace = @registry.project_and_workspace_for_path(path)
-      return project_and_workspace.first if project_and_workspace
+      return project_and_workspace if project_and_workspace
 
       raise Error, "Could not infer project from #{path.inspect}. Pass a checkout in a known project."
     end
@@ -1417,7 +1421,7 @@ module Addressit
 
     def print_risk_reconciliation_gate
       round = @state.fetch('current_round')
-      registry = File.join(TASK_ROOT, @context.project, 'review-risk-registry.json')
+      registry = File.join(File.dirname(@context.task_folder), 'review-risk-registry.json')
       puts "Addressit round #{round}: agent-manager must reconcile blind audits."
       puts "Now read the project risk registry: #{registry}"
       puts "Prioritize active, high-weight risks only when their tags/triggers match this diff."
@@ -1648,7 +1652,7 @@ module Addressit
       repo_root = File.realpath(Autowork::Shell.capture!('git', '-C', @cwd, 'rev-parse', '--show-toplevel').strip)
       repo, number = artifact_review_target(files, state)
       context = Context.new(
-        project: File.basename(File.dirname(task_folder)),
+        project: TaskResolver.new(cwd: @cwd).project_for_task_folder(task_folder),
         task_id: File.basename(task_folder)[/\A\d+/],
         task_folder: task_folder,
         repo_root: repo_root,

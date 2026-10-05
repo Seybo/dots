@@ -5,6 +5,7 @@ require "fileutils"
 require "json"
 require "open3"
 require "tmpdir"
+require "yaml"
 
 module Handit
   class Error < StandardError; end
@@ -21,8 +22,10 @@ module Handit
   class Runner
     REQUIRED_FILES = %w[HANDOFF.md TRANSIT.md session.jsonl].freeze
 
-    def initialize(tasks_root:, cloud_root:, scanner_path:, session_file:, session_id:, output: nil)
-      @tasks_root = File.realpath(tasks_root)
+    def initialize(task_roots:, cloud_root:, scanner_path:, session_file:, session_id:, output: nil)
+      @task_roots = task_roots.filter_map do |project, path|
+        [project, File.realpath(path)] if File.directory?(path)
+      end.to_h
       @cloud_root = File.expand_path(cloud_root)
       @scanner_path = File.expand_path(scanner_path)
       @session_file = session_file.to_s
@@ -89,11 +92,10 @@ module Handit
 
     def resolve_task(task_path)
       canonical_path = File.realpath(task_path)
-      expected_parent = @tasks_root
-      project_path = File.dirname(canonical_path)
-      raise Error, "Task must be directly below a registered task project: #{canonical_path}" unless File.dirname(project_path) == expected_parent
+      task_root = File.dirname(canonical_path)
+      project = @task_roots.key(task_root)
+      raise Error, "Task must be directly below a registered task root: #{canonical_path}" unless project
 
-      project = File.basename(project_path)
       folder = File.basename(canonical_path)
       unless project.match?(/\A[a-z][a-z0-9_-]*\z/) && folder.match?(/\A(?:draft\d{2}|\d+-[a-z0-9][a-z0-9-]*)\z/)
         raise Error, "Invalid project or Task folder: #{canonical_path}"
@@ -196,14 +198,30 @@ module Handit
     end
   end
 
-  def self.tasks_root(env)
-    File.join(env.fetch("DEV_ROOT"), "_tasks")
+  def self.task_roots(env, projects_file: File.expand_path("~/.ai/skills-shared/components/projects.yml"))
+    dev_root = File.expand_path(env.fetch("DEV_ROOT"))
+    stow_dir = File.expand_path(env.fetch("STOW_DIR", "~/.dots"))
+    data = YAML.safe_load(File.read(projects_file), permitted_classes: [], aliases: false)
+
+    data.fetch("projects").to_h do |project, config|
+      registered_root = config.fetch(config.fetch("checkout_layout") == "direct" ? "checkout_path" : "code_root")
+      checkout_root = if registered_root == "$STOW_DIR"
+                        stow_dir
+                      elsif registered_root.start_with?("/", "~/")
+                        File.expand_path(registered_root)
+                      else
+                        File.expand_path(registered_root, dev_root)
+                      end
+      [project, File.join(checkout_root, "_tasks")]
+    end
+  rescue Errno::ENOENT, KeyError, Psych::Exception => exception
+    raise Error, "Invalid project registry #{projects_file}: #{exception.message}"
   end
 
   def self.cli(argv, env: ENV, output: $stdout, error: $stderr)
     operation = argv.shift
     runner = Runner.new(
-      tasks_root: tasks_root(env),
+      task_roots: task_roots(env),
       cloud_root: File.join(Dir.home, "Dropbox", "@docs", "pi-handoffs"),
       scanner_path: File.join(Dir.home, ".dots", ".agents", "skills", "dots-check", "scripts", "scan.rb"),
       session_file: env["PI_SESSION_FILE"],

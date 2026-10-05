@@ -8,7 +8,7 @@ tooling.
 Runtime files:
 
 - registry: `~/.ai/skills-shared/components/projects.yml`
-- task root: `$DEV_ROOT/_tasks/<project>/`
+- task root: `<registered-checkout-root>/_tasks/`
 - helper commands: `$DEV_ROOT/bin/skills/`
 
 ## Machine roots
@@ -76,8 +76,14 @@ Registration is manual. Do not infer a project from a Git remote or mutate the
 registry automatically. Add a direct entry to `projects.yml` with the friendly
 name and checkout path you choose.
 
-On first `/taskit` or `/draftit` use for a registered project, create its
-missing task root at `$DEV_ROOT/_tasks/<project>/`. Task-consuming/reporting
+A project's task root is derived from its registered checkout location:
+
+- `direct`: `<checkout_path>/_tasks/`
+- `ordinal_workspaces`: `<code_root>/_tasks/`
+
+The task root is shared by every ordinal workspace and is itself a separate Git
+repository. On first `/taskit` or `/draftit` use for a
+registered project, create its missing task root there. Task-consuming/reporting
 skills never create missing task roots.
 
 ## Resolving a project
@@ -85,22 +91,23 @@ skills never create missing task roots.
 1. An explicit project argument uses the matching registry key. Ordinal session
    aliases are valid only for `ordinal_workspaces` projects.
 2. Without an explicit project, match the current directory against registered
-   checkout paths. A direct checkout resolves to its root. An ordinal checkout
-   resolves to the canonical ordinal folder below its code root.
+   checkout paths or task roots. A direct checkout resolves to its root. An
+   ordinal checkout resolves to the canonical ordinal folder below its code
+   root. A directory inside a registered task root resolves to that project.
 3. If no project matches, stop and ask the user to register the checkout in
    `projects.yml` or pass a registered project explicitly. Do not guess.
 
-An explicit project maps to `$DEV_ROOT/_tasks/<project>/`. A direct project
-needs no workspace selection. An ordinal project selects a workspace in this
-order: explicit session alias, workspace inferred from the current directory,
-then user input.
+An explicit project maps to its derived task root. A direct project needs no
+workspace selection. An ordinal project selects a workspace in this order:
+explicit session alias, workspace inferred from the current directory, then
+user input.
 
 ## Task selection
 
 Task folders remain directly below the project task root:
 
 ```text
-$DEV_ROOT/_tasks/<project>/<task-id>-<slug>/
+<task-root>/<task-id>-<slug>/
 ```
 
 Local/manual tasks use zero-padded four-digit IDs such as `0001`. Shortcut
@@ -138,7 +145,7 @@ and Tasks remain unfeatured.
 Feature files live at:
 
 ```text
-$DEV_ROOT/_tasks/<project>/features/<feature-slug>.md
+<task-root>/features/<feature-slug>.md
 ```
 
 `<feature-slug>` follows Draftit's slug rules and matches
@@ -150,8 +157,7 @@ Feature: [<feature-slug>](../features/<feature-slug>.md)
 ```
 
 The relative path is stable because draft and numbered Task folders remain
-direct children of `$DEV_ROOT/_tasks/<project>/`. Never nest those folders below
-`features/`.
+direct children of `<task-root>/`. Never nest those folders below `features/`.
 
 A Feature file contains its stable shared brief and this final first-level
 inventory section:

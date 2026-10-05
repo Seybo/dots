@@ -35,11 +35,7 @@ Usage: /handit pass [--allow-sensitive] | /handit receive
 
 Read and follow `../components/task-resolution.md` and `../components/projects.yml`.
 
-Require exactly one existing canonical draft or numbered Task folder directly under:
-
-```text
-$DEV_ROOT/_tasks/<project>/
-```
+Require exactly one existing canonical draft or numbered Task folder directly under the registered `<task-root>/`.
 
 Use an exact Task path already established by the active Grillme, Draftit, Taskit, Workit, Autoimplement, or Autofix conversation when one exists. Otherwise use the shared current-checkout, workspace, and `sc-<digits>` branch rules. Verify the resolved folder and its `task.md` on disk.
 

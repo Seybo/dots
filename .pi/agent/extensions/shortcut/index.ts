@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { existsSync, readdirSync, statSync } from "node:fs"
+import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent"
 
@@ -174,26 +175,36 @@ function parseUpdateStoryArgs(text: string): { storyId: string; descriptionPath:
 }
 
 function findTaskMarkdownForStory(storyId: string): string | undefined {
-    const devRoot = process.env.DEV_ROOT?.trim()
-    if (!devRoot) return undefined
-
-    const tasksRoot = join(devRoot, "_tasks")
-    if (!existsSync(tasksRoot)) return undefined
-
     const matches: string[] = []
-    for (const projectName of readdirSync(tasksRoot)) {
-        const projectPath = join(tasksRoot, projectName)
-        if (!statSync(projectPath).isDirectory()) continue
+    for (const tasksRoot of projectTaskRoots()) {
+        if (!existsSync(tasksRoot)) continue
 
-        for (const taskFolder of readdirSync(projectPath)) {
+        for (const taskFolder of readdirSync(tasksRoot)) {
             if (!taskFolder.startsWith(`${storyId}-`)) continue
 
-            const taskPath = join(projectPath, taskFolder, "task.md")
+            const taskPath = join(tasksRoot, taskFolder, "task.md")
             if (existsSync(taskPath)) matches.push(taskPath)
         }
     }
 
     return matches.length === 1 ? matches[0] : undefined
+}
+
+function projectTaskRoots(): string[] {
+    const devRoot = process.env.DEV_ROOT?.trim()
+    if (!devRoot) return []
+
+    const roots = [join(process.env.STOW_DIR?.trim() || join(homedir(), ".dots"), "_tasks")]
+    for (const group of ["misc", "my", "shaka"]) {
+        const groupRoot = join(devRoot, "projects", group)
+        if (!existsSync(groupRoot)) continue
+
+        for (const project of readdirSync(groupRoot)) {
+            const taskRoot = join(groupRoot, project, "_tasks")
+            if (existsSync(taskRoot) && statSync(taskRoot).isDirectory()) roots.push(taskRoot)
+        }
+    }
+    return roots
 }
 
 function parseMarkdownPath(text: string): string | undefined {

@@ -51,7 +51,7 @@ On `main`, `master`, a local-provider Task, or any arbitrary branch without that
 segment, stop with the usage text and require `--task <digits>`. Never infer a
 local Task from its branch.
 
-Resolve the numeric ID beneath `$DEV_ROOT/_tasks/<project>/`. Require exactly
+Resolve the numeric ID beneath the registered `<task-root>/`. Require exactly
 one first-level Task folder whose name begins with that ID and require its
 `task.md`. Stop and list the matches when ambiguous; stop with the searched task
 root when none match. Never select the newest Task folder or a SQLite row.

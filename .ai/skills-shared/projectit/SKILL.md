@@ -2,7 +2,7 @@
 name: projectit
 description: >-
   Create an ordinal-workspace project for the task workflow. Creates its task
-  root, first code workspace, Git repository, tmuxinator layout, registry
+  repository, first code workspace and Git repository, tmuxinator layout, registry
   entry, and active-project entry. Command-only skill. In Pi, invoke via
   /skill:projectit; /projectit is also accepted where that alias is exposed.
 disable-model-invocation: true
@@ -40,7 +40,7 @@ Do not auto-use this skill from a general project-management request. Wait for t
 /projectit shaka p1
 
 project key: shaka_p1
-$DEV_ROOT/_tasks/shaka_p1/
+$DEV_ROOT/projects/shaka/p1/_tasks/
 $DEV_ROOT/projects/shaka/p1/1st/
 ```
 
@@ -87,9 +87,11 @@ Tmux sessions use `<project-key><number>`.
 
 3. **Resolve paths:**
    - read and follow `~/.ai/skills-shared/components/task-resolution.md`
-   - task root:
+   - code root, task root, and required first workspace:
      ```text
-     $DEV_ROOT/_tasks/<project>/
+     $DEV_ROOT/projects/my/<name>/_tasks/    # group my
+     $DEV_ROOT/projects/shaka/<name>/_tasks/ # group shaka
+     $DEV_ROOT/projects/misc/<name>/_tasks/  # group misc
      ```
    - code root and required first workspace:
      ```text
@@ -107,7 +109,7 @@ Tmux sessions use `<project-key><number>`.
      ```
 
 4. **Validate base directories:**
-   - require `$DEV_ROOT/_tasks/` and the selected group’s code parent to exist
+   - require the selected group’s code parent to exist
    - selected group parents:
      ```text
      my    -> $DEV_ROOT/projects/my/
@@ -117,19 +119,20 @@ Tmux sessions use `<project-key><number>`.
    - do not create those parent directories
 
 5. **Create directories safely:**
-   - create the task root, code root, and required `1st` workspace when missing
+   - create the code root, its `_tasks` task root, and required `1st` workspace when missing
    - if any target exists as a non-directory, stop and report it
    - leave existing directories in place; do not overwrite or delete anything
    - do not create task folders, draft folders, `task.md`, or `steps.md`
 
 6. **Initialize Git:**
-   - inspect `<code-root>/1st/` after it exists
-   - if it already has a `.git` file or directory, report that Git is already initialized
-   - otherwise run:
+   - inspect `<code-root>/_tasks/` and `<code-root>/1st/` after they exist
+   - for each directory, report Git as already initialized when it has a `.git` file or directory
+   - otherwise initialize that directory independently:
      ```bash
+     git -C <code-root>/_tasks init
      git -C <code-root>/1st init
      ```
-   - if Git initialization fails, report the error and leave created directories in place
+   - if either Git initialization fails, report the error and leave created directories in place
 
 7. **Create and register the project layout:**
    - require `~/.config/tmuxinator/default.yml`
@@ -154,7 +157,7 @@ Tmux sessions use `<project-key><number>`.
    - never add inferred sibling workspaces or other projects
 
 9. **Return paths clearly:**
-   - show whether the task root, code root, `1st` workspace, Git repo, project registry entry, and active-project entry were created or already existed
+   - show whether the task repository, code root, `1st` workspace repository, project registry entry, and active-project entry were created or already existed
    - show the full task root, first workspace, project registry, and active-project registry paths
    - state that Git initializes on `main` or `master`, which is protected for every non-`env` project
    - before `/workit`, tell the user to create and switch to a task branch manually:

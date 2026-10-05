@@ -20,8 +20,8 @@ offer uses Featureit's preserved Feature file as the authoritative source.
 After grilling completes successfully and the final summary is ready:
 
 1. **Existing non-Feature file:** Grillme has saved the settled results in that
-   file. If it matches exactly
-   `$DEV_ROOT/_tasks/<project>/draftNN/task.md`, preserve the project and draft
+   file. If it matches exactly `<task-root>/draftNN/task.md`, preserve the
+   project and draft
    path and show:
 
    ```text

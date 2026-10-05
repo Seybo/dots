@@ -105,11 +105,12 @@ Feature path, reference, inventory, membership, and precedence contract.
    - do not accept a manual name or slug override
 
 2. **Resolve the target:**
-   - use the selected project's Feature root
-     `$DEV_ROOT/_tasks/<project>/features/`
-   - create that directory when missing
-   - resolve the target as
-     `$DEV_ROOT/_tasks/<project>/features/<feature-slug>.md`
+   - derive `<task-root>/` from the registered checkout using `../components/task-resolution.md`
+   - use the selected project's Feature root `<task-root>/features/`
+   - if the task root does not exist, create it and initialize it as a Git repository
+   - if the task root exists without a `.git` file or directory, initialize it as a Git repository
+   - create the Feature root when missing
+   - resolve the target as `<task-root>/features/<feature-slug>.md`
    - the target Feature file must not already exist; stop rather than overwrite,
      merge, rename, or choose another slug
 

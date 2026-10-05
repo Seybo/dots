@@ -40,8 +40,8 @@ An inferred story ID is treated as a task identifier (see below).
 
 Treat the selector as one of:
 
-- a **task identifier** if it is digits only, matched as a prefix of a task folder under `$DEV_ROOT/_tasks/<project>/`; this can be a Shortcut story ID like `33557` or a local sequential task ID like `0003`
-- a **draft reference** if it matches `^draft\d{2}$`, resolved to `$DEV_ROOT/_tasks/<project>/draftNN/task.md`
+- a **task identifier** if it is digits only, matched as a prefix of a task folder under `<task-root>/`; this can be a Shortcut story ID like `33557` or a local sequential task ID like `0003`
+- a **draft reference** if it matches `^draft\d{2}$`, resolved to `<task-root>/draftNN/task.md`
 - a **task markdown path** if it is an existing path ending in `.md` or `.markdown`
 
 Examples:
@@ -51,7 +51,7 @@ Examples:
 /sumit shaka_gtm
 /sumit shaka_gtm 33557
 /sumit my_health 0003
-/sumit shaka_gtm $DEV_ROOT/_tasks/shaka_gtm/33557-foo/task.md
+/sumit shaka_gtm $DEV_ROOT/projects/shaka/gtm/_tasks/33557-foo/task.md
 /sumit shaka_gtm draft01
 ```
 
@@ -98,10 +98,7 @@ Do not create project folders, task folders, or files.
      ```
 
 2. **Resolve and validate project:**
-   - resolve the task root as:
-     ```text
-     $DEV_ROOT/_tasks/<project>/
-     ```
+   - derive `<task-root>/` from the registered checkout using `../components/task-resolution.md`
    - if the project is not registered, tell the user to add it to `~/.ai/skills-shared/components/projects.yml`
    - if its task root does not exist, report that no tasks have been created for the registered project
    - do not create folders automatically
@@ -111,7 +108,7 @@ Do not create project folders, task folders, or files.
      - zero matches: stop and report no matching task folder
      - multiple matches: stop and ask the user to disambiguate, listing the matches
      - exactly one match: require `<matched_folder>/task.md`
-   - **Draft reference mode:** resolve to `$DEV_ROOT/_tasks/<project>/draftNN/task.md` and require the file to exist
+   - **Draft reference mode:** resolve to `<task-root>/draftNN/task.md` and require the file to exist
    - **Task markdown path mode:** require the provided path to exist and end in `.md` or `.markdown`
 
 4. **Read source text and manager context:**

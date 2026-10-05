@@ -10,9 +10,9 @@ require_relative "../scripts/handit"
 class HanditSpec < Minitest::Test
   def setup
     @root = Dir.mktmpdir("handit-")
-    @tasks_root = File.join(@root, "tasks")
+    @tasks_root = File.join(@root, "dots", "_tasks")
     @cloud_root = File.join(@root, "cloud")
-    @task_path = File.join(@tasks_root, "env", "0042-mobile-pi-session-handoff")
+    @task_path = File.join(@tasks_root, "0042-mobile-pi-session-handoff")
     @session_path = File.join(@root, "session.jsonl")
     @summary_path = File.join(@root, "summary.md")
     @session_id = "session-123"
@@ -98,10 +98,27 @@ class HanditSpec < Minitest::Test
     refute File.exist?(@summary_path)
   end
 
-  def test_tasks_root_uses_dev_root
+  def test_task_roots_are_derived_from_registered_checkouts
     dev_root = File.join(@root, "dev")
+    stow_dir = File.join(@root, "dots")
+    registry = File.join(@root, "projects.yml")
+    File.write(registry, <<~YAML)
+      projects:
+        env:
+          checkout_layout: direct
+          checkout_path: $STOW_DIR
+        shaka_gtm:
+          checkout_layout: ordinal_workspaces
+          code_root: projects/shaka/gtm
+    YAML
 
-    assert_equal File.join(dev_root, "_tasks"), Handit.tasks_root("DEV_ROOT" => dev_root)
+    assert_equal(
+      {
+        "env" => File.join(stow_dir, "_tasks"),
+        "shaka_gtm" => File.join(dev_root, "projects", "shaka", "gtm", "_tasks")
+      },
+      Handit.task_roots({ "DEV_ROOT" => dev_root, "STOW_DIR" => stow_dir }, projects_file: registry)
+    )
   end
 
   private
@@ -112,7 +129,7 @@ class HanditSpec < Minitest::Test
 
   def build_runner(session_id: @session_id)
     Handit::Runner.new(
-      tasks_root: @tasks_root,
+      task_roots: { "env" => @tasks_root },
       cloud_root: @cloud_root,
       scanner_path: @scanner_path,
       session_file: @session_path,

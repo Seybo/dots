@@ -9,10 +9,11 @@ RSpec.describe 'LoadTaskStatus' do
   let(:service_class) { Object.const_get(:LoadTaskStatus) }
   let(:db) { Database.connection }
   let(:root_path) { Dir.mktmpdir('load-task-status-spec') }
-  let(:task_path) { File.join(root_path, 'env', '0038-render-status') }
+  let(:task_path) { File.join(root_path, 'env', '_tasks', '0038-render-status') }
 
   before do
     write_task_files
+    allow(ResolveTaskProject).to receive(:call).with(task_path: File.realpath(task_path)).and_return('env')
   end
 
   after do
