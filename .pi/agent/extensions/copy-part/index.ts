@@ -8,6 +8,7 @@ import { extractFilePaths } from "./file-paths.ts";
 import { extractLinks } from "./links.ts";
 import { openFileInAdjacentPane } from "./open-file.ts";
 import { PickerState } from "./picker-state.ts";
+import { extractQuotes } from "./quotes.ts";
 import { formatSentenceList } from "./sentence-list.ts";
 import { parseCopyArgs, resolveSelection } from "./selection.ts";
 import { extractSentences } from "./sentences.ts";
@@ -15,7 +16,7 @@ import { extractSentences } from "./sentences.ts";
 const MAX_VISIBLE_ITEMS = 8;
 
 type ModeConfig = {
-	partName: "sentence" | "code" | "link" | "file path";
+	partName: "sentence" | "code" | "link" | "file path" | "quote";
 	missing: string;
 	extract: (response: string) => string[];
 	isMultiSelect?: boolean;
@@ -33,6 +34,7 @@ const MODES = {
 	l: { partName: "link", missing: "web link", extract: extractLinks },
 	f: { partName: "file path", missing: "file path", extract: extractFilePaths },
 	v: { partName: "file path", missing: "file path", extract: extractFilePaths, action: "open" },
+	q: { partName: "quote", missing: "quoted response", extract: extractQuotes },
 } satisfies Record<string, ModeConfig>;
 
 type Mode = keyof typeof MODES;
@@ -203,7 +205,7 @@ export default function copyPartExtension(pi: ExtensionAPI) {
 		handler: async (args, ctx) => {
 			const parsed = parseCopyArgs(args);
 			if (!parsed || !isMode(parsed.mode)) {
-				ctx.ui.notify("Usage: /cp <s|c|l|f|v> [number|l]", "warning");
+				ctx.ui.notify("Usage: /cp <s|c|l|f|v|q> [number|l]", "warning");
 				return;
 			}
 			if (ctx.mode !== "tui") {
