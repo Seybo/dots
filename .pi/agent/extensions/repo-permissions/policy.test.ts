@@ -331,6 +331,29 @@ test("repository mode allows normal skill and development commands", () => {
 	});
 });
 
+test("repository mode allows explicit read-only GitHub REST requests", () => {
+	withRepository((repository) => {
+		for (const command of [
+			`gh api --method GET search/repositories -f q='neovim visual selection AI agent CLI' -f per_page=10 --jq '.items[] | [.full_name, .html_url, (.description // "")] | @tsv'`,
+			"gh api search/issues -XGET -f q='repo:example/project is:open'",
+			"gh api --method=HEAD repos/example/project -f per_page=1",
+		]) {
+			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "allow", command);
+		}
+
+		for (const command of [
+			"gh api --method POST search/repositories -f q=neovim",
+			"gh api --method GET search/repositories -F q=@query.txt",
+			"gh api --method GET search/repositories --input query.json",
+			`gh api --method GET search/repositories -f q="$QUERY"`,
+			`gh api --method GET graphql -f query='mutation { deleteProjectV2(input:{projectV2Id:"PVT_1"}) { projectV2 { id } } }'`,
+			"gh api --method GET --method POST search/repositories -f q=neovim",
+		]) {
+			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "ask", command);
+		}
+	});
+});
+
 test("repository mode allows literal read-only GitHub GraphQL queries", () => {
 	withRepository((repository) => {
 		for (const command of [

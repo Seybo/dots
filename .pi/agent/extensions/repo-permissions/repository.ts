@@ -1,5 +1,7 @@
 import { lstatSync, realpathSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { parseStartupIgnoredPaths, type RepositoryState } from "./policy.ts";
 
@@ -19,6 +21,110 @@ export type RepositoryDiscovery = {
 	repository?: RepositoryState;
 	warning?: string;
 };
+
+export type TaskRepositoryDiscovery = {
+	repository?: RepositoryState;
+	warning?: string;
+};
+
+export type TaskRepositoryOptions = {
+	registryPath?: string;
+	resolverPath?: string;
+	devRoot?: string;
+	stowDir?: string;
+};
+
+export type TaskRepositoryResolver = (
+	primaryRoot: string,
+	exec: GitExec,
+) => Promise<TaskRepositoryDiscovery>;
+
+export async function discoverTaskRepository(
+	primaryRoot: string,
+	exec: GitExec,
+	options: TaskRepositoryOptions = {},
+): Promise<TaskRepositoryDiscovery> {
+	const registryPath =
+		options.registryPath ?? join(homedir(), ".ai", "skills-shared", "components", "projects.yml");
+	const resolverPath =
+		options.resolverPath ?? fileURLToPath(new URL("resolve_task_root.rb", import.meta.url));
+	const devRoot = options.devRoot ?? process.env.DEV_ROOT;
+	const stowDir = options.stowDir ?? process.env.STOW_DIR;
+	if (!devRoot || !stowDir) {
+		return {
+			warning: "Project task repository discovery needs DEV_ROOT and STOW_DIR; companion access is unavailable",
+		};
+	}
+
+	let result: GitExecResult;
+	try {
+		result = await exec("ruby", [resolverPath, registryPath, primaryRoot, devRoot, stowDir], {
+			timeout: 5000,
+		});
+	} catch {
+		return {
+			warning: "Project task repository discovery failed; companion access is unavailable",
+		};
+	}
+	if (result.code !== 0) {
+		return {
+			warning: "Project task repository discovery failed; companion access is unavailable",
+		};
+	}
+
+	const output = result.stdout.trim();
+	if (!output) return {};
+	if (output.includes("\n") || !isAbsolute(output) || basename(output) !== "_tasks") {
+		return {
+			warning: "Project task repository discovery returned an invalid path; companion access is unavailable",
+		};
+	}
+
+	let taskRoot: string;
+	try {
+		taskRoot = join(realpathSync(dirname(output)), "_tasks");
+		const stat = lstatSync(output);
+		if (stat.isSymbolicLink()) {
+			return {
+				warning: "The registered task root is a symbolic link; companion access is unavailable",
+			};
+		}
+		if (!stat.isDirectory()) {
+			return {
+				warning: "The registered task root is not a directory; companion access is unavailable",
+			};
+		}
+	} catch (error) {
+		if (!isMissingPathError(error)) {
+			return {
+				warning: "The registered task root could not be resolved; companion access is unavailable",
+			};
+		}
+		try {
+			taskRoot = join(realpathSync(dirname(output)), "_tasks");
+		} catch {
+			return {
+				warning: "The registered task root parent could not be resolved; companion access is unavailable",
+			};
+		}
+		return { repository: { root: taskRoot, startupIgnoredPaths: new Set() } };
+	}
+
+	const discovery = await discoverRepository(taskRoot, exec);
+	if (!discovery.repository) {
+		return {
+			warning: discovery.hasGitRoot
+				? "The task repository ignored-file snapshot failed; companion access is unavailable"
+				: "The registered task root is not a Git repository; companion access is unavailable",
+		};
+	}
+	if (discovery.repository.root !== taskRoot) {
+		return {
+			warning: "The registered task root is not an independent Git repository; companion access is unavailable",
+		};
+	}
+	return { repository: discovery.repository };
+}
 
 export async function discoverRepositoryContaining(
 	target: string,
@@ -77,4 +183,8 @@ export async function discoverRepository(cwd: string, exec: GitExec): Promise<Re
 			startupIgnoredPaths: parseStartupIgnoredPaths(root, ignoredResult.stdout),
 		},
 	};
+}
+
+function isMissingPathError(error: unknown): boolean {
+	return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT";
 }

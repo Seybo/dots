@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -14,6 +15,7 @@ function createHarness(
 	results: ExecResult[],
 	skillCommands: Record<string, unknown>[] = [],
 	parseFrontmatter: (content: string) => Record<string, unknown> = () => ({}),
+	taskRepositoryResolver: Parameters<typeof registerRepoPermissions>[3] = async () => ({}),
 ) {
 	const handlers = new Map<string, Handler>();
 	const commands = new Map<string, { handler: Handler }>();
@@ -24,7 +26,12 @@ function createHarness(
 		registerCommand: (name: string, command: { handler: Handler }) => commands.set(name, command),
 		getCommands: () => skillCommands,
 	};
-	registerRepoPermissions(pi as never, parseFrontmatter, (entry) => permissionRequests.push(entry));
+	registerRepoPermissions(
+		pi as never,
+		parseFrontmatter,
+		(entry) => permissionRequests.push(entry),
+		taskRepositoryResolver,
+	);
 	return { handlers, commands, permissionRequests };
 }
 
@@ -404,6 +411,73 @@ test("HTTP origin approval is scoped to the current session", async () => {
 		context,
 	);
 	assert.ok(context.selections.at(-1)?.includes(httpChoice));
+});
+
+test("a registered task repository is automatically allowed and resets with the session", async () => {
+	const base = mkdtempSync(join(tmpdir(), "repo-permission-task-repository-"));
+	const root = join(base, "1st");
+	const taskRoot = join(base, "_tasks");
+	mkdirSync(root);
+	mkdirSync(taskRoot);
+	execFileSync("git", ["init", "-q", root]);
+	execFileSync("git", ["init", "-q", taskRoot]);
+	writeFileSync(join(taskRoot, "obsolete.md"), "old\n");
+	let resolutionCount = 0;
+	const taskRepositoryResolver: Parameters<typeof registerRepoPermissions>[3] = async () => {
+		resolutionCount++;
+		return resolutionCount === 1
+			? {
+					repository: {
+						root: realpathSync(taskRoot),
+						startupIgnoredPaths: new Set([join(realpathSync(taskRoot), "private.md")]),
+					},
+				}
+			: {};
+	};
+	const harness = createHarness(
+		[
+			gitResult(0, `${realpathSync(root)}\n`),
+			gitResult(0),
+			gitResult(0, `${realpathSync(root)}\n`),
+			gitResult(0),
+		],
+		[],
+		undefined,
+		taskRepositoryResolver,
+	);
+	const context = createContext(root, false);
+
+	try {
+		await harness.handlers.get("session_start")!({}, context);
+		assert.equal(
+			await harness.handlers.get("tool_call")!(
+				{ toolName: "write", input: { path: join(taskRoot, "task.md") } },
+				context,
+			),
+			undefined,
+		);
+		assert.equal(
+			await harness.handlers.get("tool_call")!(
+				{ toolName: "bash", input: { command: `rm ${join(taskRoot, "obsolete.md")}` } },
+				context,
+			),
+			undefined,
+		);
+		const ignored = await harness.handlers.get("tool_call")!(
+			{ toolName: "edit", input: { path: join(taskRoot, "private.md") } },
+			context,
+		);
+		assert.match(String((ignored as { reason?: string }).reason), /Git-ignored/i);
+
+		await harness.handlers.get("session_start")!({}, context);
+		const blocked = await harness.handlers.get("tool_call")!(
+			{ toolName: "write", input: { path: join(taskRoot, "task.md") } },
+			context,
+		);
+		assert.equal((blocked as { block?: boolean }).block, true);
+	} finally {
+		rmSync(base, { recursive: true, force: true });
+	}
 });
 
 test("an additional repository can be allowed for the current session", async () => {

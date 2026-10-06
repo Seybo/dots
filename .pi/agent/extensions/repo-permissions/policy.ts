@@ -720,10 +720,37 @@ function isReadOnlyGraphqlQuery(segment: string, args: string[]): boolean {
 	return /^query(?:\s|\(|\{)/.test(query) && !/\bmutation\b/.test(query);
 }
 
+function isExplicitReadOnlyGhApiRequest(segment: string, args: string[]): boolean {
+	if (args[0] !== "api" || args.includes("graphql") || hasUnsafeShellSyntax(segment)) return false;
+	if (
+		args.some(
+			(arg) =>
+				arg.startsWith("-F") ||
+				["--field", "--input"].some((option) => arg === option || arg.startsWith(`${option}=`)),
+		)
+	) {
+		return false;
+	}
+
+	const methods: string[] = [];
+	for (let index = 1; index < args.length; index++) {
+		const arg = args[index]!;
+		if (arg === "-X" || arg === "--method") {
+			const method = args[++index];
+			if (!method) return false;
+			methods.push(method);
+			continue;
+		}
+		const attachedMethod = arg.match(/^(?:-X|--method=)(.+)$/)?.[1];
+		if (attachedMethod) methods.push(attachedMethod);
+	}
+	return methods.length === 1 && /^(?:GET|HEAD)$/i.test(methods[0]!);
+}
+
 function isMutatingGh(segment: string, args: string[]): boolean {
 	const [area, action] = args;
 	if (area === "api") {
-		if (isReadOnlyGraphqlQuery(segment, args)) return false;
+		if (isReadOnlyGraphqlQuery(segment, args) || isExplicitReadOnlyGhApiRequest(segment, args)) return false;
 		return args.some((arg, index) => {
 			if (/^(?:-[fF].+|--field=|--raw-field=|--input=)/.test(arg)) return true;
 			if (["-f", "-F", "--field", "--raw-field", "--input"].includes(arg)) return true;

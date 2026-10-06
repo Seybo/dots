@@ -62,10 +62,13 @@ Repository mode allows:
 - exact non-force `git push origin <literal-branch>`, optionally with `-u` or `--set-upstream`; pushes to `main`, `master`, `HEAD`, full refs, other remotes, multiple or dynamic refspecs, tags, deletion, and force options remain guarded
 - literal `rm` and plain `rmdir` targets when their resolved deletion paths stay inside the repository; `rmdir -p` remains guarded
 - ordinary local `rsync`; remote transfers, deletion, source-file removal, and custom remote-shell options remain guarded
-- literal `gh api graphql -f query='query ...'` documents; mutations, dynamic or file-backed query documents, input files, explicit methods, and other field forms remain guarded
+- explicit `gh api --method GET|HEAD` REST requests with literal raw fields, plus literal `gh api graphql -f query='query ...'` documents; REST typed/file fields and conflicting or mutating methods remain guarded, as do GraphQL mutations, dynamic or file-backed queries, input files, explicit methods, and other GraphQL field forms
 - direct changes and literal deletion inside repositories allowed for the session; an `edit` or `write` prompt for another repository may grant that exact canonical repository
+- direct changes and literal deletion inside the registered project's companion `_tasks` repository; direct checkouts use `<checkout>/_tasks`, while ordinal workspaces share `<code_root>/_tasks`
 
-A repository grant snapshots its ignored files and applies the same Git-metadata, ignored-file, deletion, and `agents_tmp` protections. It does not bypass the high-impact ask list and clears on reload, session switch, or restart. Outside deletion and non-repository paths offer Allow once but no repository grant. Unattended mode blocks outside-repository changes without prompting.
+The companion task repository is resolved from `projects.yml`, never inferred from an arbitrary folder name. Existing task repositories receive their own ignored-file snapshot. A missing registered task root is allowed at its exact expected path so `/taskit` or `/draftit` can create it. Symlinked, unregistered, non-directory, and existing non-Git task roots fail closed.
+
+A repository grant snapshots its ignored files and applies the same Git-metadata, ignored-file, deletion, and `agents_tmp` protections. Companion task repositories receive those same protections and do not bypass the high-impact ask list. Companion access and repository grants clear and are recomputed on reload, session switch, or restart. Outside deletion and non-repository paths offer Allow once but no repository grant. Unattended mode blocks outside-repository changes without prompting.
 
 Other destructive or remote Git operations remain guarded. Agent authorization rules still decide when branch creation or push is permitted.
 
@@ -135,7 +138,7 @@ Do not add skill rules for ordinary Repository-mode work; it is already allowed.
 - Ask mode is the fallback outside Git or after discovery failure.
 - Unattended mode is available only after Repository discovery and blocks instead of prompting.
 - Unrestricted mode is session-only.
-- Repository mode allows outside reads but asks before direct changes and literal deletion outside repositories allowed for the session. It is not filesystem confinement.
+- Repository mode allows outside reads but asks before direct changes and literal deletion outside repositories allowed for the session. A registered project's exact companion `_tasks` repository is automatically included. It is not filesystem confinement.
 - Pi clipboard images named `pi-clipboard-<UUID>.png` are readable from the OS temporary directory in Repository and Ask modes.
 - SSH access through conservative `ssh`, `scp`, and `sftp` forms may be approved for one exact destination for the current session. Quoted local `scp` paths may use simple environment variables. The safe options `-q`, `-o BatchMode=yes`, and `-o ConnectTimeout=<seconds>` may precede the destination.
 - Conservative mutating `curl` requests may be approved for one exact loopback HTTP origin for the current session. Grants support `localhost`, `127.0.0.1`, and `::1`; redirects, proxies, alternate connection targets, config files, Unix sockets, and custom Host headers remain guarded.

@@ -12,7 +12,13 @@ import {
 	type PermissionMode,
 	type RepositoryState,
 } from "./policy.ts";
-import { discoverRepository, discoverRepositoryContaining, type GitExec } from "./repository.ts";
+import {
+	discoverRepository,
+	discoverRepositoryContaining,
+	discoverTaskRepository,
+	type GitExec,
+	type TaskRepositoryResolver,
+} from "./repository.ts";
 
 const STATUS_ID = "repo-permissions";
 const PROMPT_CHOICES = ["Allow once", "Allow everything for this session", "Reject"];
@@ -39,9 +45,11 @@ export function registerRepoPermissions(
 	pi: ExtensionAPI,
 	parseFrontmatter: FrontmatterParser,
 	logPermissionRequest: PermissionRequestLogger = appendPermissionRequest,
+	resolveTaskRepository: TaskRepositoryResolver = discoverTaskRepository,
 ): void {
 	let mode: PermissionMode = "ask";
 	let repository: RepositoryState | undefined;
+	let taskRepository: RepositoryState | undefined;
 	let hasGitRoot = false;
 	let skillRules: string[] | undefined;
 	let hasLogWarning = false;
@@ -60,11 +68,17 @@ export function registerRepoPermissions(
 	}
 
 	async function loadRepository(ctx: ExtensionContext): Promise<void> {
-		const discovery = await discoverRepository(ctx.cwd, (command, args, options) =>
-			pi.exec(command, args, options),
-		);
+		const exec = (command: string, args: string[], options?: { cwd?: string; timeout?: number }) =>
+			pi.exec(command, args, options);
+		const discovery = await discoverRepository(ctx.cwd, exec);
 		hasGitRoot = discovery.hasGitRoot;
 		repository = discovery.repository;
+		taskRepository = undefined;
+		if (repository) {
+			const taskDiscovery = await resolveTaskRepository(repository.root, exec);
+			taskRepository = taskDiscovery.repository;
+			if (taskDiscovery.warning) ctx.ui.notify(taskDiscovery.warning, "warning");
+		}
 		setMode(repository ? "repository" : "ask", ctx);
 		if (discovery.warning) ctx.ui.notify(discovery.warning, "warning");
 	}
@@ -92,6 +106,7 @@ export function registerRepoPermissions(
 	pi.on("session_start", async (_event, ctx) => {
 		mode = "ask";
 		repository = undefined;
+		taskRepository = undefined;
 		hasGitRoot = false;
 		skillRules = undefined;
 		hasLogWarning = false;
@@ -109,7 +124,9 @@ export function registerRepoPermissions(
 		const input = event.input as Record<string, unknown>;
 		const command = event.toolName === "bash" && typeof input.command === "string" ? input.command : undefined;
 		const sshDestination = command ? getSshDestination(command) : undefined;
-		const repositories = repository ? [repository, ...repositoryGrants.values()] : [];
+		const repositories = repository
+			? [repository, ...(taskRepository ? [taskRepository] : []), ...repositoryGrants.values()]
+			: [];
 		const decision = decideToolCall({
 			mode,
 			toolName: event.toolName,
