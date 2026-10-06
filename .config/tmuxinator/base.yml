@@ -20,6 +20,22 @@ windows:
       panes:
         -
 
+  - pi3:
+      panes:
+        -
+
+  - pi4:
+      panes:
+        -
+
+  - pi5:
+      panes:
+        -
+
+  - pi6:
+      panes:
+        -
+
   - piweb:
       layout: 74cf,156x46,0,0{75x46,0,0,88,80x46,76,0[80x23,76,0,70,80x22,76,24,98]}
       panes:
