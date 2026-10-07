@@ -8,6 +8,7 @@ import {
 	decideToolCall,
 	getHttpOrigin,
 	getSshDestination,
+	getWorktreeAdditions,
 	matchRule,
 	parseStartupIgnoredPaths,
 	parseRuleList,
@@ -449,6 +450,16 @@ test("repository mode asks for high-impact command families", () => {
 	});
 });
 
+test("worktree destinations follow git -C and reject unresolved directory changes", () => {
+	withRepository((repository, outside) => {
+		assert.deepEqual(
+			getWorktreeAdditions(`git fetch origin master && git -C ${outside} worktree add -b fix ../temporary origin/master`, repository.root),
+			[{ source: outside, target: resolve(outside, "../temporary") }],
+		);
+		assert.deepEqual(getWorktreeAdditions("cd ../source && git worktree add ../temporary HEAD", repository.root), []);
+	});
+});
+
 test("ordinary Git writes are allowed while destructive and remote operations ask", () => {
 	withRepository((repository, outside) => {
 		for (const command of [
@@ -469,6 +480,9 @@ test("ordinary Git writes are allowed while destructive and remote operations as
 			"git push -u origin feature",
 			`git -C ${outside} push --set-upstream origin feature`,
 			"git worktree list",
+			"git worktree add ../temporary origin/master",
+			"git worktree add -b fix-example ../temporary origin/master",
+			"git -C ../source worktree add -b fix-example ../temporary origin/master",
 		]) {
 			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "allow", command);
 		}
@@ -510,6 +524,10 @@ test("ordinary Git writes are allowed while destructive and remote operations as
 			"git remote set-url origin example.test/repo",
 			"git stash drop stash@{0}",
 			"git worktree remove ../review",
+			"git worktree add --force ../temporary origin/master",
+			"git worktree add -B fix-example ../temporary origin/master",
+			'git worktree add "$TARGET" origin/master',
+			"git -c core.hooksPath=hooks worktree add ../temporary origin/master",
 			"git config --remove-section branch.old",
 		]) {
 			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "ask", command);

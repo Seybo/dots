@@ -568,11 +568,49 @@ function isGuardedGit(segment: string, tokens: string[]): boolean {
 	if (command === "stash") return !["list", "show"].includes(args[0] ?? "");
 	if (command === "remote") return ![undefined, "-v", "show", "get-url"].includes(args[0]);
 	if (command === "reflog") return ["delete", "expire"].includes(args[0] ?? "");
-	if (command === "worktree") return args[0] !== "list";
+	if (command === "worktree") return args[0] !== "list" && !parseWorktreeAdd(segment, tokens);
 	if (command === "submodule") return !["status", "summary"].includes(args[0] ?? "");
 	if (command === "notes") return !["list", "show"].includes(args[0] ?? "");
 	if (command === "config") return isMutatingGitConfig(args);
 	return false;
+}
+
+export type WorktreeAddition = { source: string; target: string };
+
+function parseWorktreeAdd(segment: string, tokens: string[]): { source?: string; target: string } | undefined {
+	if (basename(tokens[0] ?? "") !== "git" || hasUnsafeShellSyntax(segment)) return undefined;
+	let index = 1;
+	let source: string | undefined;
+	if (tokens[index] === "-C") {
+		source = tokens[index + 1];
+		if (!source || source.startsWith("-")) return undefined;
+		index += 2;
+	}
+	if (tokens[index++] !== "worktree" || tokens[index++] !== "add") return undefined;
+	if (tokens[index] === "-b") {
+		const branch = tokens[++index];
+		if (!branch || branch.startsWith("-")) return undefined;
+		index++;
+	}
+	const operands = tokens.slice(index);
+	if (operands.length < 1 || operands.length > 2 || operands.some((arg) => arg.startsWith("-"))) return undefined;
+	return { source, target: operands[0]! };
+}
+
+export function getWorktreeAdditions(command: string, cwd: string): WorktreeAddition[] {
+	const additions: WorktreeAddition[] = [];
+	for (const segment of splitShellCommand(command) ?? []) {
+		const tokens = getCommandTokens(segment);
+		if (!tokens) return [];
+		// Relative destinations after cd cannot be resolved from the tool's original cwd.
+		if (basename(tokens[0]!) === "cd") return [];
+		const addition = parseWorktreeAdd(segment, tokens);
+		if (!addition) continue;
+		const source = canonicalPath(resolve(cwd, addition.source ?? "."));
+		const target = source ? canonicalPath(resolve(source, addition.target)) : undefined;
+		if (source && target) additions.push({ source, target });
+	}
+	return additions;
 }
 
 function isSafeOriginPush(segment: string, command: string, args: string[]): boolean {

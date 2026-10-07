@@ -1,4 +1,4 @@
-import { appendFileSync, chmodSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, chmodSync, lstatSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -8,6 +8,8 @@ import {
 	decideToolCall,
 	getHttpOrigin,
 	getSshDestination,
+	getWorktreeAdditions,
+	type WorktreeAddition,
 	parseRuleList,
 	type PermissionMode,
 	type RepositoryState,
@@ -56,6 +58,7 @@ export function registerRepoPermissions(
 	const sshDestinations = new Set<string>();
 	const httpOrigins = new Set<string>();
 	const repositoryGrants = new Map<string, RepositoryState>();
+	const pendingWorktrees = new Map<string, WorktreeAddition[]>();
 
 	function renderStatus(ctx: ExtensionContext): void {
 		const label = mode === "repository" ? "repo" : mode;
@@ -113,7 +116,28 @@ export function registerRepoPermissions(
 		sshDestinations.clear();
 		httpOrigins.clear();
 		repositoryGrants.clear();
+		pendingWorktrees.clear();
 		await loadRepository(ctx);
+	});
+
+	pi.on("tool_result", async (event, ctx) => {
+		const additions = pendingWorktrees.get(event.toolCallId);
+		pendingWorktrees.delete(event.toolCallId);
+		if (event.toolName !== "bash" || event.isError || !additions) return;
+		for (const { source, target } of additions) {
+			try {
+				if (!lstatSync(join(target, ".git")).isFile() || realpathSync(target) !== target) continue;
+				const sourceResult = await pi.exec("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: source, timeout: 5000 });
+				const targetResult = await pi.exec("git", ["rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"], { cwd: target, timeout: 5000 });
+				if (sourceResult.code !== 0 || targetResult.code !== 0) continue;
+				const [root, commonDir] = targetResult.stdout.trim().split("\n");
+				if (root !== target || commonDir !== sourceResult.stdout.trim()) continue;
+				repositoryGrants.set(target, { root: target, startupIgnoredPaths: new Set() });
+				ctx.ui.notify(`Disposable worktree access: ${target}`, "info");
+			} catch {
+				// Failed verification leaves the normal repository approval boundary intact.
+			}
+		}
 	});
 
 	pi.on("session_shutdown", (_event, ctx) => {
@@ -138,7 +162,20 @@ export function registerRepoPermissions(
 			httpOrigins,
 		});
 
-		if (decision.kind === "allow") return;
+		if (decision.kind === "allow") {
+			if (command && (mode === "repository" || mode === "unattended")) {
+				const additions = getWorktreeAdditions(command, ctx.cwd).filter(({ target }) => {
+					try {
+						lstatSync(target);
+						return false;
+					} catch (error) {
+						return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT";
+					}
+				});
+				if (additions.length) pendingWorktrees.set(event.toolCallId, additions);
+			}
+			return;
+		}
 
 		try {
 			logPermissionRequest({

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,12 +16,13 @@ function createHarness(
 	skillCommands: Record<string, unknown>[] = [],
 	parseFrontmatter: (content: string) => Record<string, unknown> = () => ({}),
 	taskRepositoryResolver: Parameters<typeof registerRepoPermissions>[3] = async () => ({}),
+	exec?: (command: string, args: string[], options?: { cwd?: string }) => Promise<ExecResult>,
 ) {
 	const handlers = new Map<string, Handler>();
 	const commands = new Map<string, { handler: Handler }>();
 	const permissionRequests: Record<string, unknown>[] = [];
 	const pi = {
-		exec: async () => results.shift() ?? { code: 1, stdout: "", stderr: "" },
+		exec: exec ?? (async () => results.shift() ?? { code: 1, stdout: "", stderr: "" }),
 		on: (name: string, handler: Handler) => handlers.set(name, handler),
 		registerCommand: (name: string, command: { handler: Handler }) => commands.set(name, command),
 		getCommands: () => skillCommands,
@@ -475,6 +476,39 @@ test("a registered task repository is automatically allowed and resets with the 
 			context,
 		);
 		assert.equal((blocked as { block?: boolean }).block, true);
+	} finally {
+		rmSync(base, { recursive: true, force: true });
+	}
+});
+
+test("only successfully created worktrees gain disposable session access", async () => {
+	const base = mkdtempSync(join(tmpdir(), "permission-worktree-"));
+	const source = join(base, "source");
+	const target = join(base, "temporary");
+	mkdirSync(source);
+	try {
+		execFileSync("git", ["init", "-q", source]);
+		execFileSync("git", ["-C", source, "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-qm", "Initial"]);
+		const harness = createHarness([], [], undefined, undefined, async (command, args, options) => {
+			const child = spawnSync(command, args, { cwd: options?.cwd, encoding: "utf8" });
+			return { code: child.status ?? 1, stdout: child.stdout ?? "", stderr: child.stderr ?? "" };
+		});
+		const context = createContext(source, false);
+		await harness.handlers.get("session_start")!({}, context);
+		const command = `git worktree add -b temporary ${target} HEAD`;
+		assert.equal(await harness.handlers.get("tool_call")!({ toolCallId: "create", toolName: "bash", input: { command } }, context), undefined);
+		execFileSync("git", ["-C", source, "worktree", "add", "-b", "temporary", target, "HEAD"]);
+		writeFileSync(join(target, ".gitignore"), ".env\n");
+		writeFileSync(join(target, ".env"), "disposable\n");
+		await harness.handlers.get("tool_result")!({ toolCallId: "create", toolName: "bash", isError: false }, context);
+		assert.equal(await harness.handlers.get("tool_call")!({ toolName: "edit", input: { path: join(target, ".env") } }, context), undefined);
+		assert.equal((await harness.handlers.get("tool_call")!({ toolName: "write", input: { path: join(target, ".git") } }, context) as { block: boolean }).block, true);
+
+		await harness.handlers.get("session_start")!({}, context);
+		assert.equal((await harness.handlers.get("tool_call")!({ toolName: "edit", input: { path: join(target, ".env") } }, context) as { block: boolean }).block, true);
+		await harness.handlers.get("tool_call")!({ toolCallId: "existing", toolName: "bash", input: { command } }, context);
+		await harness.handlers.get("tool_result")!({ toolCallId: "existing", toolName: "bash", isError: true }, context);
+		assert.equal((await harness.handlers.get("tool_call")!({ toolName: "edit", input: { path: join(target, ".env") } }, context) as { block: boolean }).block, true);
 	} finally {
 		rmSync(base, { recursive: true, force: true });
 	}
