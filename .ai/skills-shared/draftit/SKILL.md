@@ -1,7 +1,7 @@
 ---
 name: draftit
 description: >-
-  Create the next draftNN folder for the current or preserved task project from
+  Create the next draftNN folder for an explicit, current, or preserved task project from
   conversation context, deriving a short task slug automatically. An explicit
   feature ID or Grillme handoff may supply optional Feature membership.
   Command-only skill. In Pi, invoke via /skill:draftit; /draftit is also
@@ -25,7 +25,9 @@ This is a command-only skill.
 /skill:draftit help
 /draftit help
 /draftit <context-reference-or-text>
-/draftit --feature_id <feature-slug> [context-reference-or-text]
+/skill:draftit <project> [context-reference-or-text]
+/draftit <project> [context-reference-or-text]
+/draftit [--feature_id <feature-slug>] [project] [context-reference-or-text]
 ```
 
 Examples:
@@ -34,7 +36,9 @@ Examples:
 /draftit
 /draftit the above plan
 /draftit add CSV export for the current report
-/draftit --feature_id user-login add password reset
+/draftit shaka_gtm the above plan
+/draftit my_finance
+/draftit --feature_id user-login shaka_gtm add password reset
 ```
 
 A direct invocation with no context argument infers the task context from the
@@ -42,13 +46,20 @@ immediately preceding coherent discussion. If that discussion does not contain
 enough information for a useful task, ask the user for context instead of
 searching further back.
 
-A direct invocation infers the project only from the current registered
-checkout. If that state is unavailable, stop and tell the user to invoke
-Draftit from the intended project's checkout. Do not accept a project, epic,
-name, or slug argument.
+After removing the optional leading Feature option, treat the first token as
+`<project>` only when it matches a registered project key or a valid ordinal
+session alias under [`task-resolution.md`](../components/task-resolution.md).
+Remove that token and use the remaining text as context. Otherwise infer the
+project from the current registered checkout and treat all remaining text as
+context. If no project can be resolved, ask the user to pass a registered project
+or invoke Draftit from its checkout. Do not accept epic, name, or slug arguments.
+
+An explicit project selects that project's task root regardless of the current
+checkout. Draft creation does not need a code workspace; do not ask for one,
+change the session's working directory, or switch branches.
 
 A direct invocation may begin with exactly one `--feature_id <feature-slug>`
-pair. The value identifies a Feature within the inferred project's Feature
+pair. The value identifies a Feature within the selected project's Feature
 root. Reject a missing value, a duplicate pair, or any other option-style
 argument.
 
@@ -81,16 +92,17 @@ copying another slash command.
 1. **Parse and validate the invocation:**
    - if the only argument is `help`, show this help text and stop
    - for a direct invocation, detect and remove one optional leading `--feature_id <feature-slug>` pair before resolving context; reject a missing value, duplicate pair, or any other option-style argument
-   - when no context argument remains, infer context from the immediately preceding coherent discussion; if it does not describe a useful task, show the invocation forms and ask for context
-   - reject project, epic, name, and slug arguments; Draftit derives the project from the current checkout or an authorized handoff
-   - for a direct slash command, resolve the project from the current registered checkout using [`task-resolution.md`](../components/task-resolution.md); stop when it cannot be inferred
+   - for a direct slash command, read the registry and extract an optional first project token using the matching rules above before resolving context
+   - reject epic, name, and slug arguments; Draftit derives the slug from context
+   - resolve an explicit project using [`task-resolution.md`](../components/task-resolution.md); otherwise infer it from the current registered checkout; if neither resolves, ask for a registered project
    - for a Grillme handoff, use its preserved project when available; use its Feature only when the authoritative source is `<task-root>/features/<feature-slug>.md`
+   - when no context argument remains after option and project extraction, infer context from the immediately preceding coherent discussion; if it does not describe a useful task, show the invocation forms and ask for context
    - reject an explicit feature ID when Grillme already supplied Feature state
    - do not inspect Pi session logs, prompt templates, other task directories, Git history, older conversation, or persisted state to infer missing routing context
 
 2. **Resolve the project and optional Feature:**
    - read the project from `~/.ai/skills-shared/components/projects.yml`; if it is not registered, stop and tell the user to add it to the registry
-   - derive `<task-root>/` from the registered checkout using `../components/task-resolution.md`
+   - derive `<task-root>/` from the selected project's registry entry using `../components/task-resolution.md`; use its `checkout_path` for direct projects or `code_root` for ordinal-workspace projects; draft creation requires no workspace selection
    - if its task root does not exist, create it and initialize it as a Git repository
    - if the task root exists without a `.git` file or directory, initialize it as a Git repository
    - without an explicit feature ID or Feature state from Grillme, create an unfeatured draft
