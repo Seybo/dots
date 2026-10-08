@@ -12,39 +12,33 @@ windows:
       panes:
         - v
 
-  - pi1:
+  - wflow:
+      layout: even-horizontal
       panes:
+        -
         -
 
-  - pi2:
+  - pi-dev:
+      layout: even-horizontal
       panes:
+        -
         -
 
-  - pi3:
+  - envs:
+      layout: even-horizontal
       panes:
-        -
-
-  - pi4:
-      panes:
-        -
-
-  - pi5:
-      panes:
-        -
-
-  - pi6:
-      panes:
-        -
-
-  - piweb:
-      layout: 74cf,156x46,0,0{75x46,0,0,88,80x46,76,0[80x23,76,0,70,80x22,76,24,98]}
-      panes:
-        -
         -
         -
 
   - misc:
       layout: 9ad5,156x45,0,0{128x45,0,0,59,27x45,129,0,62}
       panes:
+        -
+        -
+
+  - piweb:
+      layout: 74cf,156x46,0,0{75x46,0,0,88,80x46,76,0[80x23,76,0,70,80x22,76,24,98]}
+      panes:
+        -
         -
         -
