@@ -132,7 +132,7 @@ export function registerRepoPermissions(
 				if (sourceResult.code !== 0 || targetResult.code !== 0) continue;
 				const [root, commonDir] = targetResult.stdout.trim().split("\n");
 				if (root !== target || commonDir !== sourceResult.stdout.trim()) continue;
-				repositoryGrants.set(target, { root: target, startupIgnoredPaths: new Set() });
+				repositoryGrants.set(target, { root: target, startupIgnoredPaths: new Set(), isDisposableWorktree: true });
 				ctx.ui.notify(`Disposable worktree access: ${target}`, "info");
 			} catch {
 				// Failed verification leaves the normal repository approval boundary intact.
@@ -162,8 +162,8 @@ export function registerRepoPermissions(
 			httpOrigins,
 		});
 
-		if (decision.kind === "allow") {
-			if (command && (mode === "repository" || mode === "unattended")) {
+		function recordWorktreeCreation(): void {
+			if (command && repository) {
 				const additions = getWorktreeAdditions(command, ctx.cwd).filter(({ target }) => {
 					try {
 						lstatSync(target);
@@ -174,6 +174,10 @@ export function registerRepoPermissions(
 				});
 				if (additions.length) pendingWorktrees.set(event.toolCallId, additions);
 			}
+		}
+
+		if (decision.kind === "allow") {
+			recordWorktreeCreation();
 			return;
 		}
 
@@ -248,7 +252,10 @@ export function registerRepoPermissions(
 			? ["Allow once", sessionChoice, "Allow everything for this session", "Reject"]
 			: PROMPT_CHOICES;
 		const choice = await ctx.ui.select(formatPrompt(event.toolName, input, decision.reason), choices);
-		if (choice === "Allow once") return;
+		if (choice === "Allow once") {
+			recordWorktreeCreation();
+			return;
+		}
 		if (sshDestination && choice === sshChoice) {
 			sshDestinations.add(sshDestination);
 			ctx.ui.notify(`SSH access to ${sshDestination} is allowed for this session.`, "info");
@@ -265,6 +272,7 @@ export function registerRepoPermissions(
 			return;
 		}
 		if (choice === "Allow everything for this session") {
+			recordWorktreeCreation();
 			setMode("unrestricted", ctx);
 			return;
 		}

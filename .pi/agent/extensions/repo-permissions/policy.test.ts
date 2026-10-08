@@ -450,10 +450,23 @@ test("repository mode asks for high-impact command families", () => {
 	});
 });
 
+test("ordinary merges are allowed only in disposable worktrees", () => {
+	withRepository((repository, outside) => {
+		const disposable = { ...repository, isDisposableWorktree: true };
+		for (const command of ["git merge origin/master", "git merge --ff-only origin/master", "git merge --no-edit origin/master", `git -C ${repository.root} merge origin/master`]) {
+			assert.equal(call("repository", "bash", { command }, repository.root, disposable).kind, "allow", command);
+			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "ask", command);
+		}
+		for (const command of ["git merge --abort", "git merge --quit", "git merge --strategy=ours origin/master", 'git merge "$REF"', `git -C ${outside} merge origin/master`, `cd ${outside} && git merge origin/master`]) {
+			assert.equal(call("repository", "bash", { command }, repository.root, disposable).kind, "ask", command);
+		}
+	});
+});
+
 test("worktree destinations follow git -C and reject unresolved directory changes", () => {
 	withRepository((repository, outside) => {
 		assert.deepEqual(
-			getWorktreeAdditions(`git fetch origin master && git -C ${outside} worktree add -b fix ../temporary origin/master`, repository.root),
+			getWorktreeAdditions(`git fetch origin master && git -C ${outside} worktree add ../temporary --track -b fix origin/master`, repository.root),
 			[{ source: outside, target: resolve(outside, "../temporary") }],
 		);
 		assert.deepEqual(getWorktreeAdditions("cd ../source && git worktree add ../temporary HEAD", repository.root), []);
@@ -482,6 +495,7 @@ test("ordinary Git writes are allowed while destructive and remote operations as
 			"git worktree list",
 			"git worktree add ../temporary origin/master",
 			"git worktree add -b fix-example ../temporary origin/master",
+			"git worktree add ../temporary --track -b fix-example origin/master",
 			"git -C ../source worktree add -b fix-example ../temporary origin/master",
 		]) {
 			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "allow", command);
@@ -526,6 +540,8 @@ test("ordinary Git writes are allowed while destructive and remote operations as
 			"git worktree remove ../review",
 			"git worktree add --force ../temporary origin/master",
 			"git worktree add -B fix-example ../temporary origin/master",
+			"git worktree add ../temporary --track -B fix-example origin/master",
+			"git worktree add ../temporary -b first -b second origin/master",
 			'git worktree add "$TARGET" origin/master',
 			"git -c core.hooksPath=hooks worktree add ../temporary origin/master",
 			"git config --remove-section branch.old",

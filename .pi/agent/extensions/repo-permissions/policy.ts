@@ -12,6 +12,7 @@ export type PermissionDecision =
 export type RepositoryState = {
 	root: string;
 	startupIgnoredPaths: Set<string>;
+	isDisposableWorktree?: boolean;
 };
 
 type ToolCall = {
@@ -408,7 +409,10 @@ function guardedSegmentReason(
 	if (command === "find" && args.some(isMutatingFindArgument)) {
 		return "find execution or mutation requires approval. For read-only processing, list paths first, then run the follow-up command on those literal paths in a separate tool call.";
 	}
-	if (command === "git" && isGuardedGit(segment, commandTokens)) return "This Git operation requires approval.";
+	if (command === "git" && isGuardedGit(segment, commandTokens)) {
+		if (!hasChangedDirectory && isDisposableWorktreeMerge(segment, commandTokens, cwd, repositories)) return undefined;
+		return "This Git operation requires approval.";
+	}
 	if (command === "tmux" && args.some(isGuardedTmuxCommand)) return "This tmux operation requires approval.";
 	if (command === "curl" && isMutatingCurl(args)) {
 		return isAllowedHttpAccessSegment(segment, args, httpOrigins)
@@ -575,6 +579,29 @@ function isGuardedGit(segment: string, tokens: string[]): boolean {
 	return false;
 }
 
+function isDisposableWorktreeMerge(
+	segment: string,
+	tokens: string[],
+	cwd: string,
+	repositories: RepositoryState[],
+): boolean {
+	if (hasUnsafeShellSyntax(segment)) return false;
+	let index = 1;
+	let source = cwd;
+	if (tokens[index] === "-C") {
+		const path = tokens[index + 1];
+		if (!path || path.startsWith("-")) return false;
+		source = resolve(cwd, path);
+		index += 2;
+	}
+	if (tokens[index++] !== "merge") return false;
+	const args = tokens.slice(index);
+	const refs = args.filter((arg) => !arg.startsWith("-"));
+	if (refs.length !== 1 || args.some((arg) => arg.startsWith("-") && !["--ff-only", "--no-edit"].includes(arg))) return false;
+	const path = canonicalPath(source);
+	return Boolean(path && repositoryForMutationPath(repositories, path)?.isDisposableWorktree);
+}
+
 export type WorktreeAddition = { source: string; target: string };
 
 function parseWorktreeAdd(segment: string, tokens: string[]): { source?: string; target: string } | undefined {
@@ -587,13 +614,26 @@ function parseWorktreeAdd(segment: string, tokens: string[]): { source?: string;
 		index += 2;
 	}
 	if (tokens[index++] !== "worktree" || tokens[index++] !== "add") return undefined;
-	if (tokens[index] === "-b") {
-		const branch = tokens[++index];
-		if (!branch || branch.startsWith("-")) return undefined;
-		index++;
+	const operands: string[] = [];
+	let branch: string | undefined;
+	let isTracking = false;
+	for (; index < tokens.length; index++) {
+		const arg = tokens[index]!;
+		if (arg === "-b") {
+			if (branch) return undefined;
+			branch = tokens[++index];
+			if (!branch || branch.startsWith("-")) return undefined;
+		} else if (arg === "--track") {
+			if (isTracking) return undefined;
+			isTracking = true;
+		} else if (arg.startsWith("-")) {
+			return undefined;
+		} else {
+			operands.push(arg);
+		}
 	}
-	const operands = tokens.slice(index);
-	if (operands.length < 1 || operands.length > 2 || operands.some((arg) => arg.startsWith("-"))) return undefined;
+	if (isTracking && !branch) return undefined;
+	if (operands.length < 1 || operands.length > 2) return undefined;
 	return { source, target: operands[0]! };
 }
 

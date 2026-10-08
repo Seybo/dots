@@ -58,7 +58,8 @@ Keep the ask list short. Add a command family only when it represents a concrete
 Repository mode allows:
 
 - normal `git add`, `git rm`, and ordinary `git commit`
-- literal `git worktree add <path> [ref]` and non-resetting `-b <branch>` forms, optionally using one `git -C <source>`; force, resetting, dynamic, and removal forms remain guarded
+- literal `git worktree add <path> [ref]` and non-resetting `-b <branch>` forms, including `--track` with `-b` and options after the destination, optionally using one `git -C <source>`; force, resetting, dynamic, and removal forms remain guarded
+- ordinary `git merge <literal-ref>` only inside verified disposable worktrees, optionally with `--ff-only` or `--no-edit`; other merges and abort/quit operations remain guarded
 - literal non-resetting branch creation with `git checkout -b`, `git checkout --no-track -b`, or `git switch -c`; existing-branch switches, resetting or forced creation, path restoration, branch deletion, and branch renaming remain guarded
 - exact non-force `git push origin <literal-branch>`, optionally with `-u` or `--set-upstream`; pushes to `main`, `master`, `HEAD`, full refs, other remotes, multiple or dynamic refspecs, tags, deletion, and force options remain guarded
 - literal `rm` and plain `rmdir` targets when their resolved deletion paths stay inside the repository; `rmdir -p` remains guarded
@@ -71,7 +72,7 @@ The companion task repository is resolved from `projects.yml`, never inferred fr
 
 A repository grant snapshots its ignored files and applies the same Git-metadata, ignored-file, deletion, and `agents_tmp` protections. Companion task repositories receive those same protections and do not bypass the high-impact ask list. Companion access and repository grants clear and are recomputed on reload, session switch, or restart. Outside deletion and non-repository paths offer Allow once but no repository grant. Unattended mode blocks outside-repository changes without prompting.
 
-Newly created linked worktrees gain disposable session access after a successful Bash call and verification that the previously absent exact destination shares the source's Git common directory. No ignored-file snapshot is taken for these disposable worktrees. Metadata, symlink, nested-repository, root-deletion, and high-impact guards remain. Existing destinations and calls containing `cd` receive no automatic grant. Worktree removal still requires approval.
+Newly created linked worktrees gain disposable session access after a successful automatically allowed or explicitly approved Bash call and verification that the previously absent exact destination shares the source's Git common directory. No ignored-file snapshot is taken for these disposable worktrees. Metadata, symlink, nested-repository, root-deletion, and high-impact guards remain. Existing destinations and calls containing `cd` receive no automatic grant. Separate creation and merge calls let verification complete before merging. Approving a combined call once also grants access after the whole call succeeds. Worktree removal still requires approval.
 
 Other destructive or remote Git operations remain guarded. Agent authorization rules still decide when branch creation or push is permitted.
 

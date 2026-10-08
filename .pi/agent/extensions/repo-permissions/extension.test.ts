@@ -481,7 +481,8 @@ test("a registered task repository is automatically allowed and resets with the 
 	}
 });
 
-test("only successfully created worktrees gain disposable session access", async () => {
+for (const isApprovedCall of [false, true]) {
+test(`successfully created worktrees gain disposable access after ${isApprovedCall ? "approval" : "automatic allowance"}`, async () => {
 	const base = mkdtempSync(join(tmpdir(), "permission-worktree-"));
 	const source = join(base, "source");
 	const target = join(base, "temporary");
@@ -493,15 +494,17 @@ test("only successfully created worktrees gain disposable session access", async
 			const child = spawnSync(command, args, { cwd: options?.cwd, encoding: "utf8" });
 			return { code: child.status ?? 1, stdout: child.stdout ?? "", stderr: child.stderr ?? "" };
 		});
-		const context = createContext(source, false);
+		const context = createContext(source, isApprovedCall);
 		await harness.handlers.get("session_start")!({}, context);
-		const command = `git worktree add -b temporary ${target} HEAD`;
+		const command = `git worktree add -b temporary ${target} HEAD${isApprovedCall ? ` && git -C ${target} merge HEAD` : ""}`;
+		if (isApprovedCall) context.answers.push("Allow once");
 		assert.equal(await harness.handlers.get("tool_call")!({ toolCallId: "create", toolName: "bash", input: { command } }, context), undefined);
 		execFileSync("git", ["-C", source, "worktree", "add", "-b", "temporary", target, "HEAD"]);
 		writeFileSync(join(target, ".gitignore"), ".env\n");
 		writeFileSync(join(target, ".env"), "disposable\n");
 		await harness.handlers.get("tool_result")!({ toolCallId: "create", toolName: "bash", isError: false }, context);
 		assert.equal(await harness.handlers.get("tool_call")!({ toolName: "edit", input: { path: join(target, ".env") } }, context), undefined);
+		assert.equal(await harness.handlers.get("tool_call")!({ toolName: "bash", input: { command: `git -C ${target} merge --no-edit HEAD` } }, context), undefined);
 		assert.equal((await harness.handlers.get("tool_call")!({ toolName: "write", input: { path: join(target, ".git") } }, context) as { block: boolean }).block, true);
 
 		await harness.handlers.get("session_start")!({}, context);
@@ -513,6 +516,8 @@ test("only successfully created worktrees gain disposable session access", async
 		rmSync(base, { recursive: true, force: true });
 	}
 });
+
+}
 
 test("an additional repository can be allowed for the current session", async () => {
 	const root = process.cwd();
