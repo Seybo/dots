@@ -3,7 +3,8 @@ name: taskit
 description: >-
   Create a new local task folder and task.md file under a registered project's task root,
   or create a Shortcut story from a story ID or a task.md whose Shortcut epic is present or supplied during conversion.
-  Supports a manual task name, a Shortcut story ID, a task.md path, a draftNN reference,
+  Also imports Linear issues or converts drafts for explicitly configured Linear projects, with Shaka handoff and no branch setup.
+  Supports a manual task name, a Shortcut story ID, a Linear identifier/URL, a task.md path, a draftNN reference,
   or inferring the project and Shortcut story ID from the current git branch.
   Command-only skill. In Pi, invoke via /skill:taskit; /taskit is also
   accepted where that alias is exposed.
@@ -161,6 +162,71 @@ If the section contains any unresolved question:
 A direct answer to a displayed question authorizes only the corresponding
 `task.md` update and the conversion already requested. Never tell the user to
 edit and rerun Taskit when their reply itself clearly resolves the decision.
+
+## Linear provider route
+
+Read the registry before selecting the provider. For `task_provider: linear`,
+follow this route instead of the local/Shortcut numbered instructions below.
+Do not infer an issue from a branch or treat a numeric selector as a Linear issue.
+
+1. Resolve the explicit/inferred registered project through `task-resolution.md`.
+   Accept a full identifier (`HC-123`), Linear issue URL, `draftNN`, or existing
+   task Markdown path. Reject `--base`: Linear preparation does not set up branches.
+   With no selector, ask for an issue identifier/URL or a draft. With a manual
+   title, ask whether to create a provider-neutral draft through Draftit; do not
+   turn a title into an issue implicitly.
+2. Ensure the selected registered task root exists and is a Git repository,
+   following the existing task-root initialization rule. This is task storage,
+   not branch setup in the code checkout. For a draft/path, validate the source
+   `task.md` is directly under the task root and run the Deferred decision gate
+   above before any mutation. Preserve its approval semantics. Resolve optional
+   Feature metadata through the existing env-only Feature contract before mutation;
+   never publish the Feature reference to Linear.
+3. Read `../linear-issues/SKILL.md`. Use the single CLI at
+   `$STOW_DIR/.pi/agent/extensions/linear/scripts/linear.rb`:
+   - existing identifier/URL: `import-issue <project> <identifier-or-url>`
+   - draft/path: `convert-draft <project> <absolute-task.md> <type> [requester-uuid]`
+   Use `Name:` from Story details. Infer Bug/Feature/Improvement/Chore from clear
+   task intent; otherwise ask one focused question. Use a known requester UUID
+   when available; otherwise the CLI assigns to the authenticated viewer.
+   The registry supplies verified workspace/team/status and optional Project.
+   Do not collect destination metadata in Draftit or create Projects.
+4. Stop on failure. Do not rename after failed or uncertain creation or blindly
+   retry writes. After confirmed creation and a local failure, use the reported
+   existing identity and saved metadata; never create another issue. Do not run
+   any of the Shortcut branch setup or Workit continuation steps.
+5. On success report `identifier - title`, URL, exact provider `branchName`, and
+   `task_path`. The folder prefix is the full identifier; immutable UUID is
+   retained under `config.json`'s `linear` section. For a featured conversion,
+   replace the validated Feature inventory link after successful rename and
+   verify both files agree, following the existing Feature contract.
+6. End any earlier automatic-handoff authorization and offer only:
+
+   ```text
+   What's next?
+
+   - shaka / 1 — implement the existing Linear issue with Shaka
+   ```
+
+   Preserve project, issue identifier/URL, exact branch name and local task path.
+   Exact bare `shaka` or `1` selects the continuation. Only then load the installed
+   external Shaka skill and follow its existing invocation workflow, passing the
+   existing issue URL/identifier as the work item plus exact `branchName` and local
+   `task_path` as context. Resolve the checkout through task-resolution; ask for
+   the workspace when it cannot be inferred. Shaka owns claim and branch setup,
+   including its `--branch` tracker input and any installed personal override.
+   Do not create a duplicate issue, start Workit, invent a branch name, or modify
+   the shared Shaka package. Any other reply ends this continuation.
+
+Examples:
+
+```text
+/taskit shaka_hc HC-123
+/taskit shaka_hc https://linear.app/shakacode/issue/HC-123/fix-checkout
+/taskit shaka_hc draft01
+```
+
+All existing local and Shortcut routes below remain unchanged.
 
 ## Instructions
 

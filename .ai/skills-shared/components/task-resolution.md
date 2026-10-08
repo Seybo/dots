@@ -111,7 +111,17 @@ Task folders remain directly below the project task root:
 ```
 
 Local/manual tasks use zero-padded four-digit IDs such as `0001`. Shortcut
-projects use Shortcut story IDs. Select a task explicitly by its numeric ID,
+projects use Shortcut story IDs. Linear preparation uses full identifiers such as
+`HC-123` and folders such as `HC-123-fix-checkout`; keep UUID separately in
+`config.json` under `linear`. For explicitly configured `task_provider: linear`
+projects, Taskit and the Linear CLI support identifier/URL import, draft conversion,
+explicit Markdown updates and Shaka handoff. The registry's `linear` mapping
+requires exact `workspace` (URL key), `team` and `status` names; `project` is optional.
+Verify these with authenticated discovery before enabling configuration. Linear
+Taskit never creates/switches code branches. Do not add branch inference or Linear
+execution to Workit/Autowork; those workflows retain numeric selectors.
+
+Select local/Shortcut execution tasks explicitly by numeric ID,
 which is matched as a folder prefix:
 
 ```text
@@ -226,5 +236,6 @@ restate or override those rules in task-resolution callers.
 - Never create code checkouts automatically.
 - Never guess an unregistered project or an arbitrary-branch task mapping.
 - Stop on ambiguous task-folder prefix matches.
-- Registered direct projects default to `task_provider: local`; Shortcut is an
-  explicit registry choice.
+- Registered projects default to `task_provider: local`; Shortcut and Linear are
+  explicit registry choices. Linear preparation and Shaka handoff do not authorize
+  automatic writes or Workit/Autowork execution.

@@ -52,7 +52,11 @@ projects:
     checkout_layout: ordinal_workspaces
     code_root: projects/shaka/hc
     tmux_layout: shaka_hc
-    task_provider: local
+    task_provider: linear
+    linear:
+      workspace: shakacode
+      team: HC
+      status: Ready for Development
   shaka_outreach:
     checkout_layout: ordinal_workspaces
     code_root: projects/shaka/outreach
