@@ -2,7 +2,7 @@
 name: draftit
 description: >-
   Create the next draftNN folder for an explicit, current, or preserved task project from
-  conversation context, deriving a short task slug automatically. An explicit
+  conversation context, writing a clear task title and deriving its slug automatically. An explicit
   feature ID or Grillme handoff may supply optional Feature membership.
   Command-only skill. In Pi, invoke via /skill:draftit; /draftit is also
   accepted where that alias is exposed.
@@ -93,7 +93,7 @@ copying another slash command.
    - if the only argument is `help`, show this help text and stop
    - for a direct invocation, detect and remove one optional leading `--feature_id <feature-slug>` pair before resolving context; reject a missing value, duplicate pair, or any other option-style argument
    - for a direct slash command, read the registry and extract an optional first project token using the matching rules above before resolving context
-   - reject epic, name, and slug arguments; Draftit derives the slug from context
+   - reject epic, name, and slug arguments; Draftit derives the title from context and the slug from that title
    - resolve an explicit project using [`task-resolution.md`](../components/task-resolution.md); otherwise infer it from the current registered checkout; if neither resolves, ask for a registered project
    - for a Grillme handoff, use its preserved project when available; use its Feature only when the authoritative source is `<task-root>/features/<feature-slug>.md`
    - when no context argument remains after option and project extraction, infer context from the immediately preceding coherent discussion; if it does not describe a useful task, show the invocation forms and ask for context
@@ -109,18 +109,19 @@ copying another slash command.
    - with either Feature source, validate the slug with `^[a-z][a-z0-9-]*$` and resolve `<task-root>/features/<feature-slug>.md`
    - the Feature file must exist; read it completely and require its final first-level section to be `# Drafts and tasks` before creating the draft
 
-3. **Resolve context and derive the slug:**
+3. **Resolve context, write the title, and derive the slug:**
    - with no context argument, use only the immediately preceding coherent discussion that led to the invocation; do not combine unrelated earlier topics
    - for references such as `the above plan`, use the relevant conversation content
    - for literal text, use that text
    - for commits, PRs, review comments, or external threads, inspect the source and rewrite it as self-contained context
-   - derive a short, simple slug that names the user-visible task outcome, normally using two to six words
-   - lowercase the derived name, replace separators and spaces with `-`, remove characters except letters, numbers, and `-`, collapse repeated `-`, and trim leading/trailing `-`
+   - write a natural, sentence-case task title that states the action and user-visible outcome; preserve acronyms and proper names such as BLV and Linear
+   - try to make the title concise, but preserve clarity: remove filler, not words or details needed to understand the change; do not impose a word limit
+   - include scope or quantities when they distinguish the task, for example `Increase the first web BLV batch from 5 to 10 candidates`
+   - derive the slug from that title, never the title from a slug; lowercase it, replace separators and spaces with `-`, remove characters except letters, numbers, and `-`, collapse repeated `-`, and trim leading/trailing `-`
    - require the result to match `^[a-z][a-z0-9-]*$`; if useful context cannot produce a valid slug, ask for clearer context rather than accepting a name
 
 4. **Write useful task content:**
-   - use the derived task slug as the source for the concise task title
-   - store the title in `# Story details`; do not render the slug as a heading inside `# Context`
+   - store the title from step 3 unchanged in `# Story details`; do not render the slug as a heading inside `# Context`
    - write `PR: ` immediately below `Name:` and leave it blank; the operator populates it manually
    - lead `# Context` with the user/product problem, not implementation details
    - include expected behavior and acceptance criteria when context supports them
@@ -133,7 +134,7 @@ copying another slash command.
      ```md
      # Story details
 
-     Name: {task slug with `-` replaced by spaces}
+     Name: {clear, concise task title}
      PR:
 
      # Context
@@ -193,7 +194,7 @@ copying another slash command.
 ## Important Notes
 
 - Drafts are provider-neutral; Taskit owns Shortcut epic collection and conversion.
-- Draftit always derives the slug from context. Rename a draft ad hoc later if its generated name needs correction.
+- Draftit writes the human-facing title first, then derives the slug from it. Taskit preserves `Name:` when creating the remote issue; slug formatting must never lower-case or shorten the title.
 - Do not register projects automatically.
 - Do not add extra files.
 - Do not auto-use this skill without an explicit `/draftit` command, a shown exact bare continuation reply, or Grillme's authorized automatic handoff.
