@@ -5,6 +5,7 @@
 # Syntax highlighting inherits Hunk's bundled Everforest light theme.
 
 theme = "custom"
+wrap_lines = true
 
 [custom_theme]
 base = "everforest-light"

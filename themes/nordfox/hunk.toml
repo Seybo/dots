@@ -4,6 +4,7 @@
 # Nord theme: https://github.com/modem-dev/hunk/blob/v0.17.7/src/ui/lib/shikiThemes.ts
 
 theme = "custom"
+wrap_lines = true
 
 [custom_theme]
 base = "nord"
