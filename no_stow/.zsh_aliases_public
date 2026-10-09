@@ -4,6 +4,9 @@ alias brew_update_all='brew update && brew upgrade && brew upgrade --cask && bre
 alias re_source='source ~/.zshrc'
 alias re_fzf='source $STOW_DIR/themes/active/fzf.zsh'
 alias re_tmux='tmux source-file $STOW_DIR/.tmux.conf'
+xnv() {
+  open -a XnViewMP --args "${1:-$PWD}"
+}
 pwdc() {
   local current_path
   current_path="$(builtin pwd "$@")" || return
