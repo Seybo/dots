@@ -4,35 +4,40 @@
 require 'open3'
 require 'shellwords'
 
+# Launches Hunk beside the current Pi session without changing the tmux layout.
 module Hunkit
   class Error < StandardError; end
 
   CommandResult = Struct.new(:stdout, :stderr, :exit_status)
   Pane = Struct.new(:id, :left, :top, :width, :height, :command, :is_dead, keyword_init: true)
 
+  # Validates the repository and adjacent shell before sending the launch command.
   class Runner
     WINDOW_FORMAT = "\#{window_id}"
     PANE_FORMAT = "\#{pane_id}|\#{pane_left}|\#{pane_top}|\#{pane_width}|\#{pane_height}|" \
                   "\#{pane_current_command}|\#{pane_dead}"
 
-    def initialize(env: ENV, cwd: Dir.pwd, output: $stdout, command_runner: nil)
+    def initialize(env: ENV, cwd: Dir.pwd, output: $stdout, command_runner: nil, commit_ref: nil)
       @env = env
       @cwd = File.expand_path(cwd)
       @output = output
       @command_runner = command_runner || method(:capture)
+      @commit_ref = commit_ref
     end
 
     def run
       current_pane = validate_tmux_context!
       repository = resolve_repository
+      commit = resolve_commit(repository) if @commit_ref
       validate_hunk!
-      validate_working_tree_diff!(repository)
+      validate_working_tree_diff!(repository) unless commit
       target_pane = resolve_right_pane(current_pane)
       validate_idle_shell!(target_pane)
-      launch_hunk(repository, target_pane.id)
+      launch_hunk(repository, target_pane.id, commit)
 
       @output.puts 'Hunk launched.'
       @output.puts "Repository: #{repository}"
+      @output.puts "Commit: #{commit}" if commit
       @output.puts "Pane: #{target_pane.id}"
       repository
     end
@@ -42,8 +47,8 @@ module Hunkit
     def capture(command)
       stdout, stderr, status = Open3.capture3(*command)
       CommandResult.new(stdout, stderr, status.exitstatus)
-    rescue Errno::ENOENT => err
-      CommandResult.new('', err.message, 127)
+    rescue Errno::ENOENT => e
+      CommandResult.new('', e.message, 127)
     end
 
     def command(*arguments)
@@ -69,6 +74,18 @@ module Hunkit
       File.realpath(path)
     rescue Errno::ENOENT
       raise Error, 'Git repository root does not exist'
+    end
+
+    def resolve_commit(repository)
+      result = command(
+        'git', '-C', repository, 'rev-parse', '--verify', '--end-of-options', "#{@commit_ref}^{commit}"
+      )
+      raise Error, "Commit not found: #{@commit_ref}" unless result.exit_status.zero?
+
+      commit = result.stdout.strip
+      raise Error, "Git returned an invalid commit for: #{@commit_ref}" unless commit.match?(/\A[0-9a-f]{40,64}\z/)
+
+      commit
     end
 
     def validate_hunk!
@@ -151,8 +168,9 @@ module Hunkit
       raise Error, "Right pane #{pane.id} must be an idle #{shell} shell"
     end
 
-    def launch_hunk(repository, target_pane)
-      pane_command = "(cd #{repository.shellescape} && hunk diff --watch)"
+    def launch_hunk(repository, target_pane, commit)
+      review_command = commit ? "hunk show #{commit}" : 'hunk diff --watch'
+      pane_command = "(cd #{repository.shellescape} && #{review_command})"
       result = command('tmux', 'send-keys', '-t', target_pane, pane_command, 'C-m')
       return if result.exit_status.zero?
 
@@ -164,12 +182,12 @@ module Hunkit
   end
 
   def self.cli(argv, env: ENV, output: $stdout, error: $stderr)
-    raise Error, 'Usage: hunkit.rb' unless argv.empty?
+    raise Error, 'Usage: hunkit.rb [commit]' if argv.length > 1
 
-    Runner.new(env: env, output: output).run
+    Runner.new(env: env, output: output, commit_ref: argv.first).run
     0
-  rescue Error => err
-    error.puts err.message
+  rescue Error => e
+    error.puts e.message
     2
   end
 end

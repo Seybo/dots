@@ -7,6 +7,7 @@ require 'tmpdir'
 
 require_relative '../scripts/hunkit'
 
+# Exercises launch validation with recorded commands instead of a live tmux session.
 class HunkitSpec < Minitest::Test
   def setup
     @root = File.realpath(Dir.mktmpdir('hunkit-'))
@@ -35,6 +36,38 @@ class HunkitSpec < Minitest::Test
       'tmux', 'send-keys', '-t', '%2',
       "(cd #{@repo} && hunk diff --watch)", 'C-m'
     ]
+  end
+
+  def test_launches_a_resolved_commit_without_inspecting_the_working_tree
+    commit = 'a' * 40
+    output = StringIO.new
+    respond(
+      ['git', '-C', @repo, 'rev-parse', '--verify', '--end-of-options', 'HEAD~1^{commit}'],
+      stdout: "#{commit}\n"
+    )
+    respond(
+      ['tmux', 'send-keys', '-t', '%2', "(cd #{@repo} && hunk show #{commit})", 'C-m']
+    )
+
+    assert_equal @repo, runner(output: output, commit_ref: 'HEAD~1').run
+    assert_includes output.string, "Commit: #{commit}"
+    assert_includes @calls, [
+      'tmux', 'send-keys', '-t', '%2',
+      "(cd #{@repo} && hunk show #{commit})", 'C-m'
+    ]
+    refute(@calls.any? { |command| command.include?('diff') })
+  end
+
+  def test_rejects_an_unknown_commit_without_sending_keys
+    respond(
+      ['git', '-C', @repo, 'rev-parse', '--verify', '--end-of-options', 'missing^{commit}'],
+      status: 128
+    )
+
+    error = assert_raises(Hunkit::Error) { runner(commit_ref: 'missing').run }
+
+    assert_equal 'Commit not found: missing', error.message
+    assert_no_keys_sent
   end
 
   def test_rejects_a_missing_tmux_context_without_sending_keys
@@ -153,11 +186,12 @@ class HunkitSpec < Minitest::Test
     @responses[command] = Hunkit::CommandResult.new(stdout, stderr, status)
   end
 
-  def runner(output: StringIO.new)
+  def runner(output: StringIO.new, commit_ref: nil)
     Hunkit::Runner.new(
       env: @env,
       cwd: @cwd,
       output: output,
+      commit_ref: commit_ref,
       command_runner: lambda do |command|
         @calls << command
         @responses.fetch(command) do

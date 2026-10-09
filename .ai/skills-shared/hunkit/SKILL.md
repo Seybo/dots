@@ -1,9 +1,10 @@
 ---
 name: hunkit
 description: >-
-  Launch Hunk for the current repository in an existing idle tmux pane directly
-  right of Pi, then explain the focused hunk or walk a fixed diff snapshot one
-  hunk at a time. Command-only skill. In Pi, invoke via /skill:hunkit; /hunkit
+  Launch Hunk for the current repository's working tree or one specified commit
+  in an existing idle tmux pane directly right of Pi, then explain the focused
+  hunk or walk a fixed snapshot one hunk at a time. Command-only skill. In Pi,
+  invoke via /skill:hunkit; /hunkit
   is also accepted where that alias is exposed.
 allowed-tools:
   - "bash(hunk session get *)"
@@ -11,24 +12,27 @@ allowed-tools:
   - "bash(hunk session review *)"
   - "bash(hunk session navigate *)"
   - "bash(ruby ~/.ai/skills-shared/hunkit/scripts/hunkit.rb)"
+  - "bash(ruby ~/.ai/skills-shared/hunkit/scripts/hunkit.rb *)"
 disable-model-invocation: true
 ---
 
 # Hunkit
 
-Launch one Hunk working-tree review beside the current Pi and keep the existing Pi as the explanation agent. Do not start another Pi process.
+Launch one Hunk working-tree or commit review beside the current Pi and keep the existing Pi as the explanation agent. Do not start another Pi process.
 
 ## Invocation
 
 ```text
 /skill:hunkit
+/skill:hunkit <commit>
 /hunkit
+/hunkit <commit>
 ```
 
-Reject arguments with:
+Accept at most one Git commit reference. Reject additional arguments with:
 
 ```text
-Usage: /hunkit
+Usage: /hunkit [commit]
 ```
 
 ## Start the session
@@ -36,10 +40,10 @@ Usage: /hunkit
 1. Run:
 
    ```text
-   ruby ~/.ai/skills-shared/hunkit/scripts/hunkit.rb
+   ruby ~/.ai/skills-shared/hunkit/scripts/hunkit.rb [commit]
    ```
 
-   The launcher validates the Git repository, Hunk-visible working-tree changes, and the existing left-Pi/right-idle-shell tmux layout before sending any keys. Do not launch Hunk yourself or modify the tmux layout if validation fails.
+   With no commit, the launcher validates Hunk-visible working-tree changes and starts `hunk diff --watch`. With a commit, it resolves the reference to an exact commit and starts `hunk show <sha>` without inspecting or changing the working tree. Both modes validate the Git repository and existing left-Pi/right-idle-shell tmux layout before sending any keys. Do not launch Hunk yourself or modify the tmux layout if validation fails.
 2. Preserve the repository and target pane printed by the launcher as the active Hunkit session.
 3. Confirm the live Hunk session with `hunk session get --repo <repository> --json`. If Hunk is still starting, retry once. If no matching session exists after that, report the startup failure without closing or resetting either pane.
 4. Report that Hunk is ready and wait. Mention only the available triggers: `expit` and `expall`.
@@ -83,7 +87,7 @@ A new `expall` discards any prior walkthrough queue and captures a new snapshot.
 
 1. Use only the retained `expall` queue. Do not call `hunk session review` or rebuild the snapshot.
 2. Navigate Hunk to the next captured file and hunk, then explain the retained patch.
-3. If watch mode removed that hunk, keep the snapshot unchanged, say that the live display changed, and explain the retained hunk without pretending Hunk is focused on it.
+3. In working-tree mode, if watch mode removed that hunk, keep the snapshot unchanged, say that the live display changed, and explain the retained hunk without pretending Hunk is focused on it.
 4. Report `Hunk N of M` and wait for `next`, or report that all captured hunks are explained after the final item.
 
 ## Boundaries

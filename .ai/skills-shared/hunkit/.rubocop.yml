@@ -1,0 +1,10 @@
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.4
+
+# Keep the small launcher and its command-driven tests together.
+Metrics/ClassLength:
+  Max: 160
+
+Metrics/MethodLength:
+  Max: 20
