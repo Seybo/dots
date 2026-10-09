@@ -126,6 +126,8 @@ eval "$(starship init zsh)"
 bindkey -r '^N' # don't need it
 bindkey '^P' forward-char # does completion the same way as i have configured in nvim
 bindkey '^K' kill-line # should be default but it's not mapped for some reason
+# Alacritty turns terminal bells into agent-attention notifications; repeated Esc should not trigger them.
+bindkey -s -M vicmd '^[' ''
 
 # SSH → attach to/create the base tmux session; detaching closes the SSH connection.
 # Local Ghostty sessions use the normal tmux workspace launchers.
