@@ -14,12 +14,18 @@ windows:
       panes:
         - v
 
-  - autowork:
+  - work:
       layout: 083e,156x45,0,0{42x45,0,0,47,113x45,43,0[113x23,43,0,49,113x21,43,24,50]}
       panes:
         - agent-manager:
         - agent-worker:
         - agent-reviewer:
+
+  - review:
+      layout: even-horizontal
+      panes:
+        - left:
+        - right:
 
   - engine:
       layout: tiled
