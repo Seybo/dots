@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+ruby -I. -e 'Dir["spec/*_spec.rb"].sort.each { |file| require_relative file }'
+rubocop --config .rubocop.yml scripts/hunkit.rb spec/*_spec.rb
+ruby -ryaml -e '
+  text = File.read(ARGV.fetch(0))
+  frontmatter = text.match(/\A---\n(.*?)\n---\n/m)&.[](1) or abort("missing frontmatter")
+  YAML.safe_load(frontmatter)
+  abort("missing repetition workflow") unless text.include?("### Default repetition skipping")
+  abort("missing skipped replay workflow") unless text.include?("### `show skipped`")
+' SKILL.md

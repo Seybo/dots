@@ -6,6 +6,12 @@ require 'shellwords'
 
 # Launches Hunk beside the current Pi session without changing the tmux layout.
 module Hunkit
+  HELP = <<~TEXT
+    Usage:
+      hunkit.rb --diff      Review unstaged and untracked changes
+      hunkit.rb <commit>    Review a specific commit
+  TEXT
+
   class Error < StandardError; end
 
   CommandResult = Struct.new(:stdout, :stderr, :exit_status)
@@ -182,9 +188,18 @@ module Hunkit
   end
 
   def self.cli(argv, env: ENV, output: $stdout, error: $stderr)
-    raise Error, 'Usage: hunkit.rb [commit]' if argv.length > 1
+    if argv.empty?
+      output.puts HELP
+      return 0
+    end
 
-    Runner.new(env: env, output: output, commit_ref: argv.first).run
+    raise Error, HELP if argv.length > 1
+
+    argument = argv.first
+    raise Error, HELP if argument.start_with?('-') && argument != '--diff'
+
+    commit_ref = argument unless argument == '--diff'
+    Runner.new(env: env, output: output, commit_ref: commit_ref).run
     0
   rescue Error => e
     error.puts e.message
