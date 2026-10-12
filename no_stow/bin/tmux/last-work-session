@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+client="$1"
+current_session="$2"
+
+target="$(tmux list-sessions -F $'#{session_last_attached}\t#{session_id}\t#{session_name}' |
+  awk -F '\t' -v current="$current_session" '
+    $2 != current && $3 != "base" && (!target || $1 > latest) {
+      latest = $1
+      target = $2
+    }
+    END { print target }
+  ')"
+
+if [[ -z "$target" ]]; then
+  tmux display-message -c "$client" 'No other work session'
+  exit 0
+fi
+
+tmux switch-client -c "$client" -t "$target"
