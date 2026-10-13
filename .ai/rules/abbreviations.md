@@ -8,8 +8,9 @@ When the meaning is clear, act on them without asking for clarification.
 - `00ao` — Answer only: investigate what is needed, then answer the question.
   Do not make updates, edit files, run fix-up changes, or otherwise change state.
 
-- `00cc` — Copy the referenced content exactly to the system clipboard.
-  Do not modify the content or include surrounding commentary.
+- `00cpm` — Copy the referenced content to my clipboard in Markdown format. Use straight quotes and short hyphens (`-`), not long dashes. Fix awkward line breaks without changing the meaning or breaking Markdown formatting.
+
+- `00cps` — Copy the referenced content to my clipboard as Slack mrkdwn. Use `*bold*`, not `**bold**`; replace Markdown headings with bold text. Preserve blockquotes and lists, and preserve code exactly. Outside code, use straight quotes and short hyphens. Remove awkward hard wrapping without changing meaning, list structure, or code. Copy the formatting markers intact and verify the clipboard content.
 
 - `00ex` — Explain the referenced text.
 
