@@ -53,6 +53,8 @@ cd ~/.dots
 sudo no_stow/bin/agent-brave-search-admin load
 ```
 
+`load` recreates missing socket/log directories, restores their ownership and permissions, and waits for a successful health check. It tries up to 10 times, with a one-second timeout per check and a one-second pause between checks. If startup fails, it exits with an error pointing to the log and launchd status.
+
 You do not need to re-enter the Brave API key unless you intentionally rotate/delete it.
 
 ## Manage

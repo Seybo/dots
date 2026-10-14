@@ -26,7 +26,7 @@ Usage: sudo agent-brave-search-admin <command>
 Commands:
   install     Create isolated user, install broker, create age identity, install LaunchDaemon plist
   set-key     Prompt for Brave API key and store it encrypted for the broker
-  load        Load/restart the LaunchDaemon
+  load        Restore runtime directories, restart the LaunchDaemon, wait for health
   unload      Stop/unload the LaunchDaemon
   status      Print launchd status
   uninstall   Unload LaunchDaemon and remove installed broker/plist/config/socket/log dirs
@@ -98,18 +98,20 @@ create_service_user() {
 
 install_broker() {
   require_file "$source_broker"
-  mkdir -p "$install_root" "$config_dir" "$socket_dir" "$log_dir"
+  mkdir -p "$install_root" "$config_dir"
 
   install -o root -g wheel -m 0555 "$source_broker" "$broker_path"
 
   chown "$service_user":wheel "$config_dir"
   chmod 0700 "$config_dir"
 
-  chown "$service_user:$service_group" "$socket_dir"
-  chmod 0750 "$socket_dir"
+  prepare_runtime_directories
+}
 
-  chown "$service_user:$service_group" "$log_dir"
-  chmod 0750 "$log_dir"
+prepare_runtime_directories() {
+  mkdir -p "$socket_dir" "$log_dir"
+  chown "$service_user:$service_group" "$socket_dir" "$log_dir"
+  chmod 0750 "$socket_dir" "$log_dir"
 }
 
 create_identity() {
@@ -217,11 +219,30 @@ set_key_command() {
   echo "Encrypted Brave API key installed at $encrypted_key_path"
 }
 
+wait_for_health() {
+  local attempt
+  for attempt in {1..10}; do
+    if "$ruby_bin" -rtimeout -e 'Timeout.timeout(1) { load ARGV.shift }' \
+      "$repo_root/no_stow/bin/agent-brave-search" --socket "$socket_path" --health >/dev/null 2>&1; then
+      echo "Broker health check passed."
+      return 0
+    fi
+    if [[ "$attempt" -lt 10 ]]; then
+      sleep 1
+    fi
+  done
+
+  echo "Error: broker did not become healthy after 10 attempts. Check $log_dir/stderr.log and launchd status." >&2
+  return 1
+}
+
 load_command() {
   require_root
   launchctl bootout system "$plist_path" >/dev/null 2>&1 || true
+  prepare_runtime_directories
   launchctl bootstrap system "$plist_path"
   launchctl kickstart -k "system/$label"
+  wait_for_health
 }
 
 unload_command() {
