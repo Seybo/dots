@@ -1,5 +1,4 @@
 {
-  "$comment": "Everforest hard light Pi theme. Customized local variant with adjusted contrast.",
   "$schema": "https://raw.githubusercontent.com/earendil-works/pi/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
   "name": "env-active",
   "vars": {
