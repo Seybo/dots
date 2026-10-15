@@ -2,7 +2,6 @@
 alias ..='cd ..'
 alias brew_update_all='brew update && brew upgrade && brew upgrade --cask && brew cleanup'
 alias re_source='source ~/.zshrc'
-alias re_fzf='source $STOW_DIR/themes/active/fzf.zsh'
 alias re_tmux='tmux source-file $STOW_DIR/.tmux.conf'
 xnv() {
   open -a XnViewMP --args "${1:-$PWD}"
@@ -18,18 +17,9 @@ theme() {
   if command -v tmux >/dev/null 2>&1 && tmux info >/dev/null 2>&1; then
     tmux source-file "$STOW_DIR/.tmux.conf"
   fi
-  if [ "$TERM_PROGRAM" = "ghostty" ]; then
-    echo "ghostty: press cmd+ctrl+shift+r to reload config"
+  if [ -n "${GHOSTTY_RESOURCES_DIR:-}" ]; then
+    osascript -e 'tell application "/Applications/Ghostty.app" to perform action "reload_config" on focused terminal of selected tab of front window' >/dev/null
   fi
-  re_fzf
-}
-
-
-### zellij ###
-# Force Zellij top bar to repaint when it stays stale after theme switching.
-retheme() {
-  "$STOW_DIR/no_stow/bin/zellij/retheme"
-  re_fzf
 }
 
 

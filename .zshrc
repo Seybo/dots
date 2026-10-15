@@ -86,7 +86,8 @@ source "$STOW_DIR/no_stow/rage_utils.sh"
 source "$STOW_DIR/private/.zsh_aliases_private"
 source "$STOW_DIR/private/.env"
 # the whole env theme is managed by the theme script: themes/theme_switcher.rb and its zsh alias 'theme'
-source "$STOW_DIR/themes/active/fzf.zsh"
+unset FZF_DEFAULT_OPTS
+export FZF_DEFAULT_OPTS_FILE="$STOW_DIR/themes/active/fzf.conf"
 
 export EDITOR='nvim'
 export OPENER='open'

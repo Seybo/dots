@@ -2,6 +2,8 @@
 # This script works best when invoked by zsh alias 'theme'
 # frozen_string_literal: true
 
+require 'fileutils'
+
 THEMES_DIR = File.expand_path("#{ENV['STOW_DIR']}/themes")
 ACTIVE_DIR = File.join(THEMES_DIR, 'active')
 ZELLIJ_CONFIG = File.expand_path('~/.config/zellij/config.kdl')
@@ -26,6 +28,16 @@ Dir.glob(File.join(theme_dir, '*')).each do |src|
 
   dst = File.join(ACTIVE_DIR, fname)
   File.write(dst, File.read(src))
+end
+
+# Pi only hot-reloads themes from each profile's native themes directory.
+pi_theme = File.join(ACTIVE_DIR, 'pi.json')
+if File.file?(pi_theme)
+  %w[work personal].each do |profile|
+    directory = File.expand_path("~/.pi/#{profile}/themes")
+    FileUtils.mkdir_p(directory)
+    File.write(File.join(directory, 'env-active.json'), File.read(pi_theme))
+  end
 end
 
 # Touch Zellij config so running sessions notice config/theme changes.

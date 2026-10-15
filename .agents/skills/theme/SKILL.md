@@ -49,7 +49,7 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 - The normal user-facing environment-theme command is the zsh function `theme <name>` in `no_stow/.zsh_aliases_public`.
 - The SSH workspace uses a separate selection through Squirrel's `theme_ssh <name>` function in `no_stow/shell_aliases.sh`. It preflights both machines, selects Oma's tmux theme, then selects Squirrel's Alacritty theme. The ignored links are `~/.omadots/no_stow/active_theme/tmux.conf` on Oma and `~/.dots/no_stow/active_theme/alacritty.toml` on Squirrel.
 - Agents should not switch live themes themselves. Ask the user to run `theme <name>` or `theme_ssh <name>` as appropriate.
-- `theme <name>` reloads Squirrel's local tmux, prints a Ghostty reload reminder when in Ghostty, and re-sources `themes/active/fzf.zsh` for the current shell. It does not change the SSH-workspace theme.
+- `theme <name>` reloads Squirrel's local tmux and uses Ghostty's native AppleScript `reload_config` action when `GHOSTTY_RESOURCES_DIR` is set, including inside tmux where `TERM_PROGRAM` becomes `tmux`. fzf reads `themes/active/fzf.conf` on every launch, so it needs no shell refresh. The command does not change the SSH-workspace theme.
 - Claude Code should not get switcher-specific copy/settings logic. Claude only reads custom themes from `~/.claude/themes/`, so bridge it with a symlink: `~/.claude/themes/theme.json -> ~/.dots/themes/active/claude.json`. The user selects that custom theme with `/theme`; future `theme <name>` runs update the symlink target through the existing active-theme copy flow.
 - Lazygit should not get switcher-specific copy/settings logic. Bridge it with a symlink: `~/Library/Application Support/lazygit/config.yml -> ~/.dots/themes/active/lazygit.yml`.
 - Hermes Agent should not get switcher-specific copy/settings logic. Hermes calls themes "skins" and reads user skins from `~/.hermes/skins/`, so bridge it with a symlink: `~/.hermes/skins/env-active.yaml -> ~/.dots/themes/active/hermes.yaml`, then set `display.skin: env-active` once in `~/.hermes/config.yaml`.
@@ -58,13 +58,13 @@ Use this skill for theme work in `~/.dots`: creating new themes, updating existi
 
 ## App integration map
 
-- `.zshrc` sets `STOW_DIR="$HOME/.dots"` and sources `themes/active/fzf.zsh`.
+- `.zshrc` sets `STOW_DIR="$HOME/.dots"`, clears the old `FZF_DEFAULT_OPTS`, and points `FZF_DEFAULT_OPTS_FILE` to `themes/active/fzf.conf`.
 - Ghostty: `.config/ghostty/config` loads `~/.dots/themes/active/ghostty` with `config-file`.
 - Alacritty: Squirrel's config imports `~/.dots/no_stow/active_theme/alacritty.toml` for the SSH workspace.
 - Starship: `.config/starship.toml` imports `~/.dots/themes/active/starship.toml`.
 - tmux: shared `.tmux.conf` loads the active repository's `no_stow/tmux_local.conf` last. Squirrel's machine config loads `themes/active/tmux.conf`; Oma's loads `~/.omadots/no_stow/active_theme/tmux.conf`. `theme` reloads Squirrel's tmux; `theme_ssh` reloads Oma's tmux.
-- Neovim: `.config/nvim/lua/plugins/theme.lua` defines theme plugins and an `active-theme` entry that runs `dofile(vim.env.STOW_DIR .. '/themes/active/nvim.lua')`.
-- Pi: `.pi/agent/settings.json` selects `"theme": "env-active"` and loads `~/.dots/themes/active/pi.json` via its `themes` array.
+- Neovim: `.config/nvim/lua/plugins/theme.lua` defines theme plugins and an `active-theme` entry that loads `themes/active/nvim.lua` at startup and reapplies it on `FocusGained` only when its modification time changes.
+- Pi: work and personal profiles share `.pi/agent/settings.json`, which selects `"theme": "env-active"` without an external `themes` entry. The switcher copies the selected `pi.json` to `~/.pi/{work,personal}/themes/env-active.json`, where Pi's native watcher detects changes.
 - Claude Code: custom theme file `~/.claude/themes/theme.json` is a symlink to `~/.dots/themes/active/claude.json`; select it in Claude with `/theme`. Claude Code watches `~/.claude/themes/` and reloads custom theme files automatically.
 - Lazygit: `~/Library/Application Support/lazygit/config.yml` is a symlink to `~/.dots/themes/active/lazygit.yml`; Lazygit reads it on launch.
 - Hermes Agent: `~/.hermes/skins/env-active.yaml` is a symlink to `~/.dots/themes/active/hermes.yaml`; `~/.hermes/config.yaml` sets `display.skin: env-active`.
@@ -93,7 +93,7 @@ This applies to new app integrations only when adding the active demonstration/b
 A standard modern theme should have a file for each current app integration:
 
 - `alacritty.toml`
-- `fzf.zsh`
+- `fzf.conf`
 - `ghostty`
 - `nvim.lua`
 - `starship.toml`
@@ -135,9 +135,9 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, `hermes.yaml`, `c
 3. If the active theme is the one being edited and the app supports hot reload:
    - Pi reloads the active custom theme file automatically.
    - Squirrel Alacritty reloads its imported theme after `theme_ssh <name>` touches its main config.
-   - fzf in the current shell updates only after `source themes/active/fzf.zsh` or `re_fzf`.
-   - Ghostty usually needs manual reload (`cmd+ctrl+shift+r`) or restart.
-   - Neovim usually needs restart/re-source because `active/nvim.lua` runs during plugin config.
+   - fzf reads the active options file on each launch; already-running fzf instances keep their colors.
+   - `theme <name>` reloads Ghostty automatically when run inside Ghostty. Direct file edits still need manual reload (`cmd+ctrl+shift+r`).
+   - Neovim reapplies the active theme when it regains focus and the theme file changed.
    - Starship updates on a new prompt render after active file changes.
    - tmux reloads the active theme with `tmux source-file ~/.tmux.conf`.
    - Codex requires a restart or reopening `/theme` and confirming `env-active`; it does not watch `.tmTheme` file changes.
@@ -152,11 +152,12 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, `hermes.yaml`, `c
 - Prefer an official Alacritty theme. Otherwise convert from the theme's official terminal palette or established local Ghostty palette and name the source in comments.
 - Squirrel selects this SSH-workspace theme through `~/.dots/no_stow/active_theme/alacritty.toml`; the environment `theme` command does not select it.
 
-### `fzf.zsh`
+### `fzf.conf`
 
-- Exports `FZF_DEFAULT_OPTS`.
+- Contains plain fzf options, not shell code. fzf reads the file on every launch through `FZF_DEFAULT_OPTS_FILE`.
 - Preserve these options unless intentionally changing behavior: `--height 40%`, `--layout=reverse`, `--ansi`.
 - Change only the color section for normal theme edits.
+- Do not export theme colors through `FZF_DEFAULT_OPTS`; stale shell values override file defaults.
 
 ### `ghostty`
 
@@ -226,7 +227,8 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, `hermes.yaml`, `c
 
 ### `pi.json`
 
-- Pi loads `~/.dots/themes/active/pi.json` and selects theme name `env-active`.
+- Keep `pi.json` as the environment theme source. The switcher copies it to the work and personal profiles' native `themes/env-active.json` files because Pi watches those directories, not arbitrary external resources.
+- Theme switches repaint automatically. Themes without `pi.json` leave the last valid Pi theme unchanged.
 - The JSON `name` must be `env-active` for this unified active-theme flow.
 - Include the Pi schema:
 
@@ -258,13 +260,13 @@ Older themes may lack `pi.json`, `claude.json`, `lazygit.yml`, `hermes.yaml`, `c
 - Wrong SSH-workspace theme: verify Squirrel's active Alacritty link and Oma's active tmux link resolve into the same shared theme directory.
 - Switch command fails: verify `$STOW_DIR`, the shared theme directory exists, and the required application files are present.
 - Active edits disappear: changes were made directly in `themes/active/`; update the source `themes/<name>/` instead.
-- fzf unchanged in an old shell: run `re_fzf` or `re_source`; new shells source active fzf automatically.
+- fzf unchanged: verify `FZF_DEFAULT_OPTS_FILE` points to `themes/active/fzf.conf` and that `FZF_DEFAULT_OPTS` does not override the theme colors.
 - Ghostty unchanged: reload with `cmd+ctrl+shift+r` or restart Ghostty.
 - Starship unchanged: verify `.config/starship.toml` import and the palette name in active `starship.toml`; trigger a new prompt.
 - Squirrel tmux unchanged after `theme`: verify `~/.dots/no_stow/tmux_local.conf` and `themes/active/tmux.conf`, then reload `~/.tmux.conf`.
 - Oma tmux unchanged after `theme_ssh`: verify `~/.omadots/no_stow/tmux_local.conf` and `~/.omadots/no_stow/active_theme/tmux.conf`, then run `theme_ssh <name>` again from Squirrel.
 - Neovim missing colorscheme: check `.config/nvim/lua/plugins/theme.lua`, Lazy install state, and `themes/active/nvim.lua`.
-- Pi unchanged: verify `.pi/agent/settings.json` points to `~/.dots/themes/active/pi.json`, active `pi.json` has `"name": "env-active"`, and JSON is valid.
+- Pi unchanged: verify `.pi/agent/settings.json` selects `env-active` without an external theme resource and `~/.pi/{work,personal}/themes/env-active.json` matches the selected `pi.json`.
 - Claude Code unchanged: verify `~/.claude/themes/theme.json` is a symlink to `~/.dots/themes/active/claude.json`, active `claude.json` exists and is valid JSON, and Claude has selected the custom `theme` theme via `/theme`.
 - Lazygit unchanged: verify `~/Library/Application Support/lazygit/config.yml` is a symlink to `~/.dots/themes/active/lazygit.yml`, active `lazygit.yml` exists and is valid YAML, then restart Lazygit.
 - Hermes unchanged: verify `~/.hermes/skins/env-active.yaml` is a symlink to `~/.dots/themes/active/hermes.yaml`, `~/.hermes/config.yaml` has `display.skin: env-active`, active `hermes.yaml` exists and is valid YAML, then restart Hermes or run `/skin env-active`.
