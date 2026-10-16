@@ -60,6 +60,7 @@ Repository mode allows:
 - normal `git add`, `git rm`, and ordinary `git commit`
 - literal `git worktree add <path> [ref]` and non-resetting `-b <branch>` forms, including `--track` with `-b` and options after the destination, optionally using one `git -C <source>`; force, resetting, dynamic, and removal forms remain guarded
 - ordinary `git merge <literal-ref>` only inside verified disposable worktrees, optionally with `--ff-only` or `--no-edit`; other merges and abort/quit operations remain guarded
+- literal `git rebase --onto <new-base> <old-base>` on the current branch of a verified disposable worktree; explicit branch operands, extra options, dynamic refs, rebase control commands, and rebases elsewhere remain guarded
 - literal non-resetting branch creation with `git checkout -b`, `git checkout --no-track -b`, or `git switch -c`; existing-branch switches, resetting or forced creation, path restoration, branch deletion, and branch renaming remain guarded
 - exact non-force `git push origin <literal-branch>`, optionally with `-u` or `--set-upstream`; pushes to `main`, `master`, `HEAD`, full refs, other remotes, multiple or dynamic refspecs, tags, deletion, and force options remain guarded
 - literal `rm` and plain `rmdir` targets when their resolved deletion paths stay inside the repository; `rmdir -p` remains guarded
@@ -145,6 +146,7 @@ Do not add skill rules for ordinary Repository-mode work; it is already allowed.
 - Repository mode allows outside reads but asks before direct changes and literal deletion outside repositories allowed for the session. A registered project's exact companion `_tasks` repository is automatically included. It is not filesystem confinement.
 - Pi clipboard images named `pi-clipboard-<UUID>.png` are readable from the OS temporary directory in Repository and Ask modes.
 - SSH access through conservative `ssh`, `scp`, and `sftp` forms may be approved for one exact destination for the current session. Quoted local `scp` paths may use simple environment variables. The safe options `-q`, `-o BatchMode=yes`, and `-o ConnectTimeout=<seconds>` may precede the destination.
+- `ssh` stdout may use `>` or `>>` with a literal path strictly inside the active repository's `agents_tmp/`, optionally followed by `2>&1`. These forms support the normal SSH destination grant, including in Unattended mode after approval. Outside paths, symlink escapes, Git metadata, nested repositories, dynamic paths, unsupported redirects, and redirects after a real local directory change remain guarded.
 - Conservative mutating `curl` requests may be approved for one exact loopback HTTP origin for the current session. Grants support `localhost`, `127.0.0.1`, and `::1`; redirects, proxies, alternate connection targets, config files, Unix sockets, and custom Host headers remain guarded.
 - High-impact commands prompt even when a trusted skill rule matches.
 - Unattended and non-interactive operations that require approval are blocked.

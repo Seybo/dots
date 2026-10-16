@@ -360,6 +360,22 @@ test("SSH destination approval is scoped to the current session", async () => {
 	assert.deepEqual(reset, { block: true, reason: "Rejected by user" });
 });
 
+test("SSH scratch logs offer a destination grant and remain allowed in Unattended mode", async () => {
+	const root = process.cwd();
+	const harness = createHarness([gitResult(0, `${root}\n`), gitResult(0)]);
+	const context = createContext(root);
+	const command = `ssh -o BatchMode=yes -o ConnectTimeout=5 oma 'git status' > ${root}/agents_tmp/update.log 2>&1`;
+	await harness.handlers.get("session_start")!({}, context);
+	context.answers.push("Allow SSH access to oma for this session");
+	assert.equal(await harness.handlers.get("tool_call")!({ toolName: "bash", input: { command } }, context), undefined);
+	assert.ok(context.selections.at(-1)?.includes("Allow SSH access to oma for this session"));
+	context.answers.push("Unattended");
+	await harness.commands.get("permissions")!.handler({}, context);
+	const selectionCount = context.selections.length;
+	assert.equal(await harness.handlers.get("tool_call")!({ toolName: "bash", input: { command } }, context), undefined);
+	assert.equal(context.selections.length, selectionCount);
+});
+
 test("HTTP origin approval is scoped to the current session", async () => {
 	const root = process.cwd();
 	const origin = "http://localhost:1337";
@@ -505,6 +521,7 @@ test(`successfully created worktrees gain disposable access after ${isApprovedCa
 		await harness.handlers.get("tool_result")!({ toolCallId: "create", toolName: "bash", isError: false }, context);
 		assert.equal(await harness.handlers.get("tool_call")!({ toolName: "edit", input: { path: join(target, ".env") } }, context), undefined);
 		assert.equal(await harness.handlers.get("tool_call")!({ toolName: "bash", input: { command: `git -C ${target} merge --no-edit HEAD` } }, context), undefined);
+		assert.equal(await harness.handlers.get("tool_call")!({ toolName: "bash", input: { command: `git -C ${target} rebase --onto HEAD HEAD` } }, context), undefined);
 		assert.equal((await harness.handlers.get("tool_call")!({ toolName: "write", input: { path: join(target, ".git") } }, context) as { block: boolean }).block, true);
 
 		await harness.handlers.get("session_start")!({}, context);

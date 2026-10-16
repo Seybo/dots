@@ -147,7 +147,7 @@ export function registerRepoPermissions(
 	pi.on("tool_call", async (event, ctx) => {
 		const input = event.input as Record<string, unknown>;
 		const command = event.toolName === "bash" && typeof input.command === "string" ? input.command : undefined;
-		const sshDestination = command ? getSshDestination(command) : undefined;
+		const sshDestination = command ? getSshDestination(command, ctx.cwd, repository) : undefined;
 		const repositories = repository
 			? [repository, ...(taskRepository ? [taskRepository] : []), ...repositoryGrants.values()]
 			: [];

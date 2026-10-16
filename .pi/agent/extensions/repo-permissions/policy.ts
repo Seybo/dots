@@ -197,7 +197,8 @@ export function splitShellCommand(command: string): string[] | undefined {
 			index++;
 			continue;
 		}
-		if (["|", "&", ";", "\n", "\r"].includes(character)) {
+		// Descriptor duplication (2>&1) is not a background-command separator.
+		if (["|", "&", ";", "\n", "\r"].includes(character) && !(character === "&" && command[index - 1] === ">")) {
 			pushSegment(segments, current);
 			current = "";
 			continue;
@@ -243,7 +244,7 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 		if (
 			call.toolName === "bash" &&
 			argValue &&
-			(isAllowedBySessionSsh(argValue, call.sshDestinations) ||
+			(isAllowedBySessionSsh(argValue, call.sshDestinations, call.cwd, call.repositories[0]) ||
 				isAllowedBySessionHttp(argValue, call.httpOrigins))
 		) {
 			return ALLOW;
@@ -260,11 +261,15 @@ export function decideToolCall(call: ToolCall): PermissionDecision {
 	return ALLOW;
 }
 
-export function getSshDestination(command: string): string | undefined {
+export function getSshDestination(
+	command: string,
+	cwd?: string,
+	repository?: RepositoryState,
+): string | undefined {
 	const segments = splitShellCommand(command);
 	if (!segments) return undefined;
 
-	const destinations = segments.map(parseSshAccessSegment);
+	const destinations = segments.map((segment) => parseSshAccessSegment(segment, cwd, repository));
 	const destination = destinations[0];
 	return destination && destinations.every((candidate) => candidate === destination) ? destination : undefined;
 }
@@ -389,7 +394,7 @@ function guardedSegmentReason(
 	const command = basename(commandTokens[0]!);
 	const args = commandTokens.slice(1);
 	if (["scp", "sftp", "ssh"].includes(command)) {
-		return isAllowedSshAccessSegment(segment, sshDestinations)
+		return isAllowedSshAccessSegment(segment, sshDestinations, cwd, hasChangedDirectory ? undefined : repositories[0])
 			? undefined
 			: "SSH access requires destination approval.";
 	}
@@ -410,7 +415,7 @@ function guardedSegmentReason(
 		return "find execution or mutation requires approval. For read-only processing, list paths first, then run the follow-up command on those literal paths in a separate tool call.";
 	}
 	if (command === "git" && isGuardedGit(segment, commandTokens)) {
-		if (!hasChangedDirectory && isDisposableWorktreeMerge(segment, commandTokens, cwd, repositories)) return undefined;
+		if (!hasChangedDirectory && isAllowedDisposableWorktreeGit(segment, commandTokens, cwd, repositories)) return undefined;
 		return "This Git operation requires approval.";
 	}
 	if (command === "tmux" && args.some(isGuardedTmuxCommand)) return "This tmux operation requires approval.";
@@ -579,7 +584,7 @@ function isGuardedGit(segment: string, tokens: string[]): boolean {
 	return false;
 }
 
-function isDisposableWorktreeMerge(
+function isAllowedDisposableWorktreeGit(
 	segment: string,
 	tokens: string[],
 	cwd: string,
@@ -594,10 +599,17 @@ function isDisposableWorktreeMerge(
 		source = resolve(cwd, path);
 		index += 2;
 	}
-	if (tokens[index++] !== "merge") return false;
+	const command = tokens[index++];
 	const args = tokens.slice(index);
-	const refs = args.filter((arg) => !arg.startsWith("-"));
-	if (refs.length !== 1 || args.some((arg) => arg.startsWith("-") && !["--ff-only", "--no-edit"].includes(arg))) return false;
+	if (command === "merge") {
+		const refs = args.filter((arg) => !arg.startsWith("-"));
+		if (refs.length !== 1 || args.some((arg) => arg.startsWith("-") && !["--ff-only", "--no-edit"].includes(arg))) return false;
+	} else if (command === "rebase") {
+		// An explicit branch operand could rewrite a branch outside this disposable checkout.
+		if (args.length !== 3 || args[0] !== "--onto" || args.slice(1).some((arg) => !arg || arg.startsWith("-"))) return false;
+	} else {
+		return false;
+	}
 	const path = canonicalPath(source);
 	return Boolean(path && repositoryForMutationPath(repositories, path)?.isDisposableWorktree);
 }
@@ -864,9 +876,14 @@ function isPublish(command: string, args: string[]): boolean {
 	return command === "gem" && ["push", "yank"].includes(args[0] ?? "");
 }
 
-function isAllowedBySessionSsh(command: string, destinations: Set<string>): boolean {
+function isAllowedBySessionSsh(
+	command: string,
+	destinations: Set<string>,
+	cwd: string,
+	repository: RepositoryState | undefined,
+): boolean {
 	const segments = splitShellCommand(command);
-	return Boolean(segments && segments.every((segment) => isAllowedSshAccessSegment(segment, destinations)));
+	return Boolean(segments && segments.every((segment) => isAllowedSshAccessSegment(segment, destinations, cwd, repository)));
 }
 
 function isAllowedBySessionHttp(command: string, origins: Set<string>): boolean {
@@ -882,18 +899,41 @@ function isAllowedBySessionHttp(command: string, origins: Set<string>): boolean 
 	);
 }
 
-function isAllowedSshAccessSegment(segment: string, destinations: Set<string>): boolean {
-	const destination = parseSshAccessSegment(segment);
+function isAllowedSshAccessSegment(
+	segment: string,
+	destinations: Set<string>,
+	cwd?: string,
+	repository?: RepositoryState,
+): boolean {
+	const destination = parseSshAccessSegment(segment, cwd, repository);
 	return Boolean(destination && destinations.has(destination));
 }
 
-function parseSshAccessSegment(segment: string): string | undefined {
-	const tokens = tokenizeShellSegment(segment);
+function stripScratchLogRedirection(segment: string, cwd?: string, repository?: RepositoryState): string {
+	if (!cwd || !repository) return segment;
+	const match = segment.match(/^([\s\S]*?\S)\s+>>?\s*("(?:[^"\\]|\\.)*"|'[^']*'|[^\s'"\\<>|;&()]+)(?:\s+2>&1)?\s*$/);
+	if (!match || hasUnsafeShellSyntax(match[2]!)) return segment;
+	const path = tokenizeShellSegment(match[2]!)?.[0];
+	const pathInfo = path ? resolveShellPathInfo(path, cwd) : undefined;
+	if (
+		!pathInfo ||
+		!isAgentScratchTarget(repository.root, pathInfo.lexical, pathInfo.canonical) ||
+		decideDirectMutation(path!, cwd, [repository])
+	) {
+		return segment;
+	}
+	return match[1]!;
+}
+
+function parseSshAccessSegment(segment: string, cwd?: string, repository?: RepositoryState): string | undefined {
+	const commandSegment = stripScratchLogRedirection(segment, cwd, repository);
+	const tokens = tokenizeShellSegment(commandSegment);
 	if (!tokens || tokens.length < 2) return undefined;
 
 	const command = basename(tokens[0]!);
 	if (!["scp", "sftp", "ssh"].includes(command)) return undefined;
-	if (command === "scp" ? hasUnsafeScpSyntax(segment) : hasUnsafeShellSyntax(segment)) return undefined;
+	if (commandSegment !== segment && command !== "ssh") return undefined;
+	if (command === "scp" ? hasUnsafeScpSyntax(commandSegment) : hasUnsafeShellSyntax(commandSegment)) return undefined;
 
 	const operands = sshFamilyOperands(tokens.slice(1));
 	if (!operands?.length) return undefined;

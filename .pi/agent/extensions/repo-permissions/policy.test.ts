@@ -463,6 +463,40 @@ test("ordinary merges are allowed only in disposable worktrees", () => {
 	});
 });
 
+test("literal rebase --onto is allowed only on the current branch of a disposable worktree", () => {
+	withRepository((repository, outside) => {
+		const disposable = { ...repository, isDisposableWorktree: true };
+		for (const command of [
+			"git rebase --onto origin/master task-base",
+			`git -C ${repository.root} rebase --onto 1516af63 437599c5`,
+			`seam check > agents_tmp/seam.json && git -C ${repository.root} rebase --onto 1516af63 437599c5 && git -C ${repository.root} range-diff 437599c5..task-old 1516af63..HEAD > agents_tmp/range-diff.txt && git -C ${repository.root} diff --check origin/master..HEAD`,
+		]) {
+			for (const mode of ["repository", "unattended"] as const) {
+				assert.equal(call(mode, "bash", { command }, repository.root, disposable).kind, "allow", command);
+				assert.equal(call(mode, "bash", { command }, repository.root, repository).kind, "ask", command);
+			}
+		}
+		const nestedRoot = join(repository.root, "nested");
+		mkdirSync(join(nestedRoot, ".git"), { recursive: true });
+		for (const command of [
+			"git rebase origin/master",
+			"git rebase --onto origin/master",
+			"git rebase --onto origin/master task-base other-branch",
+			"git rebase --onto origin/master task-base --interactive",
+			"git rebase --onto origin/master task-base --autostash",
+			"git rebase --abort",
+			"git rebase --quit",
+			"git rebase --continue",
+			'git rebase --onto "$BASE" task-base',
+			`git -C ${outside} rebase --onto origin/master task-base`,
+			`git -C ${nestedRoot} rebase --onto origin/master task-base`,
+			`cd ${outside} && git rebase --onto origin/master task-base`,
+		]) {
+			assert.equal(call("repository", "bash", { command }, repository.root, disposable).kind, "ask", command);
+		}
+	});
+});
+
 test("worktree destinations follow git -C and reject unresolved directory changes", () => {
 	withRepository((repository, outside) => {
 		assert.deepEqual(
@@ -643,6 +677,45 @@ test("SSH grants allow one exact destination for the session", () => {
 	});
 });
 
+test("SSH grants support literal scratch-log redirection without granting other writes", () => {
+	withRepository((repository, outside) => {
+		const destination = "oma";
+		const ssh = `ssh -o BatchMode=yes -o ConnectTimeout=5 ${destination} 'cd /project && git status'`;
+		const grants = new Set([destination]);
+		for (const command of [
+			`${ssh} > ${repository.root}/agents_tmp/update.log 2>&1`,
+			`${ssh} >> agents_tmp/update.log 2>&1`,
+			`${ssh} > 'agents_tmp/update log.log'`,
+		]) {
+			assert.equal(getSshDestination(command, repository.root, repository), destination, command);
+			assert.equal(call("repository", "bash", { command }, repository.root, repository).kind, "ask", command);
+			for (const mode of ["repository", "unattended", "ask"] as const) {
+				assert.equal(call(mode, "bash", { command }, repository.root, repository, [], grants).kind, "allow", command);
+			}
+		}
+
+		const nestedRoot = join(repository.root, "agents_tmp", "nested");
+		mkdirSync(join(nestedRoot, ".git"), { recursive: true });
+		for (const command of [
+			`${ssh} > ${outside}/update.log 2>&1`,
+			`${ssh} > tracked.txt 2>&1`,
+			`${ssh} > agents_tmp 2>&1`,
+			`${ssh} > agents_tmp/outside-link/update.log 2>&1`,
+			`${ssh} > agents_tmp/nested/update.log 2>&1`,
+			`${ssh} > agents_tmp/.git/config 2>&1`,
+			`${ssh} > "$LOG" 2>&1`,
+			`${ssh} > agents_tmp/update.log 2>${outside}/errors.log`,
+			`cd ${outside} && ${ssh} > agents_tmp/update.log 2>&1`,
+		]) {
+			assert.equal(getSshDestination(command, repository.root, repository), undefined, command);
+			assert.equal(call("repository", "bash", { command }, repository.root, repository, [], grants).kind, "ask", command);
+		}
+		const mixed = `${ssh} > agents_tmp/update.log 2>&1 && kill 123`;
+		assert.equal(getSshDestination(mixed, repository.root, repository), undefined);
+		assert.equal(call("repository", "bash", { command: mixed }, repository.root, repository, [], grants).kind, "ask");
+	});
+});
+
 test("HTTP grants allow mutating curl requests to one exact loopback origin", () => {
 	withRepository((repository) => {
 		const origin = "http://localhost:1337";
@@ -702,6 +775,10 @@ test("rule parsing and shell splitting stay anchored", () => {
 		"head -1",
 		"rg TODO .",
 		"pwd",
+	]);
+	assert.deepEqual(splitShellCommand("ssh oma true > agents_tmp/log 2>&1 && kill 123"), [
+		"ssh oma true > agents_tmp/log 2>&1",
+		"kill 123",
 	]);
 	assert.equal(splitShellCommand("tool 'unfinished"), undefined);
 });
