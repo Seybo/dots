@@ -109,12 +109,14 @@ pi() {
 
 pi-p() {
   _pi_require_shared_agents "$HOME/.pi/personal" || return
+  local -x PATH="$HOME/.asdf/installs/nodejs/24.0.1/bin:$PATH"
   PI_CODING_AGENT_DIR="$HOME/.pi/personal" \
   NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require=\"$STOW_DIR/no_stow/pi-regexp-safety.cjs\"" \
   _run_with_agent_attention pi "$@"
 }
 pi-w() {
   _pi_require_shared_agents "$HOME/.pi/work" || return
+  local -x PATH="$HOME/.asdf/installs/nodejs/24.0.1/bin:$PATH"
   PI_CODING_AGENT_DIR="$HOME/.pi/work" \
   NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require=\"$STOW_DIR/no_stow/pi-regexp-safety.cjs\"" \
   _run_with_agent_attention pi "$@"
