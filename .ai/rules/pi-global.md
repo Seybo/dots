@@ -107,8 +107,8 @@ Team conventions for any Ruby/Rails project unless the project's own instruction
 
 ## Specs
 
-- Specs and RuboCop must pass before work is considered done.
-- No `send` to call private methods. Test through the public interface; if something needs assertion, expose it.
+- For code changes, relevant specs and configured RuboCop checks must pass before work is considered done. Do not require them for documentation-only changes or projects that do not provide them. Report checks that fail or cannot run.
+- No `send` to call private methods. Assert observable behavior through existing public interfaces. Do not make methods public solely for tests; expose behavior only when the application needs it.
 - No `allow_any_instance_of`. Stub on the actual instance you control.
 - No `let!` — use `before` blocks for setup with side effects.
 - Use `instance_double(ClassName)` with the actual class constant, not a string.
@@ -128,7 +128,8 @@ Language- and project-neutral rules for all agents unless a project's local inst
 ## State-change safety
 
 - Perform state-changing work only when the current explicit request or invoked skill authorizes it. Planning, grilling, review, and explanation workflows are read-only unless they explicitly say otherwise.
-- Before moving, replacing, or deleting anything, identify state that version control cannot restore. If any exists, stop until it has a verified backup outside the affected paths.
+- Before moving, replacing, or deleting anything, identify pre-existing state that version control cannot restore. Preserve it with a verified backup outside the affected paths.
+- Disposable artifacts created by the current task may be deleted without backup after verifying their exact paths and origin. Being untracked, ignored, or named "cache" alone does not establish that a file is disposable. If ownership or origin is uncertain, stop and ask.
 - Do not create a separate safety backup when version control already preserves the exact state being replaced.
 - Inspection must not create or mutate the thing being inspected. Verify existence first and use read-only modes.
 
@@ -225,11 +226,13 @@ When a user message visibly begins with `/skill:<name>` (or another recognized s
 
 # Temporary stubs and placeholders
 
-Incremental stubs between implementation steps are encouraged — land a working skeleton first, fill in real behavior in a later step. The one hard rule: every temporary stub, placeholder, fake value, hardcoded shortcut, or not-yet-implemented path MUST carry this exact marker on its own comment line (in the file's comment syntax) directly above the placeholder, followed by a short note of what the real implementation is and which step adds it:
+Incremental stubs between implementation steps are encouraged — land a working skeleton first, fill in real behavior in a later step. The one hard rule: every temporary implementation stub, placeholder, fake value, hardcoded shortcut, or not-yet-implemented path intended to be replaced before merge MUST carry this exact marker on its own comment line (in the file's comment syntax) directly above the placeholder, followed by a short note of what the real implementation is and which step adds it:
 
 ```text
 !!!! SHOULD BE HANDLED/REMOVED BEFORE MERGE !!!!
 ```
+
+Intentional test data, fixtures, mocks, and documentation examples do not require this marker.
 
 Before declaring work merge-ready, `rg 'SHOULD BE HANDLED/REMOVED BEFORE MERGE'` must come back clean, or every remaining hit must be explicitly agreed to defer. A commit-gate hook also blocks `git commit` when the staged diff adds the marker. The marker is permission to stub between steps, not permission to merge a stub.
 

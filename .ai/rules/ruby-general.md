@@ -9,8 +9,8 @@ Team conventions for any Ruby/Rails project unless the project's own instruction
 
 ## Specs
 
-- Specs and RuboCop must pass before work is considered done.
-- No `send` to call private methods. Test through the public interface; if something needs assertion, expose it.
+- For code changes, relevant specs and configured RuboCop checks must pass before work is considered done. Do not require them for documentation-only changes or projects that do not provide them. Report checks that fail or cannot run.
+- No `send` to call private methods. Assert observable behavior through existing public interfaces. Do not make methods public solely for tests; expose behavior only when the application needs it.
 - No `allow_any_instance_of`. Stub on the actual instance you control.
 - No `let!` — use `before` blocks for setup with side effects.
 - Use `instance_double(ClassName)` with the actual class constant, not a string.

@@ -5,7 +5,8 @@ Language- and project-neutral rules for all agents unless a project's local inst
 ## State-change safety
 
 - Perform state-changing work only when the current explicit request or invoked skill authorizes it. Planning, grilling, review, and explanation workflows are read-only unless they explicitly say otherwise.
-- Before moving, replacing, or deleting anything, identify state that version control cannot restore. If any exists, stop until it has a verified backup outside the affected paths.
+- Before moving, replacing, or deleting anything, identify pre-existing state that version control cannot restore. Preserve it with a verified backup outside the affected paths.
+- Disposable artifacts created by the current task may be deleted without backup after verifying their exact paths and origin. Being untracked, ignored, or named "cache" alone does not establish that a file is disposable. If ownership or origin is uncertain, stop and ask.
 - Do not create a separate safety backup when version control already preserves the exact state being replaced.
 - Inspection must not create or mutate the thing being inspected. Verify existence first and use read-only modes.
 
