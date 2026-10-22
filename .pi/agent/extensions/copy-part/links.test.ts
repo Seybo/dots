@@ -17,6 +17,24 @@ test("extracts Markdown, autolink, and bare HTTP URLs in response order", () => 
 	]);
 });
 
+test("excludes closing bold markers and sentence punctuation from bare links", () => {
+	assert.deepEqual(
+		extractLinks("Open **https://hichee.com/admin/flipper**. Then https://example.org/help."),
+		["https://hichee.com/admin/flipper", "https://example.org/help"],
+	);
+});
+
+test("excludes inline-code delimiters from links", () => {
+	assert.deepEqual(extractLinks("Use `https://example.com/docs`."), ["https://example.com/docs"]);
+});
+
+test("preserves punctuation inside explicitly delimited URL destinations", () => {
+	assert.deepEqual(
+		extractLinks("[Search](https://example.com/search?q=why?) and <https://example.org/file.>"),
+		["https://example.com/search?q=why?", "https://example.org/file."],
+	);
+});
+
 test("preserves repeated URL occurrences", () => {
 	const markdown = "https://example.com then [again](https://example.com)";
 

@@ -18,7 +18,7 @@ function isClosingFence(line: string, fence: Fence): boolean {
 	return Boolean(marker && marker[0] === fence.character && marker.length >= fence.length);
 }
 
-const URL_PATTERN = /https?:\/\/[^\s<>()\[\]{}"']+/g;
+const URL_PATTERN = /\]\((?<destination>https?:\/\/[^\s<>()\[\]{}"']+)\)|<(?<autolink>https?:\/\/[^\s<>]+)>|(?<bare>https?:\/\/[^\s<>()\[\]{}"'`]+)/g;
 const REFERENCE_DEFINITION = /^\s{0,3}\[[^\]]+\]:/;
 
 export function extractLinks(markdown: string): string[] {
@@ -34,7 +34,11 @@ export function extractLinks(markdown: string): string[] {
 		fence = openingFence(line);
 		if (fence || REFERENCE_DEFINITION.test(line)) continue;
 
-		links.push(...(line.match(URL_PATTERN) ?? []));
+		for (const match of line.matchAll(URL_PATTERN)) {
+			const { destination, autolink, bare } = match.groups!;
+			// Delimited destinations are exact; bare URLs may end in prose or emphasis.
+			links.push(destination ?? autolink ?? bare!.replace(/[*.,;:!?]+$/, ""));
+		}
 	}
 
 	return links;
