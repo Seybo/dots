@@ -31,7 +31,8 @@ case "$helper" in
     }
 
     echo "This removes local cache/generated-data for apps and dev tools."
-    echo "Close affected apps first: Chrome/Google apps, Brave, Vivaldi, Camoufox, Slack, Claude, Insta360 Studio, Cypress/Playwright, and editors using Solargraph/TypeScript."
+    echo "Close affected apps first: Chrome/Google apps, Brave, Vivaldi, Camoufox, Slack, Claude, Insta360 Studio, Cypress/Playwright, and editors using Solargraph/TypeScript. Stop browser-cpu-monitor if running."
+    echo "Old browser-monitor diagnostic logs will also be deleted without a backup."
     echo
     printf "Type CLOSED to confirm those apps are closed and continue: "
     read -r confirmation
@@ -66,6 +67,7 @@ case "$helper" in
       "$HOME/.npm/_cacache"
       "$HOME/.yarn/berry/cache"
       "$HOME/.cache/uv"
+      "$HOME/Library/Logs/browser-monitor"
     )
 
     echo
