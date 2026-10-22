@@ -9,6 +9,10 @@ ruby -ryaml -e '
   text = File.read(ARGV.fetch(0))
   frontmatter = text.match(/\A---\n(.*?)\n---\n/m)&.[](1) or abort("missing frontmatter")
   YAML.safe_load(frontmatter)
+  abort("missing task context workflow") unless text.include?("## Optional task context")
+  abort("missing narrative workflow") unless text.include?("### Narrative walkthrough order")
   abort("missing repetition workflow") unless text.include?("### Default repetition skipping")
   abort("missing skipped replay workflow") unless text.include?("### `show skipped`")
+  abort("missing commit continuation workflow") unless text.include?("### Commit continuation")
+  abort("missing continue trigger") unless text.include?("### `continue`")
 ' SKILL.md

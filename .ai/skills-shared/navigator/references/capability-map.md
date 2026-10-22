@@ -10,7 +10,7 @@ This file is the curated, human-friendly map. Keep it concise. Generated invento
 ## GitHub / PRs / code review
 
 - `/skill:super-review` — default deep code-review workflow for PRs, branches, diffs, and uncommitted changes.
-- `/skill:hunkit --diff|<commit>` — show usage with no argument, or launch Hunk in the existing right tmux pane for working-tree changes or one commit, then explain or review hunks while skipping and reporting repeated mechanical changes by default.
+- `/skill:hunkit --diff|<commit> [--task <path>]` — show usage with no argument, or launch Hunk for working-tree changes or one commit with optional explicit task context, then explain or review hunks in narrative order and offer first-parent continuation through newer commits.
 - `/skill:claude-super-fix` — verify and apply real, in-scope fixes from a saved super-review report.
 - `/skill:addressit` — interactively fetch and address GitHub PR review comments one at a time.
 - `/skill:autofix` — import, decide, implement, and repeatedly review GitHub or local Reported Issues.

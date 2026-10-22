@@ -5,7 +5,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 ## GitHub / PRs
 
 - `github`, `gh`, `pr`, `pull request`, `review PR`, `review my branch`, `look at diff`, `code review` → `/skill:super-review`
-- `hunk`, `guided diff`, `explain commit`, `explain current hunk`, `expall`, `revall`, `review hunks`, `skip repeated hunks`, `show skipped`, `bare expit after hunkit` → `/skill:hunkit --diff|<commit>`
+- `hunk`, `guided diff`, `explain commit`, `explain current hunk`, `expall`, `revall`, `review hunks`, `narrative diff`, `intent-first hunks`, `task-aware commit explanation`, `skip repeated hunks`, `show skipped`, `continue to next commit`, `walk PR commits`, `bare expit after hunkit` → `/skill:hunkit --diff|<commit> [--task <path>]`
 - `fix super-review`, `address super-review findings`, `apply review fixes` → `/skill:claude-super-fix`
 - `review comments`, `address comments`, `inline comments`, `review id` → `/skill:addressit`
 - `import review`, `fix imported review`, `reported issues`, `autofix` → `/skill:autofix`
