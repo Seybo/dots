@@ -92,7 +92,10 @@ ruby "$STOW_DIR/.pi/agent/extensions/linear/scripts/linear.rb" convert-draft sha
 Conversion's last optional argument is the known requester UUID.
 These commands require an existing registered task root. They return `task_path`
 and existing issue identity/branch context. They never create/switch Git branches
-or start implementation. Preserve local authored content and `config.json` metadata.
+or start implementation. Both import and conversion add `Linear: <issue-url>`
+immediately after `Name:` in `task.md`'s `# Story details` section. Conversion
+saves identity in `config.json` before adding the link and preserves all other
+local authored content and metadata. Story details stay out of the remote description.
 Only start Shaka when the user selects its Taskit continuation. Pass the existing
 issue URL, identifier, exact `branchName` and local `task_path`; do not create a second issue.
 Follow the installed Shaka skill; its workflow owns branch choice and implementation.

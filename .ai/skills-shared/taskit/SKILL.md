@@ -197,7 +197,10 @@ Do not infer an issue from a branch or treat a numeric selector as a Linear issu
    any of the Shortcut branch setup or Workit continuation steps.
 5. On success report `identifier - title`, URL, exact provider `branchName`, and
    `task_path`. The folder prefix is the full identifier; immutable UUID is
-   retained under `config.json`'s `linear` section. For a featured conversion,
+   retained under `config.json`'s `linear` section. Both import and conversion
+   record `Linear: <issue-url>` immediately after `Name:` in `task.md`'s first
+   `# Story details` section. Conversion saves identity before adding the link
+   and preserves all other authored content. For a featured conversion,
    replace the validated Feature inventory link after successful rename and
    verify both files agree, following the existing Feature contract.
 6. End any earlier automatic-handoff authorization and offer only:

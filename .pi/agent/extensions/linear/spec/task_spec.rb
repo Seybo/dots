@@ -38,12 +38,14 @@ RSpec.describe Linear::Task do
 
   after { FileUtils.remove_entry(@root) }
 
-  it 'converts a draft and returns handoff context without changing authored content' do
+  it 'converts a draft, adds the issue link and preserves the remaining authored content' do
     original = File.read(source)
     result = task.convert('hc', source, 'Bug')
     path = File.join(@task_root, 'HC-123-fix-checkout', 'task.md')
     expect(result).to include('task_path' => path, 'branchName' => 'provider/hc-123-fix')
-    expect(File.read(path)).to eq(original)
+    expect(File.read(path)).to eq(
+      original.sub("Name: Fix checkout\n", "Name: Fix checkout\nLinear: #{issue.fetch('url')}\n")
+    )
     expect(File.exist?(source)).to be(false)
     expect(File.exist?(File.join(@root, '.git'))).to be(false)
     expect(client).to have_received(:create_issue).with(
@@ -63,7 +65,9 @@ RSpec.describe Linear::Task do
 
   it 'imports an existing issue without a mutation and exposes the title for later updates' do
     result = task.import('hc', 'HC-123')
-    expect(File.read(result.fetch('task_path'))).to include('Name: Fix checkout', '# Body')
+    expect(File.read(result.fetch('task_path'))).to eq(
+      "# Story details\n\nName: Fix checkout\nLinear: #{issue.fetch('url')}\n\n# Context\n\n# Body"
+    )
     expect(client).not_to have_received(:create_issue)
     expect(result).to include('identifier' => 'HC-123', 'url' => issue.fetch('url'))
   end
@@ -126,7 +130,9 @@ RSpec.describe Linear::Task do
     expect(@registry.task_path('HC-123')).to eq(result.fetch('task_path'))
     allow(client).to receive(:update_issue).and_return(issue)
     task.update('HC-123')
-    expect(client).to have_received(:update_issue).with('issue-uuid', hash_including('title' => 'Fix checkout'))
+    expect(client).to have_received(:update_issue).with(
+      'issue-uuid', 'title' => 'Fix checkout', 'description' => "# Context\n\nBody\n"
+    )
     second = File.join(@task_root, 'HC-123-other', 'task.md')
     FileUtils.mkdir_p(File.dirname(second))
     File.write(second, 'Other')

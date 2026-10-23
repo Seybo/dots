@@ -19,7 +19,8 @@ module Linear
       ensure_no_task(root, issue.fetch('identifier'))
       folder = File.join(root, folder_name(issue))
       Dir.mkdir(folder)
-      text = "# Story details\n\nName: #{issue.fetch('title')}\n\n# Context\n\n#{issue['description']}"
+      text = "# Story details\n\nName: #{issue.fetch('title')}\nLinear: #{issue.fetch('url')}\n\n" \
+             "# Context\n\n#{issue['description']}"
       File.write(File.join(folder, 'task.md'), text)
       save_identity(folder, {}, issue)
       handoff(issue, folder)
@@ -35,7 +36,8 @@ module Linear
         raise Error, "Task already associated with #{metadata.fetch('linear').fetch('identifier')}; do not recreate it"
       end
 
-      params = Markdown.parse(File.read(path))
+      text = File.read(path)
+      params = Markdown.parse(text)
       raise Error, 'Draft requires Name: in # Story details' unless params['title']
       raise Error, "type must be #{Client::TYPES.join(', ')}" unless Client::TYPES.include?(type)
 
@@ -47,6 +49,7 @@ module Linear
       save_identity(folder, metadata, issue)
       ensure_no_task(root, issue.fetch('identifier'))
       target = File.join(root, folder_name(issue))
+      File.write(path, add_issue_link(text, issue.fetch('url')))
       unless system('mv', '-n', folder, target) && !File.exist?(folder) && File.file?(File.join(target, 'task.md'))
         raise Error, 'No-clobber task rename failed'
       end
@@ -80,6 +83,14 @@ module Linear
     end
 
     private
+
+    def add_issue_link(text, url)
+      lines = text.lines
+      section_index = lines.index { |line| line.chomp == '# Story details' }
+      name_index = ((section_index + 1)...lines.length).find { |index| lines[index].start_with?('Name:') }
+      lines[name_index] = "#{lines[name_index].chomp}\nLinear: #{url}\n"
+      lines.join
+    end
 
     def existing_root(project)
       root = @registry.task_root(project)
