@@ -72,6 +72,7 @@ Use this file to map vague user wording to likely capabilities. The exact source
 
 ## Abbreviations
 
+- `00ae`, `at ease`, `another agent will work on it` → stop working on this and wait for further instructions.
 - `00ao` → answer only after investigating; do not change files or state.
 - `00cc` → copy referenced content exactly to the system clipboard.
 - `00ex` → explain referenced text.

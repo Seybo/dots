@@ -245,6 +245,8 @@ When the meaning is clear, act on them without asking for clarification.
 
 ## Abbreviations
 
+- `00ae` — At ease: another agent will work on this. Stop working on it and wait for further instructions.
+
 - `00ao` — Answer only: investigate what is needed, then answer the question.
   Do not make updates, edit files, run fix-up changes, or otherwise change state.
 
