@@ -11,8 +11,9 @@ module Linear
   class Client
     ENDPOINT = 'https://api.linear.app/graphql'
     ISSUE_FIELDS = 'id identifier title description url branchName team { id key }'
+    COMMENT_FIELDS = "id body url issue { #{ISSUE_FIELDS} }".freeze
     TYPES = %w[Bug Feature Improvement Chore].freeze
-    WRITE_WARNING = 'Write outcome may be uncertain; inspect Linear before retrying. Do not blindly recreate the issue.'
+    WRITE_WARNING = 'Write outcome may be uncertain; inspect Linear before retrying. Do not blindly repeat the write.'
 
     def initialize(api_key: ENV.fetch('LINEAR_API_KEY', nil))
       @api_key = api_key
@@ -22,6 +23,30 @@ module Linear
       id = identifier(selector)
       data = request("query($id: String!) { issue(id: $id) { #{ISSUE_FIELDS} } }", { 'id' => id })
       validate_issue(data['issue'])
+    end
+
+    def get_comment(uuid)
+      data = request("query($id: String!) { comment(id: $id) { #{COMMENT_FIELDS} } }", { 'id' => uuid })
+      validate_comment(data['comment'])
+    end
+
+    def create_comment(selector, body)
+      raise Error, 'Comment body must not be blank' if body.strip.empty?
+
+      issue = get_issue(selector)
+      query = 'mutation($input: CommentCreateInput!) { commentCreate(input: $input) ' \
+              "{ success comment { #{COMMENT_FIELDS} } } }"
+      input = { 'issueId' => issue.fetch('id'), 'body' => body }
+      begin
+        data = request(query, { 'input' => input }, is_write: true).fetch('commentCreate')
+        raise Error, "Linear mutation did not confirm success. #{WRITE_WARNING}" unless data['success'] == true
+
+        validate_comment(data['comment'])
+      rescue Error, KeyError => error
+        raise Error, "#{error.message} #{WRITE_WARNING}" unless error.message.include?(WRITE_WARNING)
+
+        raise
+      end
     end
 
     def identifier(selector)
@@ -150,6 +175,16 @@ module Linear
       end
 
       issue
+    end
+
+    def validate_comment(comment)
+      fields = %w[id body url]
+      unless comment.is_a?(Hash) && fields.all? { |field| comment[field].is_a?(String) && !comment[field].empty? }
+        raise Error, 'Linear did not return a complete comment'
+      end
+
+      validate_issue(comment['issue'])
+      comment
     end
 
     def request(query, variables = {}, is_write: false)

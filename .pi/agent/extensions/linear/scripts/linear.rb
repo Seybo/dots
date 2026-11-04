@@ -14,6 +14,12 @@ module LinearCli
     result = case command
              when 'get-issue'
                client.get_issue(argument(argv, 'identifier or URL'))
+             when 'get-comment'
+               client.get_comment(argument(argv, 'comment UUID'))
+             when 'comment-issue'
+               selector = argument(argv, 'identifier or URL')
+               body = File.read(File.expand_path(argument(argv, 'comment.md path')))
+               client.create_comment(selector, body)
              when 'discover'
                client.discover(registry.config(argument(argv, 'project')))
              when 'create-issue'
@@ -36,7 +42,8 @@ module LinearCli
                                                                             assignee_id: argv.shift)
              else
                raise Linear::Error,
-                     'Usage: linear.rb get-issue ID | discover PROJECT | create-issue PROJECT JSON | ' \
+                     'Usage: linear.rb get-issue ID | get-comment UUID | comment-issue ID comment.md | ' \
+                     'discover PROJECT | create-issue PROJECT JSON | ' \
                      'update-issue ID [task.md] | import-issue PROJECT ID | ' \
                      'convert-draft PROJECT task.md TYPE [ASSIGNEE_UUID]'
              end

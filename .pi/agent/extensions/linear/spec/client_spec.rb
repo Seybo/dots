@@ -95,6 +95,76 @@ RSpec.describe Linear::Client do
     expect { client.get_issue('HC-123') }.to raise_error(Linear::Error) { |error| expect(error.message).not_to include('test-key') }
   end
 
+  describe 'comments' do
+    let(:body) { "A reply with \"quotes\" and `code`.\n\nKeep this spacing.\n" }
+    let(:comment) do
+      { 'id' => 'comment-uuid', 'body' => body, 'url' => "#{issue.fetch('url')}#comment-uuid", 'issue' => issue }
+    end
+
+    def respond_to_comment(data)
+      stub_request(:post, Linear::Client::ENDPOINT)
+        .with { |request| JSON.parse(request.body).fetch('query').include?('commentCreate(') }
+        .to_return(body: JSON.generate('data' => { 'commentCreate' => data }))
+    end
+
+    it 'posts the exact Markdown to the resolved issue UUID using variables' do
+      respond('issue' => issue)
+      respond_to_comment('success' => true, 'comment' => comment)
+
+      expect(client.create_comment(issue.fetch('url'), body)).to eq(comment)
+      expect(WebMock).to(have_requested(:post, Linear::Client::ENDPOINT).with do |request|
+        JSON.parse(request.body)['variables'] == { 'input' => { 'issueId' => 'issue-uuid', 'body' => body } }
+      end.once)
+    end
+
+    it 'reads a posted comment by UUID with its issue identity' do
+      respond('comment' => comment)
+
+      expect(client.get_comment('comment-uuid')).to eq(comment)
+      expect(WebMock).to(have_requested(:post, Linear::Client::ENDPOINT).with do |request|
+        JSON.parse(request.body)['variables'] == { 'id' => 'comment-uuid' }
+      end)
+    end
+
+    it 'rejects blank comments before making a request' do
+      expect { client.create_comment('HC-123', " \n") }
+        .to raise_error(Linear::Error, 'Comment body must not be blank')
+      expect(WebMock).not_to have_requested(:post, Linear::Client::ENDPOINT)
+    end
+
+    it 'reports an unconfirmed comment write without retrying' do
+      respond('issue' => issue)
+      respond_to_comment('success' => false)
+
+      expect { client.create_comment('HC-123', body) }
+        .to raise_error(Linear::Error, /inspect Linear before retrying/)
+      expect(WebMock).to(have_requested(:post, Linear::Client::ENDPOINT).with do |request|
+        JSON.parse(request.body).fetch('query').include?('commentCreate(')
+      end.once)
+    end
+
+    it 'reports a timed-out comment write as uncertain without retrying' do
+      respond('issue' => issue)
+      stub_request(:post, Linear::Client::ENDPOINT)
+        .with { |request| JSON.parse(request.body).fetch('query').include?('commentCreate(') }
+        .to_timeout
+
+      expect { client.create_comment('HC-123', body) }
+        .to raise_error(Linear::Error, /inspect Linear before retrying/)
+      expect(WebMock).to(have_requested(:post, Linear::Client::ENDPOINT).with do |request|
+        JSON.parse(request.body).fetch('query').include?('commentCreate(')
+      end.once)
+    end
+
+    it 'does not treat an incomplete comment response as a confirmed write' do
+      respond('issue' => issue)
+      respond_to_comment('success' => true, 'comment' => comment.reject { |key| key == 'id' })
+
+      expect { client.create_comment('HC-123', body) }
+        .to raise_error(Linear::Error, /complete comment.*inspect Linear before retrying/)
+    end
+  end
+
   it 'requires credentials' do
     expect { described_class.new(api_key: '').get_issue('HC-123') }.to raise_error(Linear::Error, /LINEAR_API_KEY/)
   end
