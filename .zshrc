@@ -135,6 +135,7 @@ bindkey -s -M vicmd '^[' ''
 if [ -n "$SSH_CONNECTION" ] && [ -z "$TMUX" ]; then
   exec tmux new-session -A -s base
 fi
+export SHAKA_RUBY="$HOME/.asdf/installs/ruby/3.4.8/bin/ruby"
 export PI_AGENT_SHAKACODE_SESSIONS_DIR=~/.pi/work/sessions
 export CODEX_DEFAULT_MODEL='openai-codex/gpt-5.6-sol:high'
 export CODEX_SECONDARY_MODEL='openai-codex/gpt-5.6-terra:high'
