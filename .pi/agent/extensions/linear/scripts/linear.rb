@@ -14,6 +14,16 @@ module LinearCli
     result = case command
              when 'get-issue'
                client.get_issue(argument(argv, 'identifier or URL'))
+             when 'list-my-issues'
+               raise Linear::Error, 'list-my-issues takes no arguments' unless argv.empty?
+
+               client.list_my_issues
+             when 'set-issue-status'
+               selector = argument(argv, 'identifier or URL')
+               name = argument(argv, 'status name')
+               raise Linear::Error, 'Use one status name; quote names containing spaces' unless argv.empty?
+
+               client.set_issue_status(selector, name)
              when 'get-comment'
                client.get_comment(argument(argv, 'comment UUID'))
              when 'comment-issue'
@@ -42,7 +52,8 @@ module LinearCli
                                                                             assignee_id: argv.shift)
              else
                raise Linear::Error,
-                     'Usage: linear.rb get-issue ID | get-comment UUID | comment-issue ID comment.md | ' \
+                     'Usage: linear.rb get-issue ID | list-my-issues | set-issue-status ID "Status name" | ' \
+                     'get-comment UUID | comment-issue ID comment.md | ' \
                      'discover PROJECT | create-issue PROJECT JSON | ' \
                      'update-issue ID [task.md] | import-issue PROJECT ID | ' \
                      'convert-draft PROJECT task.md TYPE [ASSIGNEE_UUID]'

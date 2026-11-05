@@ -10,8 +10,9 @@ module Linear
 
   class Client
     ENDPOINT = 'https://api.linear.app/graphql'
-    ISSUE_FIELDS = 'id identifier title description url branchName team { id key }'
+    ISSUE_FIELDS = 'id identifier title description url branchName archivedAt state { id name } team { id key name }'
     COMMENT_FIELDS = "id body url issue { #{ISSUE_FIELDS} }".freeze
+    SUMMARY_FIELDS = 'id identifier title url archivedAt team { id key name } state { id name type }'
     TYPES = %w[Bug Feature Improvement Chore].freeze
     WRITE_WARNING = 'Write outcome may be uncertain; inspect Linear before retrying. Do not blindly repeat the write.'
 
@@ -20,9 +21,27 @@ module Linear
     end
 
     def get_issue(selector)
-      id = identifier(selector)
-      data = request("query($id: String!) { issue(id: $id) { #{ISSUE_FIELDS} } }", { 'id' => id })
-      validate_issue(data['issue'])
+      read_issue(identifier(selector))
+    end
+
+    def list_my_issues
+      query = 'query($after: String) { organization { urlKey } viewer { id ' \
+              'assignedIssues(first: 100, after: $after, includeArchived: true) { ' \
+              "nodes { #{SUMMARY_FIELDS} } pageInfo { hasNextPage endCursor } } } }"
+      issues = paginate do |cursor|
+        data = request(query, { 'after' => cursor })
+        unless data.dig('organization', 'urlKey') == 'shakacode'
+          raise Error, 'Linear workspace must be ShakaCode (shakacode)'
+        end
+
+        viewer = data['viewer']
+        raise Error, 'Linear returned incomplete viewer data' unless valid_strings?(viewer, %w[id])
+
+        viewer['assignedIssues']
+      end
+      issues.each { |issue| validate_listing_issue(issue) }
+      { 'issues' => issues.map { |issue| issue.merge('is_archived' => !issue.fetch('archivedAt').nil?) },
+        'issues_count' => issues.size }
     end
 
     def get_comment(uuid)
@@ -116,12 +135,43 @@ module Linear
       mutation('issueUpdate', 'IssueUpdateInput!', input, uuid: uuid)
     end
 
+    def set_issue_status(selector, name)
+      raise Error, 'Status name must not be blank' if name.strip.empty?
+
+      issue = get_issue(selector)
+      raise Error, 'Linear returned incomplete issue team data' unless valid_strings?(issue['team'], %w[id])
+
+      states = connection('states', 'id name', team_id: issue.fetch('team').fetch('id'))
+      state = exact(states, name, 'status')
+      raise Error, 'Linear returned incomplete workflow status data' unless valid_strings?(state, %w[id name])
+
+      write_error = nil
+      begin
+        mutation('issueUpdate', 'IssueUpdateInput!', { 'stateId' => state.fetch('id') }, uuid: issue.fetch('id'))
+      rescue Error => error
+        write_error = error.message
+      end
+      begin
+        saved = read_issue(issue.fetch('id'))
+        unless valid_strings?(saved['state'], %w[id name]) && saved.fetch('state').fetch('id') == state.fetch('id')
+          raise Error, 'Saved status does not match the requested status'
+        end
+      rescue Error => error
+        details = [write_error, error.message].compact.join('; ')
+        raise Error, "Status change could not be verified: #{details}. Inspect Linear before another status request."
+      end
+      saved
+    end
+
     private
 
+    def read_issue(id)
+      data = request("query($id: String!) { issue(id: $id) { #{ISSUE_FIELDS} } }", { 'id' => id })
+      validate_issue(data['issue'])
+    end
+
     def connection(field, fields, team_id: nil)
-      nodes = []
-      cursor = nil
-      loop do
+      paginate do |cursor|
         arguments = 'first: 100, after: $after'
         selection = "#{field}(#{arguments}) { nodes { #{fields} } pageInfo { hasNextPage endCursor } }"
         query = if team_id
@@ -132,13 +182,45 @@ module Linear
         variables = { 'after' => cursor }
         variables['id'] = team_id if team_id
         data = request(query, variables)
-        page = (team_id ? data.fetch('team') : data).fetch(field)
-        nodes.concat(page.fetch('nodes'))
-        break unless page.fetch('pageInfo').fetch('hasNextPage')
+        (team_id ? data.fetch('team') : data).fetch(field)
+      end
+    end
 
-        cursor = page.fetch('pageInfo').fetch('endCursor')
+    def paginate
+      nodes = []
+      cursors = []
+      cursor = nil
+      loop do
+        page = yield(cursor)
+        info = page['pageInfo'] if page.is_a?(Hash)
+        unless page.is_a?(Hash) && page['nodes'].is_a?(Array) && info.is_a?(Hash) &&
+               [true, false].include?(info['hasNextPage']) && info.key?('endCursor')
+          raise Error, 'Linear returned incomplete pagination data'
+        end
+
+        nodes.concat(page.fetch('nodes'))
+        break unless info.fetch('hasNextPage')
+
+        cursor = info['endCursor']
+        unless cursor.is_a?(String) && !cursor.empty? && !cursors.include?(cursor)
+          raise Error, 'Linear pagination returned a missing or repeated cursor'
+        end
+
+        cursors << cursor
       end
       nodes
+    end
+
+    def valid_strings?(value, fields)
+      value.is_a?(Hash) && fields.all? { |field| value[field].is_a?(String) && !value[field].empty? }
+    end
+
+    def validate_listing_issue(issue)
+      unless valid_strings?(issue, %w[id identifier title url]) &&
+             valid_strings?(issue['team'], %w[id key name]) && valid_strings?(issue['state'], %w[id name type]) &&
+             issue.key?('archivedAt') && (issue['archivedAt'].nil? || issue['archivedAt'].is_a?(String))
+        raise Error, 'Linear returned incomplete issue listing data'
+      end
     end
 
     def exact(nodes, name, kind)
@@ -159,7 +241,9 @@ module Linear
       query = "mutation(#{declaration}$input: #{input_type}) { #{name}(#{id_argument}input: $input) " \
               "{ success issue { #{ISSUE_FIELDS} } } }"
       data = request(query, variables, is_write: true).fetch(name)
-      raise Error, "Linear mutation did not confirm success. #{WRITE_WARNING}" unless data['success'] == true
+      unless data.is_a?(Hash) && data['success'] == true
+        raise Error, "Linear mutation did not confirm success. #{WRITE_WARNING}"
+      end
 
       validate_issue(data['issue'])
     rescue Error, KeyError => error
@@ -202,11 +286,16 @@ module Linear
       raise Error, "Linear API returned HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
 
       result = JSON.parse(response.body)
+      raise Error, 'Linear returned an invalid response' unless result.is_a?(Hash)
+
       if result['errors']&.any?
         message = result.fetch('errors').map { |error| error.fetch('message', 'GraphQL error') }.join('; ')
         raise Error, "Linear GraphQL error: #{message.gsub(@api_key, '[REDACTED]')}"
       end
-      result.fetch('data')
+      data = result.fetch('data')
+      raise Error, 'Linear returned incomplete response data' unless data.is_a?(Hash)
+
+      data
     rescue JSON::ParserError, KeyError
       raise Error, "Linear returned an invalid response. #{WRITE_WARNING if is_write}"
     rescue Timeout::Error, IOError, SystemCallError, SocketError, OpenSSL::SSL::SSLError => error

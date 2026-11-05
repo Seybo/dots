@@ -29,6 +29,51 @@ RSpec.describe LinearCli do
       .to output("#{JSON.pretty_generate(comment)}\n").to_stdout
   end
 
+  it 'prints the complete assigned issue listing' do
+    listing = { 'issues' => [{ 'identifier' => 'HC-123' }], 'issues_count' => 1 }
+    allow(client).to receive(:list_my_issues).and_return(listing)
+
+    expect { described_class.run(['list-my-issues'], client: client, registry: registry) }
+      .to output("#{JSON.pretty_generate(listing)}\n").to_stdout
+  end
+
+  it 'does not print partial listing output on API failure' do
+    allow(client).to receive(:list_my_issues).and_raise(Linear::Error, 'Later page failed')
+
+    expect do
+      expect { described_class.run(['list-my-issues'], client: client, registry: registry) }
+        .to raise_error(Linear::Error, /Later page failed/)
+    end.to output('').to_stdout
+  end
+
+  it 'changes an explicitly requested multi-word status and prints the verified issue' do
+    saved = { 'identifier' => 'HC-123', 'state' => { 'name' => 'Ready for Development' } }
+    allow(client).to receive(:set_issue_status).with('HC-123', 'Ready for Development').and_return(saved)
+
+    expect do
+      described_class.run(['set-issue-status', 'HC-123', 'Ready for Development'], client: client, registry: registry)
+    end.to output("#{JSON.pretty_generate(saved)}\n").to_stdout
+  end
+
+  it 'requires exactly one status argument before changing status' do
+    expect do
+      described_class.run(%w[set-issue-status HC-123], client: client, registry: registry)
+    end.to raise_error(Linear::Error, /status name/)
+    expect do
+      described_class.run(%w[set-issue-status HC-123 In Progress], client: client, registry: registry)
+    end.to raise_error(Linear::Error, /quote/)
+  end
+
+  it 'prints no success result when the status change cannot be verified' do
+    allow(client).to receive(:set_issue_status).and_raise(Linear::Error, 'Status change could not be verified')
+
+    expect do
+      expect do
+        described_class.run(%w[set-issue-status HC-123 Done], client: client, registry: registry)
+      end.to raise_error(Linear::Error, /could not be verified/)
+    end.to output('').to_stdout
+  end
+
   it 'requires a source file before posting' do
     expect { described_class.run(%w[comment-issue HC-123], client: client, registry: registry) }
       .to raise_error(Linear::Error, /comment.md path/)
