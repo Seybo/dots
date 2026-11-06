@@ -54,21 +54,19 @@ The script clears tmux window/global options used by the agent attention bar and
 
 ### cache-clean
 
-Remove known-safe local cache/generated-data folders from this Mac, then inspect
-other disk-space cleanup candidates. The script performs the standard cleanup;
-the agent performs the read-only inspection below afterward.
+Inspect disk usage first, present one cleanup report, then let the user choose
+what to remove. Cover the `dev`, `other`, and `vault` volumes sharing an APFS
+container, as well as the existing home-directory/application cleanup areas.
+Do not delete anything or run the cleanup script before presenting the report
+and receiving the user's cleanup choice.
 
-Run:
+The agent performs inspection and approved follow-ups. The existing script is
+only the standard fixed-list cleanup executor, not the full skill workflow.
 
-```bash
-~/.ai/skills-shared/misc-helper/scripts/misc-helper cache-clean
-```
+#### Standard cleanup scope
 
-The script first asks the user to type `CLOSED` to confirm affected apps are closed
-and browser-cpu-monitor is stopped. It warns that browser-monitor diagnostics
-will be deleted without a backup.
-
-The script removes only these paths:
+Keep this existing cleanup option available after inspection. The script removes
+only these paths:
 
 - `~/Library/Application Support/Insta360/Insta360 Studio/previewer_cache`
 - `~/Library/Application Support/Insta360/Insta360 Studio/log`
@@ -91,7 +89,10 @@ The script removes only these paths:
 - `~/.cache/uv`
 - `~/Library/Logs/browser-monitor` (old diagnostic logs and stack samples; no backup)
 
-Then it runs `HOMEBREW_NO_AUTO_UPDATE=1 brew cleanup -s` when Homebrew is installed.
+After removing those paths, the script runs
+`HOMEBREW_NO_AUTO_UPDATE=1 brew cleanup -s` when Homebrew is installed.
+Include both the fixed paths and Homebrew cleanup in the report's standard
+cleanup option.
 
 At the end, it prints what was removed, approximate disk space freed, and manual follow-ups:
 
@@ -101,23 +102,53 @@ At the end, it prints what was removed, approximate disk space freed, and manual
 
 It intentionally does **not** remove Android emulators/SDKs, browser profiles, Slack data, Telegram data, Codex runtime cache, asdf runtimes, or whole app support folders.
 
-#### Additional inspection after cleanup
+#### Cleanup exclusions
 
-Check these areas read-only and report existing candidates with their sizes.
-Do not automatically delete anything beyond the script's existing cleanup list.
+- `~/.config/xnviewmp/Thumb.db`: preserve this file. Do not propose it as a
+  cleanup candidate or delete it, including during additional cleanup.
+
+#### Phase 1: Read-only inspection and report
+
+Resolve the actual mount points and APFS container membership of `dev`, `other`,
+and `vault` using read-only storage metadata, such as `diskutil apfs list` and
+`diskutil info`. Do not assume a volume name is its mount point or that `$HOME`
+shares their container. Record the container's free space once, not the sum of
+per-volume available-space figures. Report any other containers separately.
+If a target volume is absent, locked, or unmounted, report that limitation;
+do not mount or unlock it as part of inspection.
+
+Inspect first-level usage on all three available volumes, then drill into the
+largest local folders. Avoid traversing the same paths twice when inspection
+roots overlap. Do not follow symlinks, cross into unrelated mounted storage,
+or scan cloud-backed content. Report permission-limited and skipped areas
+without claiming full coverage. List discovered paths before issuing follow-up
+commands on those literal paths.
+
+For development projects, look for large caches, dependency folders, and
+generated/build output. Report these as candidates, not automatically disposable
+files: ignored or untracked status does not prove data is safe to delete.
+Distinguish source code and local changes from rebuildable data, databases,
+diagnostics, runtimes, backups, and other user data. Explain deletion consequences
+and any rebuilding or downloading needed. Respect standing backup requirements
+for state version control cannot restore.
+
+Measure existing paths in the standard cleanup list above, then check these
+existing areas read-only and report candidates with their sizes. Do not run
+cleanup, install tools, update packages, or create caches merely to inspect them.
 
 1. Inspect first-level disk usage under `$HOME`, `~/Library`, `/Applications`,
    and `/opt/homebrew`. Drill into the largest local folders and look for files
-   over 500 MiB. Do not follow symlinks or scan mounted/cloud-backed storage.
+   over 500 MiB. Do not follow symlinks, cross into unrelated mounts, or scan
+   cloud-backed storage.
    Report permission-limited areas rather than claiming full coverage.
 2. Check overlooked caches: `~/Library/Caches/Yarn`, `~/.npm/_npx`,
    `~/Library/Caches/node-gyp`, `~/Library/Caches/pnpm`,
-   `~/.cache/selenium`, `~/.cache/ranger`, and
-   `~/.config/xnviewmp/Thumb.db`. Explain that rebuilding or downloading may be
+   `~/.cache/selenium`, and `~/.cache/ranger`. Explain that rebuilding or downloading may be
    needed; require affected tools/apps to be closed before any approved cleanup.
-3. Browser-monitor diagnostics are already included in the standard cleanup
-   above by user request. Do not archive them or retain recovery copies. Do not
-   print private log contents. The monitor must be stopped before cleanup.
+3. Browser-monitor diagnostics are included in the standard cleanup option
+   above by user request, but have not been deleted during inspection. Do not
+   archive them or retain recovery copies. Do not print private log contents.
+   The monitor must be stopped before cleanup.
 4. Check retained versions under `~/.codex/packages/app-server-daemon/releases`
    and `~/.local/share/claude/versions`. Compare with each installation's current
    symlink and check running processes before proposing removal. Never assume
@@ -147,11 +178,39 @@ Do not automatically delete anything beyond the script's existing cleanup list.
    under `/opt/homebrew/var` as database content, not package leftovers; keep
    them unless the user explicitly approves removal of the specific data.
 
-Summarize rebuildable caches separately from diagnostics, app/runtime versions,
-backups, and user/database data. Ask for approval of specific paths or versions
-before additional cleanup. After approved removals, verify the targets are gone,
-required apps/runtimes remain, and report current free space. This inspection
-must not install tools, update packages, or create caches merely to inspect them.
+Present one report before any deletion. Identify each candidate's path, size,
+volume, consequences, and whether it belongs to the standard cleanup list or
+requires separate approval. Summarize rebuildable caches separately from
+diagnostics, app/runtime versions, backups, and user/database data. Show shared
+container free space once and clearly identify inspection limitations.
+
+#### Phase 2: Approved cleanup and verification
+
+After the report, offer the existing standard cleanup and the specific additional
+candidates. Inspection alone does not authorize cleanup. Wait for the user's
+choice; require approval of exact paths or versions for additional removals.
+Check affected tools/processes and require them to be stopped when necessary.
+Do not stop processes automatically.
+
+Only if the user chooses standard cleanup, run:
+
+```bash
+~/.ai/skills-shared/misc-helper/scripts/misc-helper cache-clean
+```
+
+Retain the script's `CLOSED` confirmation that affected apps are closed and
+browser-cpu-monitor is stopped. It warns that browser-monitor diagnostics will
+be deleted without a backup. Do not bypass or supply that confirmation on the
+user's behalf. The script may clear home-directory caches on a different
+container; make that distinction clear in the report.
+
+Perform only approved additional removals, respecting the safety rules above.
+After cleanup, verify the approved targets are gone and required apps/runtimes
+remain. Re-read storage metadata and report the shared APFS container's free
+space once. Keep other containers' figures separate; do not use the script's
+home-volume free-space delta as the shared container's reclaimed space unless
+you verified they belong to the same container. Separate removed targets from
+skipped or failed removals in the final report.
 
 ### davinci-kill
 
