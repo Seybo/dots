@@ -58,6 +58,27 @@ keybind = cmd+shift+slash=text:⟮
 # cmd+o => enter session operations mode
 keybind = cmd+o=text:⚙
 
+# Tmux pane positions: replace native tab shortcuts, including physical digit aliases.
+# cmd+1 through cmd+9 => zoom panes top-to-bottom, then left-to-right
+keybind = cmd+1=text:
+keybind = cmd+digit_1=text:
+keybind = cmd+2=text:
+keybind = cmd+digit_2=text:
+keybind = cmd+3=text:
+keybind = cmd+digit_3=text:
+keybind = cmd+4=text:
+keybind = cmd+digit_4=text:
+keybind = cmd+5=text:
+keybind = cmd+digit_5=text:
+keybind = cmd+6=text:
+keybind = cmd+digit_6=text:
+keybind = cmd+7=text:
+keybind = cmd+digit_7=text:
+keybind = cmd+8=text:
+keybind = cmd+digit_8=text:
+keybind = cmd+9=text:
+keybind = cmd+digit_9=text:
+
 # Zellij panes
 # cmd+p => enter pane mode
 keybind = cmd+p=text:

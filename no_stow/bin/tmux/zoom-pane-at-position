@@ -1,0 +1,39 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require 'open3'
+
+module PanePositionZoom
+  def self.pane_order(layout)
+    # tmux 3.8's window_layout retains the tiled geometry while zoomed.
+    positions(JSON.parse(layout).fetch('L')).sort.map(&:last)
+  end
+
+  def self.zoom_pane(position, window_id)
+    layout, status = Open3.capture2(
+      'tmux', 'display-message', '-p', '-t', window_id, '#{window_layout}' # rubocop:disable Lint/InterpolationCheck -- tmux format, not Ruby interpolation.
+    )
+    raise 'tmux layout query failed' unless status.success?
+
+    panes = pane_order(layout)
+    return unless position.between?(1, panes.size)
+
+    pane_id = panes.fetch(position - 1)
+    # Keep both commands in one queue: failed selection must not toggle zoom.
+    system(
+      'tmux', 'select-pane', '-Z', '-t', pane_id, ';',
+      'if-shell', '-t', pane_id, '-F', '#{!:#{window_zoomed_flag}}',
+      "resize-pane -Z -t #{pane_id}", exception: true
+    )
+  end
+
+  def self.positions(node)
+    return [[node.fetch('y'), node.fetch('x'), node.fetch('I')]] if node.fetch('t') == 'p'
+
+    node.fetch('c').flat_map { |child| positions(child) }
+  end
+  private_class_method :positions
+end
+
+PanePositionZoom.zoom_pane(Integer(ARGV.fetch(0)), ARGV.fetch(1)) if $PROGRAM_NAME == __FILE__
