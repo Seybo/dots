@@ -71,7 +71,11 @@ projects:
     checkout_layout: ordinal_workspaces
     code_root: projects/shaka/shaka-skill
     tmux_layout: shaka_shaka-skill
-    task_provider: local
+    task_provider: linear
+    linear:
+      workspace: shakacode
+      team: HC
+      status: Ready for Development
   shaka_trp:
     checkout_layout: ordinal_workspaces
     code_root: projects/shaka/trp
