@@ -15,7 +15,7 @@ module SkillsManager
   REPO_ROOT = Pathname.new(__dir__).join('..', '..', '..', '..').expand_path
   DEFAULT_EXTERNAL_ROOT = REPO_ROOT.join('.ai', 'external-skills')
   DEFAULT_MANIFEST_PATH = DEFAULT_EXTERNAL_ROOT.join('external-skills.yml')
-  REQUIRED_AUDITOR_NAMES = %w[skillspector cisco-skill-scanner sentry-skill-scanner].freeze
+  REQUIRED_AUDITOR_NAMES = %w[cisco-skill-scanner sentry-skill-scanner].freeze
   BLOCKING_STATUSES = %w[fail error].freeze
   WARNING_STATUSES = %w[warn].freeze
   SEVERITY_RANK = {

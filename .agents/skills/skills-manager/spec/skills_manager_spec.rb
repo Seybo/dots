@@ -44,9 +44,9 @@ class SkillsManagerTest < Minitest::Test
     }
   end
 
-  def test_normal_skill_is_audited_by_all_three_auditors
+  def test_normal_skill_is_audited_without_skillspector
     with_manager do |manager|
-      assert_equal %w[skillspector cisco-skill-scanner sentry-skill-scanner], manager.audit_plan('normal-skill')
+      assert_equal %w[cisco-skill-scanner sentry-skill-scanner], manager.audit_plan('normal-skill')
     end
   end
 

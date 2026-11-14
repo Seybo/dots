@@ -1,6 +1,6 @@
 ---
 name: skills-manager
-description: Manage external Claude and Pi skills/plugins from .ai/external-skills. Audits normal external skills with SkillSpector, Cisco skill-scanner, and Sentry skill-scanner before install/update.
+description: Manage external Claude and Pi skills/plugins from .ai/external-skills. Audits normal external skills with Cisco skill-scanner and Sentry skill-scanner before install/update.
 ---
 
 # Skills manager
@@ -18,7 +18,8 @@ External skill content is untrusted until freshly audited.
 ## Rules
 
 - Use `skills-manager`; do not install normal external skills directly with `claude`, `pi`, plugin commands, manual copies, or ad-hoc scripts.
-- Normal skills are audited by all three auditors before install/update.
+- Normal skills are audited by Cisco skill-scanner and Sentry skill-scanner before install/update.
+- Run SkillSpector only when the user explicitly requests a SkillSpector scan. It is not an install/update requirement.
 - Auditor skills are trust roots and are not audited by this manager.
 - Block on auditor errors, High/Critical findings, `DO_NOT_INSTALL`, dirty checkouts, or missing checkouts.
 - Warnings require explicit user approval via `--allow-warnings`.
@@ -66,7 +67,6 @@ For an existing manifest name, run:
 
 ```bash
 .agents/skills/skills-manager/bin/skills-manager sync
-.agents/skills/skills-manager/bin/skills-manager install skillspector
 .agents/skills/skills-manager/bin/skills-manager install cisco-skill-scanner
 .agents/skills/skills-manager/bin/skills-manager install sentry-skill-scanner
 ```
