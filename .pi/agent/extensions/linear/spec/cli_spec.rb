@@ -74,6 +74,50 @@ RSpec.describe LinearCli do
     end.to output('').to_stdout
   end
 
+  it 'passes parent creation JSON unchanged to the shared client' do
+    payload = { 'title' => 'Child', 'type' => 'Feature', 'parent' => 'HC-503' }
+    config = { 'workspace' => 'shakacode' }
+    allow(registry).to receive(:config).with('hc').and_return(config)
+    allow(client).to receive(:discover).with(config).and_return({})
+    allow(client).to receive(:create_issue).with(payload, {}).and_return('identifier' => 'HC-504')
+
+    expect do
+      described_class.run(['create-issue', 'hc', JSON.generate(payload)], client: client, registry: registry)
+    end.to output(/HC-504/).to_stdout
+  end
+
+  it 'passes an optional parent and requester to draft conversion' do
+    task = instance_double(Linear::Task)
+    allow(Linear::Task).to receive(:new).with(client: client, registry: registry).and_return(task)
+    allow(task).to receive(:convert).with('hc', '/draft/task.md', 'Feature',
+                                          assignee_id: 'requester', parent: 'HC-503')
+                                    .and_return('identifier' => 'HC-504')
+
+    expect do
+      described_class.run(%w[convert-draft hc /draft/task.md Feature --parent HC-503 requester],
+                          client: client, registry: registry)
+    end.to output(/HC-504/).to_stdout
+  end
+
+  it 'preserves conversion without a parent option' do
+    task = instance_double(Linear::Task)
+    allow(Linear::Task).to receive(:new).with(client: client, registry: registry).and_return(task)
+    allow(task).to receive(:convert).with('hc', '/draft/task.md', 'Bug',
+                                          assignee_id: nil, parent: nil).and_return('identifier' => 'HC-504')
+
+    expect do
+      described_class.run(%w[convert-draft hc /draft/task.md Bug], client: client, registry: registry)
+    end.to output(/HC-504/).to_stdout
+  end
+
+  it 'rejects missing, repeated or unsupported conversion options before creation' do
+    [%w[--parent], %w[--parent HC-503 --parent HC-502], %w[--unknown HC-503]].each do |options|
+      expect do
+        described_class.run(%w[convert-draft hc /draft/task.md Bug] + options, client: client, registry: registry)
+      end.to raise_error(Linear::Error)
+    end
+  end
+
   it 'requires a source file before posting' do
     expect { described_class.run(%w[comment-issue HC-123], client: client, registry: registry) }
       .to raise_error(Linear::Error, /comment.md path/)

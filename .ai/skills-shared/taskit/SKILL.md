@@ -28,12 +28,16 @@ In Pi, use either:
 /taskit <project> <story_id> --base <full-base-branch-or-ref>
 /taskit <project> <path-to-task.md>
 /taskit <project> draftNN
+/taskit <project> draftNN --parent <linear-identifier-or-url>
 ```
 
 With no arguments, infer the project from the current git checkout and infer a Shortcut story ID from the branch only when the project's registry entry has `task_provider: shortcut`.
 With one token, treat it as `<project>` only when it matches a registered task project; otherwise infer `<project>` from the current working directory and treat the token as the selector/task name.
 With two or more tokens, treat the first token as `<project>` only when it matches a registered task project; otherwise infer `<project>` from the current working directory and treat all tokens as the selector/task name.
 `--base <full-base-branch-or-ref>` is optional for registered workspace Shortcut mode. It tells `/taskit` to create the generated task branch from that exact base branch/ref. Do not infer a base from a numeric parent task/story ID.
+`--parent <identifier-or-url>` is optional only for Linear draft/path conversion.
+Reject it for local/Shortcut tasks, existing-issue import and manual task names.
+It selects a Linear parent issue, not a Project or Git base.
 
 The selector/task name is interpreted as either:
 
@@ -174,7 +178,10 @@ Do not infer an issue from a branch or treat a numeric selector as a Linear issu
    task Markdown path. Reject `--base`: Linear preparation does not set up branches.
    With no selector, ask for an issue identifier/URL or a draft. With a manual
    title, ask whether to create a provider-neutral draft through Draftit; do not
-   turn a title into an issue implicitly.
+   turn a title into an issue implicitly. Before interpreting the selector, remove
+   one optional `--parent <identifier-or-url>` pair; reject a missing value or
+   duplicate option. Accept it only for draft/path conversion. Preserve it for
+   this invocation; never infer a parent from the branch or collect it in Draftit.
 2. Ensure the selected registered task root exists and is a Git repository,
    following the existing task-root initialization rule. This is task storage,
    not branch setup in the code checkout. For a draft/path, validate the source
@@ -185,18 +192,24 @@ Do not infer an issue from a branch or treat a numeric selector as a Linear issu
 3. Read `../linear-issues/SKILL.md`. Use the single CLI at
    `$STOW_DIR/.pi/agent/extensions/linear/scripts/linear.rb`:
    - existing identifier/URL: `import-issue <project> <identifier-or-url>`
-   - draft/path: `convert-draft <project> <absolute-task.md> <type> [requester-uuid]`
+   - draft/path: `convert-draft <project> <absolute-task.md> <type> [requester-uuid] [--parent <identifier-or-url>]`
    Use `Name:` from Story details. Infer Bug/Feature/Improvement/Chore from clear
    task intent; otherwise ask one focused question. Use a known requester UUID
    when available; otherwise the CLI assigns to the authenticated viewer.
    The registry supplies verified workspace/team/status and optional Project.
-   Do not collect destination metadata in Draftit or create Projects.
+   Do not collect destination metadata in Draftit or create Projects. When a parent
+   was supplied, pass it through `--parent`. The CLI resolves it before creation,
+   sends its UUID as `parentId` in the same create mutation and verifies the
+   returned parent UUID. Parent and child may belong to different accessible
+   teams; parent selection does not change the child's configured destination.
 4. Stop on failure. Do not rename after failed or uncertain creation or blindly
    retry writes. After confirmed creation and a local failure, use the reported
    existing identity and saved metadata; never create another issue. Do not run
    any of the Shortcut branch setup or Workit continuation steps.
 5. On success report `identifier - title`, URL, exact provider `branchName`, and
-   `task_path`. The folder prefix is the full identifier; immutable UUID is
+   `task_path`; when returned, also report the parent identifier and URL. The new
+   child remains Shaka's work item; the parent only groups related issues.
+   The folder prefix is the full identifier; immutable UUID is
    retained under `config.json`'s `linear` section. Both import and conversion
    record `Linear: <issue-url>` immediately after `Name:` in `task.md`'s first
    `# Story details` section. Conversion saves identity before adding the link
@@ -227,6 +240,7 @@ Examples:
 /taskit shaka_hc HC-123
 /taskit shaka_hc https://linear.app/shakacode/issue/HC-123/fix-checkout
 /taskit shaka_hc draft01
+/taskit shaka_hc draft01 --parent HC-503
 ```
 
 All existing local and Shortcut routes below remain unchanged.

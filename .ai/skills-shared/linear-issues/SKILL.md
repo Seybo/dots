@@ -88,6 +88,7 @@ request intent; otherwise ask. Types are Bug, Feature, Improvement and Chore.
 /linear-issue-create shaka_hc "Fix checkout" Bug
 /linear-issue-create shaka_hc "Fix checkout" Bug "./description.md"
 /linear-issue-create shaka_hc {"title":"Fix checkout","type":"Bug","assignee_id":"requester-uuid"}
+/linear-issue-create shaka_hc {"title":"Child issue","type":"Feature","parent":"HC-503"}
 ```
 
 ```bash
@@ -95,9 +96,18 @@ ruby "$STOW_DIR/.pi/agent/extensions/linear/scripts/linear.rb" create-issue shak
 ```
 
 The payload accepts only `title`, `type`, optional `description` or
-`description_path` (not both), and optional `assignee_id`. JSON may also come
+`description_path` (not both), optional `assignee_id`, and optional `parent`
+(full issue identifier or Linear URL). JSON may also come
 through stdin with `-`. Markdown files exclude local Story details and Feature
 routing metadata. For raw `description`, provide only the intended remote content.
+
+When `parent` is supplied, the CLI resolves that existing issue before creating
+the child and sends its UUID as `parentId` in the same mutation. It verifies the
+returned parent UUID and includes parent identity/URL in the result. A parent may
+be in another accessible team. It does not select the child's team or Project.
+A failed parent lookup makes no mutation. If creation returns an unverified parent,
+report the created child's identifier/URL and inspect Linear; do not recreate it.
+Omitting `parent` keeps the existing standalone creation behavior.
 
 The registry selects the exact workspace, team, status and optional Project.
 `discover shaka_hc` verifies them read-only. HC currently uses ShakaCode / HC /
@@ -136,14 +146,20 @@ is supported; use the separate explicit status command for status changes.
 ## Taskit and Shaka
 
 Use `/taskit shaka_hc HC-123` for import or `/taskit shaka_hc draft01` for approved
-conversion. Taskit owns deferred-decision and Feature gates. Its preparation CLI is:
+conversion. Add `--parent HC-503` to that Taskit conversion to create a sub-issue.
+Do not use `--parent` with import or local/Shortcut tasks. Taskit owns deferred-decision
+and Feature gates. Its preparation CLI is:
 
 ```bash
 ruby "$STOW_DIR/.pi/agent/extensions/linear/scripts/linear.rb" import-issue shaka_hc HC-123
 ruby "$STOW_DIR/.pi/agent/extensions/linear/scripts/linear.rb" convert-draft shaka_hc /absolute/task-root/draft01/task.md Feature
+ruby "$STOW_DIR/.pi/agent/extensions/linear/scripts/linear.rb" convert-draft shaka_hc /absolute/task-root/draft01/task.md Feature --parent HC-503
 ```
 
-Conversion's last optional argument is the known requester UUID.
+Conversion accepts an optional positional requester UUID and an optional
+`--parent <identifier-or-url>` flag. Draftit stays provider-neutral; parent selection
+belongs to this explicit Taskit invocation, not draft metadata. The child remains
+Shaka's work item. This flow does not reparent already-created issues.
 These commands require an existing registered task root. They return `task_path`
 and existing issue identity/branch context. They never create/switch Git branches
 or start implementation. Both import and conversion add `Linear: <issue-url>`

@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require 'optparse'
 require_relative '../lib/client'
 require_relative '../lib/markdown'
 require_relative '../lib/registry'
@@ -48,18 +49,31 @@ module LinearCli
                project = argument(argv, 'project')
                path = argument(argv, 'task.md path')
                type = argument(argv, 'issue type')
+               parent = nil
+               OptionParser.new do |parser|
+                 parser.on('--parent ISSUE') do |value|
+                   raise Linear::Error, 'Specify --parent only once' if parent
+
+                   parent = value
+                 end
+               end.parse!(argv)
+               assignee_id = argv.shift
+               raise Linear::Error, 'Unexpected conversion arguments' unless argv.empty?
+
                Linear::Task.new(client: client, registry: registry).convert(project, path, type,
-                                                                            assignee_id: argv.shift)
+                                                                            assignee_id: assignee_id, parent: parent)
              else
                raise Linear::Error,
                      'Usage: linear.rb get-issue ID | list-my-issues | set-issue-status ID "Status name" | ' \
                      'get-comment UUID | comment-issue ID comment.md | ' \
                      'discover PROJECT | create-issue PROJECT JSON | ' \
                      'update-issue ID [task.md] | import-issue PROJECT ID | ' \
-                     'convert-draft PROJECT task.md TYPE [ASSIGNEE_UUID]'
+                     'convert-draft PROJECT task.md TYPE [ASSIGNEE_UUID] [--parent ISSUE]'
              end
     puts JSON.pretty_generate(result)
     result
+  rescue OptionParser::ParseError => error
+    raise Linear::Error, error.message
   end
 
   def argument(argv, name)

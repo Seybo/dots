@@ -56,6 +56,24 @@ RSpec.describe Linear::Task do
     expect(JSON.parse(File.read(File.join(File.dirname(path), 'config.json'))).keys).to eq(['linear'])
   end
 
+  it 'passes an explicit parent through conversion and returns the relationship' do
+    issue['parent'] = { 'id' => 'parent-uuid', 'identifier' => 'HC-503', 'url' => 'https://linear.app/x/issue/HC-503' }
+    result = task.convert('hc', source, 'Feature', parent: 'HC-503')
+
+    expect(client).to have_received(:create_issue).with(hash_including('parent' => 'HC-503'), destination)
+    expect(result.fetch('parent')).to eq(issue.fetch('parent'))
+    expect(File.exist?(result.fetch('task_path'))).to be(true)
+  end
+
+  it 'leaves the draft unchanged when the parent cannot be resolved' do
+    original = File.read(source)
+    allow(client).to receive(:create_issue).and_raise(Linear::Error, 'Parent was not found')
+
+    expect { task.convert('hc', source, 'Feature', parent: 'HC-503') }.to raise_error(Linear::Error, /Parent/)
+    expect(File.read(source)).to eq(original)
+    expect(File.exist?(File.join(File.dirname(source), 'config.json'))).to be(false)
+  end
+
   it 'preserves unrelated task metadata' do
     File.write(File.join(File.dirname(source), 'config.json'), JSON.generate('other' => { 'value' => 1 }))
     result = task.convert('hc', source, 'Chore')

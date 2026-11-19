@@ -10,7 +10,8 @@ module Linear
 
   class Client
     ENDPOINT = 'https://api.linear.app/graphql'
-    ISSUE_FIELDS = 'id identifier title description url branchName archivedAt state { id name } team { id key name }'
+    ISSUE_FIELDS = 'id identifier title description url branchName archivedAt state { id name } ' \
+                   'team { id key name } parent { id identifier url }'
     COMMENT_FIELDS = "id body url issue { #{ISSUE_FIELDS} }".freeze
     SUMMARY_FIELDS = 'id identifier title url archivedAt team { id key name } state { id name type }'
     TYPES = %w[Bug Feature Improvement Chore].freeze
@@ -103,7 +104,7 @@ module Linear
     end
 
     def create_issue(params, destination)
-      allowed = %w[title type description description_path assignee_id]
+      allowed = %w[title type description description_path assignee_id parent]
       unless params.is_a?(Hash) && (params.keys - allowed).empty?
         raise Error,
               "create-issue only accepts #{allowed.join(', ')}"
@@ -126,7 +127,14 @@ module Linear
         input['description'] =
           Markdown.parse(File.read(File.expand_path(params.fetch('description_path')))).fetch('description')
       end
-      mutation('issueCreate', 'IssueCreateInput!', input)
+      parent = get_issue(params.fetch('parent')) if params.key?('parent')
+      input['parentId'] = parent.fetch('id') if parent
+      created = mutation('issueCreate', 'IssueCreateInput!', input)
+      if parent && created.dig('parent', 'id') != parent.fetch('id')
+        raise Error, "Created #{created.fetch('identifier')} #{created.fetch('url')}, but its parent relationship " \
+                     'could not be verified. Inspect Linear. Do not recreate this issue.'
+      end
+      created
     end
 
     def update_issue(uuid, input)

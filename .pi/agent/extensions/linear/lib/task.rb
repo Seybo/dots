@@ -26,7 +26,7 @@ module Linear
       handoff(issue, folder)
     end
 
-    def convert(project, path, type, assignee_id: nil)
+    def convert(project, path, type, assignee_id: nil, parent: nil)
       config = @registry.config(project)
       root = existing_root(project)
       path = source_path(root, path)
@@ -44,6 +44,7 @@ module Linear
       slug(params.fetch('title'))
       params['type'] = type
       params['assignee_id'] = assignee_id if assignee_id
+      params['parent'] = parent if parent
       issue = @client.create_issue(params, @client.discover(config))
       # Persist identity first: a collision or interrupted rename must not cause another remote creation.
       save_identity(folder, metadata, issue)
