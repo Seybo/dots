@@ -99,6 +99,10 @@ eval "$(zoxide init zsh --cmd j)"
 
 export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"
 
+# Android SDK
+export ANDROID_HOME="$DEV_ROOT/android-sdk"
+export PATH="$ANDROID_HOME/platform-tools:$PATH"
+
 
 # PostgreSQL
 export PATH="/opt/homebrew/opt/postgresql@13/bin:$PATH"
