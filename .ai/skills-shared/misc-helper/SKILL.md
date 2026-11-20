@@ -80,7 +80,6 @@ only these paths:
 - `~/Library/Caches/camoufox`
 - `~/Library/Caches/Vivaldi`
 - `~/Library/Caches/Cypress`
-- `~/Library/Caches/ms-playwright`
 - `~/Library/Caches/typescript`
 - `~/Library/Caches/com.tinyspeck.slackmacgap.ShipIt`
 - `~/.cache/solargraph`
@@ -103,6 +102,10 @@ At the end, it prints what was removed, approximate disk space freed, and manual
 It intentionally does **not** remove Android emulators/SDKs, browser profiles, Slack data, Telegram data, Codex runtime cache, asdf runtimes, or whole app support folders.
 
 #### Cleanup exclusions
+
+- `~/Library/Caches/ms-playwright`: preserve installed Playwright browser
+  binaries. Removing them breaks browser tests until they are reinstalled;
+  do not include this directory in standard cleanup.
 
 - `~/.config/xnviewmp/Thumb.db`: preserve this file. Do not propose it as a
   cleanup candidate or delete it, including during additional cleanup.
