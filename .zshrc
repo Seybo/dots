@@ -104,12 +104,10 @@ export ANDROID_HOME="$DEV_ROOT/android-sdk"
 export PATH="$ANDROID_HOME/platform-tools:$PATH"
 
 
-# PostgreSQL
-export PATH="/opt/homebrew/opt/postgresql@13/bin:$PATH"
-# Optional: Set compiler flags for PostgreSQL 13
-export LDFLAGS="-L/opt/homebrew/opt/postgresql@13/lib"
-export CPPFLAGS="-I/opt/homebrew/opt/postgresql@13/include"
-export PKG_CONFIG_PATH="/opt/homebrew/opt/postgresql@13/lib/pkgconfig"
+export PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
+export LDFLAGS="-L/opt/homebrew/opt/postgresql@17/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/postgresql@17/include"
+export PKG_CONFIG_PATH="/opt/homebrew/opt/postgresql@17/lib/pkgconfig"
 
 
 # show with catalogs content with alt-c
@@ -139,7 +137,7 @@ bindkey -s -M vicmd '^[' ''
 if [ -n "$SSH_CONNECTION" ] && [ -z "$TMUX" ]; then
   exec tmux new-session -A -s base
 fi
-export SHAKA_RUBY="$HOME/.asdf/installs/ruby/3.4.8/bin/ruby"
+export SHAKA_RUBY="$HOME/.asdf/installs/ruby/3.4.9/bin/ruby"
 export PI_AGENT_SHAKACODE_SESSIONS_DIR=~/.pi/work/sessions
 export CODEX_DEFAULT_MODEL='openai-codex/gpt-5.6-sol:high'
 export CODEX_SECONDARY_MODEL='openai-codex/gpt-5.6-terra:high'
