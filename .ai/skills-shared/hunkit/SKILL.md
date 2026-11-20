@@ -92,6 +92,10 @@ continue
 
 Do not treat them as active outside the same Hunkit conversation. `next` is valid only while an `expall` or `revall` walkthrough or skipped-hunk replay is active. During an active walkthrough, treat a clear request to review the skipped hunks as `show skipped`. `continue` is valid only after Hunkit has completed a commit walkthrough and recorded a suggested next commit.
 
+### Display locations
+
+Identify each change by its starting source line, for example `Line 26`. Use the first added or removed line in the captured patch, not the hunk's leading context. Use the new-side line number when the change adds lines; for deletion-only changes, use the old-side line number and label it `old`. Do not display file paths, line ranges, or hunk numbers; the file is already visible in Hunk. Keep file paths and hunk numbers internally for navigation.
+
 ### `expit`
 
 1. Run `hunk session context --repo <repository> --json` to identify Hunk's current focus.
@@ -124,7 +128,7 @@ Build this order once from the complete immutable snapshot before starting eithe
 2. Build and retain the narrative queue defined above, containing each captured file, original one-based hunk number, and patch. Initialize empty processed-change signatures and skipped-hunk queues for this snapshot.
 3. Navigate Hunk to the first narrative hunk using `hunk session navigate`.
 4. Explain it using the same boundaries as `expit`, then retain a concise signature of its material change for snapshot-wide deduplication.
-5. Report `Walkthrough 1 of N` with the file and original hunk number, then wait for the exact bare reply `next`.
+5. Report `Walkthrough 1 of N` with the change's starting source line, then wait for the exact bare reply `next`.
 
 A new `expall` discards any prior walkthrough, replay, and deduplication state; captures a new snapshot; and records explanation-only mode.
 
@@ -141,7 +145,7 @@ A new `expall` discards any prior walkthrough, replay, and deduplication state; 
    - report a supported task/code contradiction separately as `Task mismatch:`;
    - do not turn style preferences, speculative edge cases, or one hunk's lack of a task requirement into findings.
 6. Retain a concise signature of the hunk's material change for snapshot-wide deduplication.
-7. Report `Walkthrough 1 of N` with the file and original hunk number, then wait for the exact bare reply `next`.
+7. Report `Walkthrough 1 of N` with the change's starting source line, then wait for the exact bare reply `next`.
 
 A new `revall` discards any prior walkthrough, replay, and deduplication state and captures a new snapshot.
 
@@ -152,7 +156,7 @@ Apply this behavior to both `expall` and `revall` across the entire retained nar
 1. Treat a later hunk as repetitive only when its complete material change is mechanically equivalent to a processed-change signature, such as the same identifier rename or the same call-site replacement, and it adds no distinct behavior.
 2. When similarity or additional behavior is uncertain, keep the hunk; do not skip it.
 3. Retain every skipped hunk in narrative queue order. Do not remove it from the immutable snapshot or walkthrough queue.
-4. Group consecutive or related skipped hunks for reporting. State the repeated transformation, skipped count, and file/hunk locations.
+4. Group consecutive or related skipped hunks for reporting. State the repeated transformation, skipped count, and starting source lines.
 5. A skipped hunk is not considered explained or reviewed. It remains available for replay.
 
 ### `next`
@@ -161,7 +165,7 @@ Apply this behavior to both `expall` and `revall` across the entire retained nar
 2. Otherwise, use only the retained walkthrough queue and its recorded mode. Do not call `hunk session review` or rebuild the snapshot.
 3. Scan forward from the current position in the narrative queue. Move repetitive hunks into the retained skipped queue until reaching the first distinct hunk or the end of the queue.
 4. Navigate Hunk directly to the next distinct hunk, then explain the retained patch. In `revall` mode, also perform the focused development-principles review defined above. Retain its material-change signature after processing.
-5. Report every group skipped during this advance before reporting `Walkthrough N of M` with the file and original hunk number and waiting for `next`.
+5. Report every group skipped during this advance before reporting `Walkthrough N of M` with the change's starting source line and waiting for `next`.
 6. In working-tree mode, if watch mode removed a retained hunk, keep the snapshot unchanged, say that the live display changed, and explain or review the retained hunk without pretending Hunk is focused on it.
 7. If no distinct hunks remain, report the final skipped groups and that the main walkthrough is complete. Keep skipped hunks available for replay, then follow the commit-continuation rules below.
 
@@ -170,7 +174,7 @@ Apply this behavior to both `expall` and `revall` across the entire retained nar
 1. Use only the retained skipped queue. If it is empty, say that no hunks are waiting for replay.
 2. Save the current main-walkthrough position and whether it had completed, then enter replay mode.
 3. Navigate to the first skipped hunk and process it individually using the active walkthrough's explanation-only or explanation-plus-review mode. Do not deduplicate replayed hunks.
-4. Report `Skipped hunk 1 of N` and wait for `next`.
+4. Report `Skipped hunk 1 of N` with the change's starting source line and wait for `next`.
 5. During replay, each `next` advances exactly one skipped hunk in retained narrative queue order.
 6. After the final skipped hunk, clear the replayed skipped queue. If the main walkthrough was incomplete, navigate back to its saved current hunk and wait for `next`; otherwise report that the walkthrough is complete and repeat any recorded next-commit suggestion.
 
